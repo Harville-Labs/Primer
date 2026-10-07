@@ -254,6 +254,9 @@ difference is the whole content of the message someone reads.
 - SvelteKit 2 with Svelte 5 runes, TypeScript, pnpm, Biome, Node 24.
 - UI components come from `@sivir-ui/svelte` (https://www.sivir.dev); icons
   from `@lucide/svelte`.
+- Primer keeps light and dark reading themes rather than the HL dark-only
+  visual palette. Theme Sivir through shared semantic tokens in `app.css`.
+  See [ADR 0001](docs/adr/0001-reading-themes.md).
 - The web app is a **desktop-dense application shell**, not a scaled-up
   mobile column.
 - Alembic for migrations, per-service schemas. **Never run migrations during

@@ -80,6 +80,9 @@ nav:
       - Ingestion: architecture/ingestion.md
       - Retrieval: architecture/retrieval.md
       - Identity and access: architecture/identity.md
+      - Decisions:
+          - Index: adr/README.md
+          - Reading themes: adr/0001-reading-themes.md
   - Operations:
       - Configuration: operations/configuration.md
       - Choosing models: operations/models.md
