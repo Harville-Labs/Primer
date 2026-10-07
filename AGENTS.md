@@ -6,6 +6,11 @@ assistant" — it is Primer, and the name stands on its own.
 This file is instructions for agents working in this repository. It is the
 one documentation file that may be maintained as ordinary policy.
 
+Harville Labs' org-wide standards
+([Harville-Labs/agents](https://github.com/Harville-Labs/agents/blob/main/AGENTS.md))
+apply too. This file adds to them and can tighten them; it departs from one
+only where an ADR in `docs/adr/` says so.
+
 ## Repository policy
 
 - **Never commit secrets.** Not in values files, not in tests, not in a
@@ -249,6 +254,9 @@ difference is the whole content of the message someone reads.
 - SvelteKit 2 with Svelte 5 runes, TypeScript, pnpm, Biome, Node 24.
 - UI components come from `@sivir-ui/svelte` (https://www.sivir.dev); icons
   from `@lucide/svelte`.
+- Primer keeps light and dark reading themes rather than the HL dark-only
+  visual palette. Theme Sivir through shared semantic tokens in `app.css`.
+  See [ADR 0001](docs/adr/0001-reading-themes.md).
 - The web app is a **desktop-dense application shell**, not a scaled-up
   mobile column.
 - Alembic for migrations, per-service schemas. **Never run migrations during

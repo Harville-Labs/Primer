@@ -2,12 +2,12 @@
 	import {
 		Alert,
 		Button,
+		Composer,
 		Conversation,
 		Markdown,
 		Message,
 		Progress,
 		Reasoning,
-		PromptComposer,
 		Spinner
 	} from '@sivir-ui/svelte';
 	import { Check, FileText, Plus } from '@lucide/svelte';
@@ -671,26 +671,25 @@
 		<Conversation.ScrollButton />
 	</Conversation.Root>
 
-	<PromptComposer.Root
+	<Composer.Root
 		bind:value={question}
-		status={streaming ? 'submitting' : 'idle'}
+		disabled={!answerable || streaming}
 		onSubmit={ask}
 		class="mt-4"
 	>
-		<PromptComposer.Input
+		<Composer.Input
 			placeholder={!answerable
 				? 'No model is available to answer.'
 				: libraryId
 					? 'Ask about this library…'
 					: 'Ask anything…'}
 			aria-label="Your question"
-			disabled={!answerable}
 		/>
-		<PromptComposer.Toolbar>
-			<PromptComposer.Actions></PromptComposer.Actions>
-			<PromptComposer.Submit />
-		</PromptComposer.Toolbar>
-	</PromptComposer.Root>
+		<Composer.Toolbar>
+			<Composer.Actions></Composer.Actions>
+			<Composer.Submit />
+		</Composer.Toolbar>
+	</Composer.Root>
 
 	<!--
 	  Below the composer, because whether this question is answered from your
@@ -728,7 +727,7 @@
 		</div>
 
 		{#if !libraryId}
-			<p class="text-xs text-muted-foreground">Answers will not be cited.</p>
+			<p class="mr-12 text-xs text-muted-foreground sm:mr-0">Answers will not be cited.</p>
 		{/if}
 	</div>
 
