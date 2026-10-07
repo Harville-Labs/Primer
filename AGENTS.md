@@ -6,6 +6,11 @@ assistant" — it is Primer, and the name stands on its own.
 This file is instructions for agents working in this repository. It is the
 one documentation file that may be maintained as ordinary policy.
 
+Harville Labs' org-wide standards
+([Harville-Labs/agents](https://github.com/Harville-Labs/agents/blob/main/AGENTS.md))
+apply too. This file adds to them and can tighten them; it departs from one
+only where an ADR in `docs/adr/` says so.
+
 ## Repository policy
 
 - **Never commit secrets.** Not in values files, not in tests, not in a

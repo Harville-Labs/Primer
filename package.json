@@ -13,6 +13,6 @@
 		"generate:api": "pnpm --filter @primer/web generate:api"
 	},
 	"devDependencies": {
-		"@biomejs/biome": "^2.0.0"
+		"@biomejs/biome": "^2.5.15"
 	}
 }
