@@ -82,21 +82,33 @@ jobs:
           echo "Releasing $TAG as $version (stable: $stable)"
 
   images:
+    # Two architectures, each on a runner of its own architecture. Pushed by
+    # digest and named in the job after this one: a tag that arrived while
+    # only one architecture had finished would serve that one and fail on the
+    # other, and a release is the worst place to find that out.
     name: Images
     needs: version
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.platform.runner }}
     permissions:
       contents: read
       packages: write
     strategy:
+      fail-fast: false
       matrix:
-        include:
+        image:
           - name: primer-api
             dockerfile: deploy/images/Dockerfile.python
           - name: primer-worker
             dockerfile: deploy/images/Dockerfile.worker
           - name: primer-web
             dockerfile: deploy/images/Dockerfile.gui
+        platform:
+          - key: amd64
+            id: linux/amd64
+            runner: ubuntu-latest
+          - key: arm64
+            id: linux/arm64
+            runner: ubuntu-24.04-arm
     steps:
       # The tag, explicitly. A release event's ref is already the tag, but a
       # manual re-run's is not, and building the wrong commit under a release
@@ -114,38 +126,111 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Build and push by digest
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.image.dockerfile }}
+          platforms: ${{ matrix.platform.id }}
+          outputs: type=image,name=ghcr.io/${{ github.repository_owner }}/${{ matrix.image.name }},push-by-digest=true,name-canonical=true,push=true
+          labels: |
+            org.opencontainers.image.version=${{ needs.version.outputs.version }}
+          # What is in a released image is a question an operator is entitled
+          # to answer from the registry, without pulling it first.
+          sbom: true
+          provenance: mode=max
+          cache-from: type=gha,scope=${{ matrix.image.name }}-${{ matrix.platform.key }}
+
+      - name: Hand the digest to the manifest job
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          # Named by the bare hex, because the manifest job puts it back
+          # together as `image@sha256:<name>`.
+          mkdir -p /tmp/digests
+          touch "/tmp/digests/${DIGEST#sha256:}"
+
+      - name: Upload the digest
+        uses: actions/upload-artifact@v4
+        with:
+          name: digest-${{ matrix.image.name }}-${{ matrix.platform.key }}
+          path: /tmp/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  manifest:
+    # The version, and the minor line it is the newest of. Not `latest`: that
+    # belongs to main, and moving it here would make the newest build of
+    # Primer and the newest release of Primer the same name for two different
+    # things.
+    name: Manifest
+    needs: [version, images]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        image: [primer-api, primer-worker, primer-web]
+    steps:
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: digest-${{ matrix.image }}-*
+          merge-multiple: true
+          path: /tmp/digests
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Tags
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ghcr.io/${{ github.repository_owner }}/${{ matrix.name }}
-          # The version, and the minor line it is the newest of. Not
-          # `latest`: that belongs to main, and moving it here would make the
-          # newest build of Primer and the newest release of Primer the same
-          # name for two different things.
+          images: ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}
           tags: |
             type=raw,value=${{ needs.version.outputs.version }}
             type=raw,value=${{ needs.version.outputs.minor }},enable=${{ needs.version.outputs.stable == 'true' }}
-          labels: |
-            org.opencontainers.image.version=${{ needs.version.outputs.version }}
 
-      - name: Build and push
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: ${{ matrix.dockerfile }}
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          platforms: linux/amd64
-          cache-from: type=gha,scope=${{ matrix.name }}
+      - name: Create the manifest
+        working-directory: /tmp/digests
+        run: |
+          set -euo pipefail
+          # Both architectures, or nothing published under this version.
+          test "$(ls -1 | wc -l)" -eq 2
+
+          docker buildx imagetools create \
+            $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
+            $(printf 'ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}@sha256:%s ' *)
+
+      - name: Check both architectures are there
+        run: |
+          set -euo pipefail
+          # The acceptance test for the whole thing, run against the registry
+          # rather than against what this workflow believes it pushed.
+          raw=$(docker buildx imagetools inspect \
+            "ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}:${{ needs.version.outputs.version }}" \
+            --raw)
+          for architecture in amd64 arm64; do
+            jq -e --arg a "$architecture" \
+              '[.manifests[].platform.architecture] | index($a)' <<< "$raw" > /dev/null \
+              || { echo "::error::${{ matrix.image }} has no $architecture" >&2; exit 1; }
+          done
+          echo "$raw" | jq '[.manifests[].platform]'
 
   chart:
     name: Chart
-    # After the images, never beside them. The chart's appVersion is what
+    # After the manifests, never beside them. The chart's appVersion is what
     # picks an image tag, so publishing it first would offer an install that
-    # pulls tags nothing has pushed yet.
-    needs: [version, images]
+    # pulls tags nothing has pushed yet - and until the manifest job runs the
+    # images exist only as digests nothing points at.
+    needs: [version, manifest]
     runs-on: ubuntu-latest
     permissions:
       contents: read

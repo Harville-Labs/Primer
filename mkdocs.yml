@@ -88,6 +88,7 @@ nav:
       - Choosing models: operations/models.md
       - Deploying: operations/deploying.md
       - Kubernetes: operations/kubernetes.md
+      - Images: operations/images.md
       - Migrations: operations/migrations.md
       - Upgrading: operations/upgrading.md
   - Reference:
