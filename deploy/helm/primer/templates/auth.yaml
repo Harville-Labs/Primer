@@ -19,6 +19,7 @@ spec:
         app.kubernetes.io/component: auth
     spec:
       {{- include "primer.podIdentity" (dict "root" . "component" "auth") | nindent 6 }}
+      {{- include "primer.topologySpread" (dict "root" . "component" "auth") | nindent 6 }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:

@@ -460,3 +460,14 @@ securityContext:
   readOnlyRootFilesystem: true
   capabilities:
     drop: ["ALL"]
+
+# Optional placement rule applied independently to each component's pods.
+# ScheduleAnyway keeps single-node clusters installable; clusters with enough
+# nodes can require separation and provide matchLabelKeys to avoid counting
+# old ReplicaSet pods during a rollout.
+podTopologySpread:
+  enabled: false
+  topologyKey: kubernetes.io/hostname
+  maxSkew: 1
+  whenUnsatisfiable: ScheduleAnyway
+  matchLabelKeys: []

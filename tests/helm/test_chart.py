@@ -223,6 +223,35 @@ def test_parsing_and_indexing_scale_separately(manifests: list[dict[str, Any]]) 
     assert "ingestion.parse" not in index_queues
 
 
+def test_component_topology_spread_is_configurable_without_post_rendering() -> None:
+    """A release can spread its own pods while each service stays independent."""
+    rendered = render(
+        "podTopologySpread.enabled=true",
+        "podTopologySpread.whenUnsatisfiable=DoNotSchedule",
+        "podTopologySpread.matchLabelKeys[0]=pod-template-hash",
+    )
+    control = named(rendered, "Deployment", "-control")
+    index = named(rendered, "Deployment", "-worker-index")
+
+    constraint = control["spec"]["template"]["spec"]["topologySpreadConstraints"][0]
+    assert constraint["topologyKey"] == "kubernetes.io/hostname"
+    assert constraint["whenUnsatisfiable"] == "DoNotSchedule"
+    assert constraint["labelSelector"]["matchLabels"]["app.kubernetes.io/component"] == "control"
+    assert constraint["matchLabelKeys"] == ["pod-template-hash"]
+    assert (
+        index["spec"]["template"]["spec"]["topologySpreadConstraints"][0]["labelSelector"][
+            "matchLabels"
+        ]["app.kubernetes.io/component"]
+        == "worker-index"
+    )
+
+
+def test_topology_spread_is_off_by_default(manifests: list[dict[str, Any]]) -> None:
+    """A hard hostname rule would make the default chart unschedulable on one node."""
+    for deployment in of_kind(manifests, "Deployment"):
+        assert "topologySpreadConstraints" not in deployment["spec"]["template"]["spec"]
+
+
 def test_the_parse_worker_keeps_its_model_cache(manifests: list[dict[str, Any]]) -> None:
     """Without it every pod restart re-downloads half a gigabyte."""
     claims = of_kind(manifests, "PersistentVolumeClaim")
