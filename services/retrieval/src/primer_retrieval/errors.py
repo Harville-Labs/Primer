@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import logging
 import re
-from collections.abc import Iterator
+from collections.abc import Generator
 from contextlib import contextmanager
 
 from fastapi import status
@@ -49,7 +49,7 @@ class UnembeddedChunks(RuntimeError):
 
 
 @contextmanager
-def embedding_endpoint(consequence: str) -> Iterator[None]:
+def embedding_endpoint(consequence: str) -> Generator[None]:
     """Mark a block that cannot run without the embedding endpoint.
 
     An unreachable embedder is a deployment fault, not a bad request, and it
@@ -127,7 +127,7 @@ def wrong_dimensions(stored: str, offered: str, consequence: str) -> ProblemErro
 
 
 @contextmanager
-def vector_store(consequence: str) -> Iterator[None]:
+def vector_store(consequence: str) -> Generator[None]:
     """Mark a block that cannot run unless the vector store accepts a write.
 
     Writing is the half of the store that was never guarded. A search that
@@ -174,7 +174,7 @@ def no_graph_store(consequence: str) -> ProblemError:
 
 
 @contextmanager
-def graph_store(consequence: str) -> Iterator[None]:
+def graph_store(consequence: str) -> Generator[None]:
     """Mark a block that cannot run without the knowledge graph.
 
     Named apart from the vector store because it is a different server. An

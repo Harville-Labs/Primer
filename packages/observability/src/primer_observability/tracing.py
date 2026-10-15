@@ -12,7 +12,7 @@ of them carrying what the question was.
 from __future__ import annotations
 
 import logging
-from collections.abc import Iterator
+from collections.abc import Generator
 from contextlib import contextmanager
 from typing import Any
 
@@ -58,7 +58,7 @@ def configure_tracing(service: str, endpoint: str | None = None) -> None:
 
 
 @contextmanager
-def span_for(name: str, **attributes: Any) -> Iterator[None]:
+def span_for(name: str, **attributes: Any) -> Generator[None]:
     """A span carrying only attributes from the safe set.
 
     Anything else is dropped rather than recorded, because a span attribute

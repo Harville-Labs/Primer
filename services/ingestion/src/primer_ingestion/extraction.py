@@ -14,7 +14,7 @@ the only shape that ever reaches Retrieval.
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable, Iterator, Sequence
+from collections.abc import Callable, Generator, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from typing import Any, Protocol
@@ -145,7 +145,7 @@ class GraphExtractor(Protocol):
 
 
 @contextmanager
-def extraction_model() -> Iterator[None]:
+def extraction_model() -> Generator[None]:
     """Report the extraction model's failures as the extraction model's.
 
     A refusal on the request's merits - a wrong model name, a bad key - is

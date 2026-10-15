@@ -47,7 +47,7 @@ class IngestionJobRepository:
         result = await self._session.execute(select(IngestionJob).where(IngestionJob.id == job_id))
         return result.scalar_one_or_none()
 
-    async def _context(self, job: IngestionJob) -> Row[tuple[DocumentVersion, Document, Library]]:
+    async def _context(self, job: IngestionJob) -> Row[DocumentVersion, Document, Library]:
         """The version, document, and library a claim needs to describe itself."""
         result = await self._session.execute(
             select(DocumentVersion, Document, Library)
