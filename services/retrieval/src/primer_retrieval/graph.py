@@ -48,6 +48,11 @@ if TYPE_CHECKING:
 #: neighbourhood stops meaning anything about the question.
 MAX_HOPS = 2
 
+# The graph enriches search but is optional. A short retry window gives a
+# transient failure a chance to clear without making vector fallback wait
+# for the driver's 30-second default.
+MAX_TRANSACTION_RETRY_SECONDS = 2.0
+
 #: Applied by the migration entrypoint, never at service startup: creating
 #: a constraint takes schema privileges a serving process should not hold.
 #: The entity constraint is also what makes concurrent writers converge on
@@ -358,5 +363,6 @@ def build_graph_store(settings: Settings) -> GraphStore | None:
         auth=(settings.graph_username, password) if password else None,
         connection_timeout=settings.graph_timeout_seconds,
         connection_acquisition_timeout=settings.graph_timeout_seconds,
+        max_transaction_retry_time=MAX_TRANSACTION_RETRY_SECONDS,
     )
     return GraphStore(driver, settings.graph_database, settings.graph_timeout_seconds)

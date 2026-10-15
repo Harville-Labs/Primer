@@ -11,6 +11,7 @@ graph, so an unreachable graph makes search worse, not broken.
 
 from __future__ import annotations
 
+import time
 import uuid
 from typing import Any
 
@@ -137,17 +138,22 @@ def test_verify_without_a_graph_reports_no_graph_count_rather_than_zero() -> Non
 
 def test_an_unreachable_graph_leaves_search_answering_from_vectors() -> None:
     """Through the real driver, so the error a refused connection raises is
-    the one search knows to search past."""
+    the one search knows to search past. Since the graph is optional, waiting
+    the driver's full transaction retry budget before falling back is not
+    useful to the searcher."""
     client = build_client(graph_url="bolt://127.0.0.1:1", graph_timeout_seconds=2)
     body = delete_body()
     body.pop("document_version_id")
     body["generation_ids"] = [body.pop("generation_id")]
 
+    started = time.monotonic()
     response = client.post(
         "/internal/v1/search",
         json={**body, "query": "Who did Marie Curie work with?"},
         headers={"X-Primer-Service-Token": SERVICE_TOKEN},
     )
+    elapsed = time.monotonic() - started
 
     assert response.status_code == 200, response.text
     assert [c["content"] for c in response.json()["chunks"]] == ["Marie Curie discovered polonium."]
+    assert elapsed < 10, f"vector fallback took {elapsed:.1f}s with an unavailable graph"
