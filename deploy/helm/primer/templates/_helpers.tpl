@@ -172,6 +172,61 @@ is what keeps a deployment without one behaving exactly as it did before.
 {{- end -}}
 
 {{/*
+How to reach the knowledge graph. Given to Retrieval, which owns it, and to
+the step that prepares its schema - nothing else opens a connection to it.
+
+Included only where `graph.url` is set; each caller guards it, so a
+deployment without a graph renders exactly as it did before there was one.
+*/}}
+{{- define "primer.graphEnv" -}}
+- name: PRIMER_GRAPH_URL
+  value: {{ .Values.graph.url | quote }}
+- name: PRIMER_GRAPH_USERNAME
+  value: {{ .Values.graph.username | quote }}
+- name: PRIMER_GRAPH_DATABASE
+  value: {{ .Values.graph.database | quote }}
+- name: PRIMER_GRAPH_PASSWORD
+  valueFrom:
+    secretKeyRef:
+      name: {{ required "graph.existingSecret is required when graph.url is set: name a Secret holding the Neo4j password under graph.passwordKey" .Values.graph.existingSecret }}
+      key: {{ .Values.graph.passwordKey }}
+{{- end -}}
+
+{{/*
+The model that reads a graph out of each passage. Only the index worker gets
+it: extraction runs in the embed stage, beside the call that embeds the
+same passages.
+
+Refused without a graph rather than rendered anyway. Retrieval with nowhere
+to put a graph refuses every one it is sent, so the deployment would install
+cleanly and then fail every document it indexed.
+*/}}
+{{- define "primer.graphExtractionEnv" -}}
+{{- with .Values.graph.extraction }}
+{{- if .baseUrl }}
+{{- if not $.Values.graph.url }}
+{{- fail "graph.extraction.baseUrl is set but graph.url is not, so every extracted graph would be refused and every document would fail to index. Set graph.url to a Neo4j, or unset graph.extraction.baseUrl." }}
+{{- end }}
+- name: PRIMER_GRAPH_EXTRACTION_BASE_URL
+  value: {{ .baseUrl | quote }}
+- name: PRIMER_GRAPH_EXTRACTION_MODEL
+  value: {{ required "graph.extraction.model is required when graph.extraction.baseUrl is set" .model | quote }}
+- name: PRIMER_GRAPH_EXTRACTION_CONCURRENCY
+  value: {{ .concurrency | quote }}
+- name: PRIMER_GRAPH_EXTRACTION_TIMEOUT_SECONDS
+  value: {{ .timeoutSeconds | quote }}
+{{- if .existingSecret }}
+- name: PRIMER_GRAPH_EXTRACTION_API_KEY
+  valueFrom:
+    secretKeyRef:
+      name: {{ .existingSecret }}
+      key: {{ .apiKeyKey }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- end -}}
+
+{{/*
 A writable home and temp directory. The root filesystem is read-only, and
 several libraries create a cache or config directory under $HOME on import
 and fail hard without one.

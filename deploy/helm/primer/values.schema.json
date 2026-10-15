@@ -240,6 +240,70 @@
         }
       }
     },
+    "graph": {
+      "type": "object",
+      "description": "Optional knowledge graph in Neo4j. Off unless url is set.",
+      "properties": {
+        "url": {
+          "description": "bolt:// or neo4j://. Empty turns the graph off.",
+          "type": "string",
+          "pattern": "^$|^(bolt|neo4j)(\\+s|\\+ssc)?://"
+        },
+        "username": {
+          "type": "string"
+        },
+        "database": {
+          "type": "string"
+        },
+        "existingSecret": {
+          "description": "Required when url is set: a Secret holding the Neo4j password.",
+          "type": "string"
+        },
+        "passwordKey": {
+          "type": "string"
+        },
+        "hops": {
+          "description": "How far search follows relations from what a question names.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2
+        },
+        "candidates": {
+          "description": "Passages the graph adds to a search before fusion.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 200
+        },
+        "extraction": {
+          "type": "object",
+          "properties": {
+            "baseUrl": {
+              "type": "string"
+            },
+            "model": {
+              "description": "Must support structured output.",
+              "type": "string"
+            },
+            "existingSecret": {
+              "type": "string"
+            },
+            "apiKeyKey": {
+              "type": "string"
+            },
+            "concurrency": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "timeoutSeconds": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
     "tools": {
       "type": "object",
       "properties": {

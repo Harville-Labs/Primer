@@ -112,6 +112,12 @@ def client(pgvector_url: str, request: pytest.FixtureRequest) -> TestClient:
 
 
 @pytest.fixture
+def neo4j_settings(neo4j: Neo4jContainer) -> Settings:
+    """Settings naming the session's Neo4j, for code that builds its own store."""
+    return graph_settings(neo4j)
+
+
+@pytest.fixture
 def graph(neo4j: Neo4jContainer) -> Iterator[GraphStore]:
     store = build_graph_store(graph_settings(neo4j))
     assert store is not None

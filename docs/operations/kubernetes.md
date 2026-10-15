@@ -64,6 +64,8 @@ values`, and in whatever stores your release history.
 | `rabbitmq.existingSecret` | `broker-url` |
 | `auth.oidc.existingSecret` | `client-secret`, `cookie-secret` |
 | `inference.*.existingSecret` | API keys, if your endpoint needs them |
+| `graph.existingSecret` | `graph-password`, when `graph.url` is set |
+| `graph.extraction.existingSecret` | `graph-extraction-api-key`, if the extraction endpoint needs one |
 
 The one it does create is Primer's own cluster-internal service token, which
 means nothing outside the release. It is generated once and preserved across
@@ -266,9 +268,58 @@ because it sounds thorough.
     answer. Until then `workers.parse.replicas` and `workers.index.replicas`
     are set by hand.
 
+## The knowledge graph
+
+Off until `graph.url` names a Neo4j. The chart does not run one, for the
+same reason it runs no PostgreSQL: see below.
+
+```yaml
+graph:
+  url: bolt://neo4j.graph.svc:7687
+  existingSecret: primer-neo4j        # key: graph-password
+  extraction:
+    baseUrl: http://vllm.models.svc:8000/v1
+    model: Qwen/Qwen2.5-7B-Instruct
+```
+
+With a URL set, Retrieval is given the graph and a `migrate-graph` hook
+applies its constraints and indexes before every install and upgrade, beside
+the SQL migrations. Nothing else is told the graph exists: the index worker
+hands each extracted graph to Retrieval rather than writing it, so the
+password stays with the one service that owns the store.
+
+`graph.extraction` is the model that reads entities and relations out of
+each passage, and it runs on the index worker. It is optional - without it
+the graph stays empty and search answers from vectors alone - but setting it
+without `graph.url` is refused at render time, because every document would
+then extract a graph that Retrieval has nowhere to put and fail to index.
+Documents indexed before extraction was turned on have no graph until they
+are reindexed.
+
+Search tolerates the graph being down: it answers from vectors and says so
+in its logs. Indexing and deletion do not, since a graph missing what the
+vectors hold would answer from passages that no longer exist; they fail and
+are retried.
+
+!!! note "Admit only Retrieval to Neo4j"
+    The chart's policies cover the pods it runs, and Neo4j is not one of
+    them. If yours runs in the cluster, give it an ingress policy that
+    admits only Primer's Retrieval pods and the schema hook:
+
+    ```yaml
+    - podSelector:
+        matchExpressions:
+          - key: app.kubernetes.io/component
+            operator: In
+            values: [retrieval, migrate-graph]
+      namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: primer
+    ```
+
 ## What is not here
 
-No PostgreSQL, RabbitMQ, or model server. A chart that shipped its own
+No PostgreSQL, RabbitMQ, Neo4j, or model server. A chart that shipped its own
 database is one people run in production by accident, and Primer's whole
 premise is that you already have the infrastructure you want to keep your
 documents on.

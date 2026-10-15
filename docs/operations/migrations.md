@@ -26,6 +26,23 @@ missing migration.
 The Compose profile and the Helm chart both run all three for you: Compose as
 one-shot `migrate-*` services, the chart as pre-install and pre-upgrade hooks.
 
+### The knowledge graph
+
+A deployment with `PRIMER_GRAPH_URL` set has a fourth step. It is not an
+Alembic migration - the graph's schema is a handful of idempotent
+constraints and indexes with no history to record - but it runs where the
+migrations do, and for the same reason:
+
+```bash
+(cd services/retrieval \
+  && PRIMER_GRAPH_URL=bolt://host:7687 PRIMER_GRAPH_PASSWORD=... \
+     uv run python -m primer_retrieval.graph_schema)
+```
+
+Safe to run on every release. Run with the graph off, it exits non-zero
+rather than succeeding at nothing. Compose runs it as `migrate-graph` under
+the `graph` profile; the chart runs it as a hook when `graph.url` is set.
+
 The URL comes from the environment, never from a file in the repository, so
 no deployment's credentials live in version control. It may name an async
 driver — the same string the services use — and migrations will rewrite the

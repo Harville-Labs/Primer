@@ -104,6 +104,42 @@ services:
     command: ["alembic", "upgrade", "head"]
     restart: "no"
 
+  # The knowledge graph, off unless the `graph` profile is enabled:
+  #
+  #   COMPOSE_PROFILES=graph
+  #
+  # Every graph variable below falls back to empty rather than being
+  # required, because Compose interpolates the whole file whichever profiles
+  # are on: `:?` here would refuse to start a stack that has no graph at all.
+  # Neo4j itself refuses an empty password, so the profile still cannot run
+  # without one.
+  neo4j:
+    image: neo4j:5.26-community
+    profiles: [graph]
+    environment:
+      NEO4J_AUTH: neo4j/${PRIMER_GRAPH_PASSWORD:-}
+    volumes:
+      - graph-data:/data
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:7474"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 20s
+    restart: unless-stopped
+
+  migrate-graph:
+    <<: [*python-image, *hardening]
+    profiles: [graph]
+    depends_on:
+      neo4j:
+        condition: service_healthy
+    environment:
+      PRIMER_GRAPH_URL: ${PRIMER_GRAPH_URL:-}
+      PRIMER_GRAPH_PASSWORD: ${PRIMER_GRAPH_PASSWORD:-}
+    command: ["python", "-m", "primer_retrieval.graph_schema"]
+    restart: "no"
+
   init-volumes:
     image: alpine
     restart: "no"
@@ -149,6 +185,10 @@ services:
     depends_on:
       migrate-vectors:
         condition: service_completed_successfully
+      # Only waited for when the `graph` profile is on.
+      migrate-graph:
+        condition: service_completed_successfully
+        required: false
     environment:
       <<: *service-env
       # Retrieval reads pgvector synchronously; it does not use asyncpg.
@@ -158,6 +198,9 @@ services:
       PRIMER_EMBEDDING_MODEL: ${PRIMER_EMBEDDING_MODEL:?set PRIMER_EMBEDDING_MODEL}
       PRIMER_EMBEDDING_DIMENSIONS: ${PRIMER_EMBEDDING_DIMENSIONS:?set PRIMER_EMBEDDING_DIMENSIONS}
       PRIMER_EMBEDDING_API_KEY: ${PRIMER_EMBEDDING_API_KEY:-}
+      # Empty turns the graph off; search answers from vectors alone.
+      PRIMER_GRAPH_URL: ${PRIMER_GRAPH_URL:-}
+      PRIMER_GRAPH_PASSWORD: ${PRIMER_GRAPH_PASSWORD:-}
     command:
       ["uvicorn", "primer_retrieval.app:create_app", "--factory",
        "--host", "0.0.0.0", "--port", "8000"]
@@ -230,6 +273,11 @@ services:
       # document structure alone and a table becomes one chunk per cell.
       PRIMER_CHUNK_TOKENIZER: ${PRIMER_CHUNK_TOKENIZER:-}
       PRIMER_MAX_CHUNK_TOKENS: ${PRIMER_MAX_CHUNK_TOKENS:-512}
+      # Reads entities and relations out of each passage for the graph.
+      # Empty leaves extraction off; it needs PRIMER_GRAPH_URL as well.
+      PRIMER_GRAPH_EXTRACTION_BASE_URL: ${PRIMER_GRAPH_EXTRACTION_BASE_URL:-}
+      PRIMER_GRAPH_EXTRACTION_MODEL: ${PRIMER_GRAPH_EXTRACTION_MODEL:-}
+      PRIMER_GRAPH_EXTRACTION_API_KEY: ${PRIMER_GRAPH_EXTRACTION_API_KEY:-}
     volumes:
       - source-objects:/var/lib/primer/sources
       # Docling downloads layout models on first use. A named volume keeps
@@ -268,3 +316,4 @@ volumes:
   rabbitmq-data:
   source-objects:
   model-cache:
+  graph-data:

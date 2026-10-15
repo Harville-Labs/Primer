@@ -46,6 +46,13 @@ spec:
             - name: PRIMER_QDRANT_URL
               value: {{ required "vectorStore.qdrantUrl is required for qdrant" .Values.vectorStore.qdrantUrl | quote }}
             {{- end }}
+            {{- if .Values.graph.url }}
+            {{- include "primer.graphEnv" . | trim | nindent 12 }}
+            - name: PRIMER_GRAPH_HOPS
+              value: {{ .Values.graph.hops | quote }}
+            - name: PRIMER_GRAPH_CANDIDATES
+              value: {{ .Values.graph.candidates | quote }}
+            {{- end }}
           ports:
             - name: http
               containerPort: 8000

@@ -222,6 +222,49 @@ vectorStore:
   kind: pgvector          # pgvector | qdrant
   qdrantUrl: ""
 
+# --- Knowledge graph ----------------------------------------------------
+#
+# Optional, and off unless `url` is set. With it, the index worker asks a
+# model for the entities and relations each passage names, and search
+# follows them to passages that share no words with the question. See
+# docs/architecture/retrieval.md for what it finds and what it costs.
+#
+# No Neo4j is bundled, for the same reason no PostgreSQL is. Community
+# edition is enough: the schema uses only uniqueness constraints and range
+# indexes.
+graph:
+  # bolt:// or neo4j://. Empty turns the graph off: nothing below is
+  # rendered and no pod opens a connection to it.
+  url: ""
+  username: neo4j
+  database: neo4j
+  # Required once `url` is set. A Secret holding the Neo4j password under
+  # `passwordKey`.
+  existingSecret: ""
+  passwordKey: graph-password
+  # How far search follows relations from the entities a question names,
+  # 0 to 2. Two reaches what is related to what is related to the question,
+  # which is where a vector search has the least chance on its own.
+  hops: 2
+  # Passages the graph adds to a search before the two rankings are fused.
+  # About as wide as the reranker's candidates, so neither drowns the other.
+  candidates: 20
+  # The model that reads entities out of passages: one call per passage,
+  # which on a large library is the most expensive thing ingestion does. Any
+  # OpenAI-compatible endpoint whose model supports structured output.
+  #
+  # Leaving it empty with `url` set is allowed and almost never wanted:
+  # nothing writes to the graph, so search consults an empty one.
+  extraction:
+    baseUrl: ""
+    model: ""
+    existingSecret: ""
+    apiKeyKey: graph-extraction-api-key
+    # Passages sent to the model at once, per document being indexed. The
+    # index worker's own concurrency multiplies it.
+    concurrency: 4
+    timeoutSeconds: 120
+
 # --- Tools --------------------------------------------------------------
 tools:
   # Off by default, deployment-wide. Turning this on without a sandbox

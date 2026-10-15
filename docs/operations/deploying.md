@@ -10,6 +10,7 @@
 | Embedding endpoint | for retrieval | Any OpenAI-compatible API |
 | `oauth2-proxy` | for multi-user | Not needed with auth off |
 | Qdrant | optional | Alternative to pgvector |
+| Neo4j | optional | For the knowledge graph; Compose bundles one under the `graph` profile |
 
 ## Running it with Compose
 
@@ -42,6 +43,24 @@ deploy/compose/scripts/smoke.sh
 
     That deletes the database along with the volume, so only do it on a stack
     you can recreate.
+
+## Turning on the knowledge graph with Compose
+
+The graph runs under a Compose profile, so a stack without one starts no
+Neo4j. Uncomment the graph block in `.env`:
+
+```bash
+COMPOSE_PROFILES=graph
+PRIMER_GRAPH_URL=bolt://neo4j:7687
+PRIMER_GRAPH_PASSWORD=...   # openssl rand -hex 32
+PRIMER_GRAPH_EXTRACTION_BASE_URL=http://host.docker.internal:11434/v1
+PRIMER_GRAPH_EXTRACTION_MODEL=qwen2.5:7b-instruct
+```
+
+Neo4j's port is not published; only Retrieval and the `migrate-graph` step
+reach it. Like PostgreSQL, it reads its password only when it first creates
+its volume. Documents indexed before the graph was on need a reindex to get
+one.
 
 ## Published images
 

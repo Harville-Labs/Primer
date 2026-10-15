@@ -38,7 +38,7 @@ RESOLVE_ENV = {
 }
 
 
-def resolve(*files: Path) -> dict[str, Any]:
+def resolve(*files: Path, env: dict[str, str] | None = None) -> dict[str, Any]:
     """Ask Docker to resolve the files, so the test sees what Compose sees.
 
     `--env-file` names `env.example` explicitly, because Compose otherwise
@@ -59,7 +59,7 @@ def resolve(*files: Path) -> dict[str, Any]:
         command,
         capture_output=True,
         text=True,
-        env={**os.environ, **RESOLVE_ENV},
+        env={**os.environ, **RESOLVE_ENV, **(env or {})},
         check=False,
     )
     if result.returncode != 0:
@@ -233,3 +233,51 @@ def test_every_documented_variable_appears_in_the_example(
     example = (COMPOSE_DIR / "env.example").read_text()
     for variable in RESOLVE_ENV:
         assert variable in example, f"{variable} is required but absent from env.example"
+
+
+#: What turns the graph on: the profile, and a URL and password for it.
+GRAPH_ENV = {
+    "COMPOSE_PROFILES": "graph",
+    "PRIMER_GRAPH_URL": "bolt://neo4j:7687",
+    "PRIMER_GRAPH_PASSWORD": "resolve-only",
+}
+
+
+def resolve_with_graph() -> dict[str, Any]:
+    if shutil.which("docker") is None:
+        pytest.skip("docker is not installed")
+    return resolve(BASE, env=GRAPH_ENV)
+
+
+def test_the_graph_is_off_unless_its_profile_is_on(compose_config: dict[str, Any]) -> None:
+    """A stack started as it always was must not start a Neo4j it never asked for."""
+    assert "neo4j" not in compose_config["services"]
+    assert "migrate-graph" not in compose_config["services"]
+
+
+def test_the_graph_schema_is_applied_before_retrieval_starts() -> None:
+    """Retrieval writing into a graph with no constraints duplicates every entity."""
+    services = resolve_with_graph()["services"]
+
+    assert services["migrate-graph"]["restart"] == "no"
+    assert services["migrate-graph"]["depends_on"]["neo4j"]["condition"] == "service_healthy"
+    waits = services["retrieval"]["depends_on"]["migrate-graph"]
+    assert waits["condition"] == "service_completed_successfully"
+    assert services["retrieval"]["environment"]["PRIMER_GRAPH_URL"] == "bolt://neo4j:7687"
+
+
+def test_the_graph_password_has_no_default() -> None:
+    """Empty when unset, never a value, so Neo4j refuses to start without one.
+
+    It cannot be `:?` like the others: Compose interpolates every service
+    whichever profiles are on, so that would refuse every stack without a graph.
+    """
+    text = BASE.read_text()
+    assert "${PRIMER_GRAPH_PASSWORD:-}" in text
+    assert "${PRIMER_GRAPH_PASSWORD:-" not in text.replace("${PRIMER_GRAPH_PASSWORD:-}", "")
+    assert "neo4j/${PRIMER_GRAPH_PASSWORD:-}" in text
+
+
+def test_neo4j_is_not_published() -> None:
+    """Only Retrieval and the schema step talk to it, both on the Compose network."""
+    assert "ports" not in resolve_with_graph()["services"]["neo4j"]

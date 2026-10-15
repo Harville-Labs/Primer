@@ -54,4 +54,50 @@ spec:
       volumes:
         {{- include "primer.scratchVolumes" $ | nindent 8 }}
 {{- end }}
+{{- if .Values.graph.url }}
+{{/*
+The knowledge graph's constraints and indexes, beside the SQL migrations and
+for the same reason: once per release, before any Retrieval replica writes.
+Not Alembic, because there is no history to record - every statement is
+`IF NOT EXISTS`, so rerunning it on each upgrade is the whole design.
+*/}}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "primer.fullname" . }}-migrate-graph
+  labels:
+    {{- include "primer.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "-5"
+    "helm.sh/hook-delete-policy": before-hook-creation
+spec:
+  backoffLimit: {{ .Values.migrations.backoffLimit }}
+  template:
+    metadata:
+      labels:
+        {{- include "primer.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: migrate-graph
+    spec:
+      restartPolicy: Never
+      {{- include "primer.podIdentity" (dict "root" . "component" "migrate") | nindent 6 }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: migrate
+          image: {{ include "primer.image" (dict "root" . "component" "api") }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          command: ["python", "-m", "primer_retrieval.graph_schema"]
+          env:
+            {{- include "primer.graphEnv" . | trim | nindent 12 }}
+            {{- with include "primer.extraEnv" . }}{{ . | trim | nindent 12 }}{{- end }}
+          resources:
+            {{- toYaml .Values.migrations.resources | nindent 12 }}
+          volumeMounts:
+            {{- include "primer.scratchMounts" . | nindent 12 }}
+      volumes:
+        {{- include "primer.scratchVolumes" . | nindent 8 }}
+{{- end }}
 {{- end }}
