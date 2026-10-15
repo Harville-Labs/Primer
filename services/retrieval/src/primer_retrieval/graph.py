@@ -23,7 +23,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
 from neo4j import (
@@ -36,7 +36,10 @@ from neo4j import (
 )
 from primer_contracts.graph import ChunkGraph, entity_key
 
-from primer_retrieval.config import Settings
+if TYPE_CHECKING:
+    # Only for annotations: config bounds its hop setting by MAX_HOPS, so
+    # importing it here at runtime would be a cycle.
+    from primer_retrieval.config import Settings
 
 #: The furthest a neighbourhood reaches from the entities a question names.
 #: Written into `_NEIGHBOURHOOD` as a literal, because Cypher cannot take a

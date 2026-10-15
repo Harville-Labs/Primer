@@ -60,6 +60,8 @@ and says which setting to change, rather than indexing a graph nobody keeps.
 | `PRIMER_GRAPH_PASSWORD` | unset | |
 | `PRIMER_GRAPH_DATABASE` | `neo4j` | Community edition has only this one |
 | `PRIMER_GRAPH_TIMEOUT_SECONDS` | `30` | Per transaction, and for connecting |
+| `PRIMER_GRAPH_HOPS` | `2` | How far search follows relations from the entities a question names. `0` to `2` |
+| `PRIMER_GRAPH_CANDIDATES` | `20` | Passages the graph adds to a search before fusion |
 | `PRIMER_INTERNAL_API_TOKEN` | unset | **Unset denies the internal API** |
 
 

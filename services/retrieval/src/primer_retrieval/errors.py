@@ -20,6 +20,11 @@ from primer_service.errors import ProblemError
 
 logger = logging.getLogger(__name__)
 
+#: What the Neo4j driver raises when the graph is down, busy or gone, as
+#: opposed to when Primer sent it something wrong. Shared by the write path,
+#: which fails over it, and search, which carries on without the graph.
+GRAPH_OUTAGES = (ServiceUnavailable, SessionExpired, TransientError)
+
 
 def dependency_unavailable(detail: str) -> ProblemError:
     return ProblemError(
@@ -191,7 +196,7 @@ def graph_store(consequence: str) -> Iterator[None]:
             f"The graph store refused Primer's credentials, so {consequence}. "
             "Check PRIMER_GRAPH_USERNAME and PRIMER_GRAPH_PASSWORD."
         ) from error
-    except (ServiceUnavailable, SessionExpired, TransientError) as error:
+    except GRAPH_OUTAGES as error:
         logger.warning("the graph store could not be reached", exc_info=True)
         raise dependency_unavailable(
             f"The graph store could not be reached, so {consequence}."

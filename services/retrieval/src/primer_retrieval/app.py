@@ -42,6 +42,7 @@ from primer_retrieval.errors import (
     vector_store,
 )
 from primer_retrieval.graph import GraphStore, build_graph_store
+from primer_retrieval.hybrid import blend, related_chunks
 from primer_retrieval.pipelines import (
     GENERATION_ID,
     DocumentEmbedder,
@@ -49,6 +50,7 @@ from primer_retrieval.pipelines import (
     build_document_embedder,
     build_retriever,
     build_text_embedder,
+    chunks_filter,
     scope_filter,
     to_documents,
     to_retrieved,
@@ -215,6 +217,12 @@ def search(payload: SearchRequest, state: State) -> SearchResult:
     is applied by the store rather than by discarding results afterwards.
     Filtering after the fact would silently return fewer results than asked
     for, and would depend on this code never being reordered.
+
+    With a graph, the passages connected to what the question names are
+    fused with the vector hits by rank before the reranker reads them. The
+    order is the fusion's; the scores are still the store's similarity or
+    the reranker's, because a fused rank score is not something a relevance
+    floor can be measured against.
     """
     with embedding_endpoint("this library cannot be searched"):
         embedded = state.text_embedder.run(payload.query)
@@ -232,10 +240,30 @@ def search(payload: SearchRequest, state: State) -> SearchResult:
         filters=scope_filter(payload.library_id, payload.generation_ids),
         top_k=candidates,
     )
+    related = related_chunks(
+        state.graph,
+        payload.library_id,
+        payload.generation_ids,
+        payload.query,
+        hops=state.settings.graph_hops,
+        limit=state.settings.graph_candidates,
+    )
+
+    # Passages the graph found are read back through the retriever rather
+    # than fetched by id, so each carries the store's own similarity to the
+    # question. That keeps every score on one scale and the floor meaningful
+    # for them too, where a lookup by id would return them unscored.
+    def fetch(chunk_ids: list[str]) -> list[Any]:
+        return state.retriever.run(
+            query_embedding=embedded["embedding"],
+            filters=chunks_filter(payload.library_id, payload.generation_ids, chunk_ids),
+            top_k=len(chunk_ids),
+        )["documents"]
+
     kept = reorder(
         state.reranker,
         payload.query,
-        list(hits["documents"]),
+        blend(list(hits["documents"]), related, fetch),
         lambda hit: hit.content or "",
         payload.limit,
     )

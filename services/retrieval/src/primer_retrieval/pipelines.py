@@ -90,6 +90,25 @@ def scope_filter(library_id: UUID, generation_ids: tuple[UUID, ...]) -> dict[str
     }
 
 
+def chunks_filter(
+    library_id: UUID, generation_ids: tuple[UUID, ...], chunk_ids: list[str]
+) -> dict[str, Any]:
+    """`scope_filter`, narrowed to named chunks.
+
+    For passages the graph points at. The graph is scoped too, but the ids
+    it returns are only a list of what to look at: whether the caller may
+    see them is still decided here, by the same filter as every other read.
+    """
+    scope = scope_filter(library_id, generation_ids)
+    return {
+        "operator": "AND",
+        "conditions": [
+            *scope["conditions"],
+            {"field": "id", "operator": "in", "value": chunk_ids},
+        ],
+    }
+
+
 def version_filter(library_id: UUID, document_version_id: UUID) -> dict[str, Any]:
     """Everything stored for one version, whatever generation built it.
 

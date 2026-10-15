@@ -13,7 +13,13 @@ import pytest
 from conformance_support import HashingDocumentEmbedder, HashingTextEmbedder, embed_text, make_chunk
 from haystack.document_stores.types import DocumentStore, DuplicatePolicy
 from primer_retrieval.config import Settings
-from primer_retrieval.pipelines import build_retriever, scope_filter, to_documents, to_retrieved
+from primer_retrieval.pipelines import (
+    build_retriever,
+    chunks_filter,
+    scope_filter,
+    to_documents,
+    to_retrieved,
+)
 
 FIRST_LIBRARY = uuid.uuid5(uuid.NAMESPACE_URL, "library-one")
 SECOND_LIBRARY = uuid.uuid5(uuid.NAMESPACE_URL, "library-two")
@@ -216,3 +222,30 @@ def test_the_locator_survives_a_round_trip(store: DocumentStore, settings: Setti
     assert results[0].locator is not None
     assert results[0].locator.page == 1
     assert results[0].locator.section == "Findings"
+
+
+def test_naming_a_chunk_never_widens_the_scope(store: DocumentStore, settings: Settings) -> None:
+    """How search reads the passages the graph points at.
+
+    The graph hands back ids, and an id is not permission. Here the caller
+    names one chunk in its own library, one in another library and one in a
+    pending generation, and only the first may come back - on every backend,
+    because each translates an `id` condition its own way.
+    """
+    mine = make_chunk(library_id=FIRST_LIBRARY, generation_id=GENERATION, content="named term")
+    other = make_chunk(library_id=FIRST_LIBRARY, generation_id=GENERATION, content="x", ordinal=1)
+    theirs = make_chunk(library_id=SECOND_LIBRARY, generation_id=GENERATION, content="named term")
+    pending = make_chunk(
+        library_id=FIRST_LIBRARY, generation_id=NEXT_GENERATION, content="named term", ordinal=2
+    )
+    write(store, mine, other, theirs, pending)
+    named = [str(chunk.chunk_id) for chunk in (mine, theirs, pending)]
+
+    hits = build_retriever(store, settings).run(
+        query_embedding=HashingTextEmbedder().run("named term")["embedding"],
+        filters=chunks_filter(FIRST_LIBRARY, (GENERATION,), named),
+        top_k=10,
+    )["documents"]
+
+    assert [to_retrieved(hit).chunk_id for hit in hits] == [mine.chunk_id]
+    assert hits[0].score is not None
