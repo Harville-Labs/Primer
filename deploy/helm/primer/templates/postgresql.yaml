@@ -1,0 +1,139 @@
+{{- if .Values.postgresql.bundled.enabled }}
+{{/*
+A PostgreSQL with pgvector, run by this release.
+
+One replica: replication and failover are what an operator's own database
+is for, and docs/adr/0003-bundle-postgresql.md says why this is offered
+anyway. The image is the one Compose runs, so the two deployments migrate
+the same server.
+
+Run under the same hardening as every other pod here - non-root, read-only
+root filesystem, no capabilities. The image's entrypoint copes with an
+arbitrary user when it can write to its data directory, its socket
+directory and /tmp. PGDATA is a directory inside the volume rather than the
+volume itself, because initdb refuses a directory that is not empty and a
+fresh volume can hold lost+found.
+*/}}
+{{- $host := include "primer.postgresqlHost" . }}
+{{- $bundled := .Values.postgresql.bundled }}
+{{- $image := printf "%s:%s" $bundled.image.repository $bundled.image.tag }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $host }}
+  labels:
+    {{- include "primer.labels" . | nindent 4 }}
+    app.kubernetes.io/component: postgresql
+spec:
+  type: ClusterIP
+  ports:
+    - name: postgresql
+      port: 5432
+      targetPort: postgresql
+  selector:
+    {{- include "primer.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: postgresql
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ $host }}
+  labels:
+    {{- include "primer.labels" . | nindent 4 }}
+    app.kubernetes.io/component: postgresql
+spec:
+  replicas: 1
+  serviceName: {{ $host }}
+  selector:
+    matchLabels:
+      {{- include "primer.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: postgresql
+  template:
+    metadata:
+      labels:
+        {{- include "primer.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: postgresql
+    spec:
+      {{- include "primer.podIdentity" (dict "root" . "component" "postgresql") | nindent 6 }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: postgresql
+          image: {{ $image }}
+          imagePullPolicy: {{ $bundled.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          env:
+            - name: POSTGRES_USER
+              value: primer
+            - name: POSTGRES_DB
+              value: primer
+            # Read on first start only, when the volume is empty. Changing
+            # the Secret afterwards does not change the password;
+            # docs/operations/kubernetes.md says how.
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.postgresql.existingSecret }}
+                  key: {{ .Values.postgresql.passwordKey }}
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          ports:
+            - name: postgresql
+              containerPort: 5432
+          # pg_isready asks whether the server accepts connections without
+          # logging in, so no probe needs the password.
+          startupProbe:
+            exec:
+              command: ["pg_isready", "-h", "127.0.0.1", "-U", "primer", "-d", "primer"]
+            periodSeconds: 5
+            failureThreshold: 60
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-h", "127.0.0.1", "-U", "primer", "-d", "primer"]
+            periodSeconds: 10
+          livenessProbe:
+            exec:
+              command: ["pg_isready", "-h", "127.0.0.1", "-U", "primer", "-d", "primer"]
+            periodSeconds: 20
+          resources:
+            {{- toYaml $bundled.resources | nindent 12 }}
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+            - name: run
+              mountPath: /var/run/postgresql
+            - name: tmp
+              mountPath: /tmp
+            # Parallel queries share memory through /dev/shm, and the
+            # runtime's default of 64Mi fails them with "could not resize
+            # shared memory segment".
+            - name: shm
+              mountPath: /dev/shm
+      volumes:
+        - name: run
+          emptyDir:
+            sizeLimit: 16Mi
+        - name: tmp
+          emptyDir:
+            sizeLimit: 256Mi
+        - name: shm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 256Mi
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+        labels:
+          {{- include "primer.selectorLabels" . | nindent 10 }}
+          app.kubernetes.io/component: postgresql
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        {{- with $bundled.persistence.storageClass }}
+        storageClassName: {{ . | quote }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ $bundled.persistence.size }}
+{{- end }}

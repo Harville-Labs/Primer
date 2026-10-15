@@ -12,6 +12,14 @@ schema has no Primer-defined tables - the vector integration creates its
 own - but nothing else creates the schema to put them in, or the extension
 its embedding column needs.
 */}}
+{{/*
+A PostgreSQL this release runs does not exist before the release does, so on
+install the SQL migrations run after it instead, behind an init container
+that waits for the server to accept connections. On an upgrade it is already
+there, so they stay pre-upgrade: new pods never start against the old schema.
+*/}}
+{{- $bundled := .Values.postgresql.bundled }}
+{{- $sqlPhase := ternary "post-install,pre-upgrade" "pre-install,pre-upgrade" $bundled.enabled }}
 {{- range $service, $directory := dict "control" "control-api" "chat" "chat" "vectors" "retrieval" }}
 ---
 apiVersion: batch/v1
@@ -21,7 +29,7 @@ metadata:
   labels:
     {{- include "primer.labels" $ | nindent 4 }}
   annotations:
-    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook": {{ $sqlPhase }}
     "helm.sh/hook-weight": "-5"
     # Kept after success so the logs of a failed migration survive long
     # enough to read. A deleted job takes its explanation with it.
@@ -38,6 +46,24 @@ spec:
       {{- include "primer.podIdentity" (dict "root" $ "component" "migrate") | nindent 6 }}
       securityContext:
         {{- toYaml $.Values.podSecurityContext | nindent 8 }}
+      {{- if $bundled.enabled }}
+      initContainers:
+        # Bounded, so a server that never comes up fails the hook with a
+        # reason instead of holding the release open.
+        - name: wait-for-postgresql
+          image: {{ printf "%s:%s" $bundled.image.repository $bundled.image.tag }}
+          imagePullPolicy: {{ $bundled.image.pullPolicy }}
+          securityContext:
+            {{- toYaml $.Values.securityContext | nindent 12 }}
+          command:
+            - sh
+            - -c
+            - >-
+              timeout 300 sh -c 'until pg_isready -h {{ include "primer.postgresqlHost" $ }} -U primer -d primer;
+              do sleep 2; done' || { echo "the bundled PostgreSQL did not accept connections within five minutes; see kubectl logs {{ include "primer.postgresqlHost" $ }}-0" >&2; exit 1; }
+          resources:
+            {{- toYaml $.Values.migrations.resources | nindent 12 }}
+      {{- end }}
       containers:
         - name: migrate
           image: {{ include "primer.image" (dict "root" $ "component" "api") }}

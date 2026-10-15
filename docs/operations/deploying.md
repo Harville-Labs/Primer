@@ -4,7 +4,7 @@
 
 | Component | Required | Notes |
 | --- | --- | --- |
-| PostgreSQL | yes | With `pgvector` if using it as the vector store |
+| PostgreSQL | yes | With `pgvector` if using it as the vector store; Compose and the chart can each run one |
 | Object storage | yes | A directory is fine for a single node |
 | RabbitMQ | for ingestion | Without it, uploads stay `queued` |
 | Embedding endpoint | for retrieval | Any OpenAI-compatible API |

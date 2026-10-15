@@ -218,6 +218,39 @@ spec:
               app.kubernetes.io/component: {{ $component }}
         {{- end }}
 {{- end }}
+{{- if .Values.postgresql.bundled.enabled }}
+{{- $migrations := list }}
+{{- if .Values.migrations.enabled }}
+{{- $migrations = list "migrate-control" "migrate-chat" "migrate-vectors" }}
+{{- end }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ $full }}-allow-postgresql
+  labels:
+    {{- include "primer.labels" . | nindent 4 }}
+spec:
+  # The services and workers that are given the database, and the hooks that
+  # migrate it. The web app and the proxy never open it.
+  podSelector:
+    matchLabels:
+      {{- include "primer.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: postgresql
+  policyTypes:
+    - Ingress
+  ingress:
+    - ports:
+        - port: 5432
+          protocol: TCP
+      from:
+        {{- range $component := concat (list "control" "chat" "retrieval") $workers $migrations }}
+        - podSelector:
+            matchLabels:
+              {{- include "primer.selectorLabels" $ | nindent 14 }}
+              app.kubernetes.io/component: {{ $component }}
+        {{- end }}
+{{- end }}
 {{- with .Values.networkPolicies.extra }}
 {{- range . }}
 ---

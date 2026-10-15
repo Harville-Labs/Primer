@@ -23,6 +23,7 @@ What is configured
   Chat          {{ .Values.inference.chat.baseUrl | default "not set - add a provider from the settings page" }}
   Embeddings    {{ .Values.inference.embeddings.model }} ({{ .Values.inference.embeddings.dimensions }} dimensions)
   Reranking     {{ if .Values.inference.rerank.baseUrl }}{{ .Values.inference.rerank.model }}, {{ .Values.inference.rerank.candidates }} candidates{{ else }}off - vector ordering is used as-is{{ end }}
+  Database      {{ if .Values.postgresql.bundled.enabled }}PostgreSQL run by this release - back up its volume{{ else }}from {{ .Values.postgresql.existingSecret }}{{ end }}
   Vector store  {{ .Values.vectorStore.kind }}
   Graph         {{ with include "primer.graphUrl" . }}{{ . }}{{ if $.Values.graph.neo4j.enabled }} (run by this release){{ end }}, {{ $.Values.graph.hops }} hops{{ if $.Values.graph.extraction.baseUrl }}, extracted by {{ $.Values.graph.extraction.model }}{{ end }}{{ else }}off - search uses vectors alone{{ end }}
   Documents     {{ .Values.sourceStore.url }}

@@ -84,6 +84,7 @@ nav:
           - Index: adr/README.md
           - Reading themes: adr/0001-reading-themes.md
           - Knowledge graph in Neo4j: adr/0002-knowledge-graph-in-neo4j.md
+          - Bundled PostgreSQL: adr/0003-bundle-postgresql.md
   - Operations:
       - Configuration: operations/configuration.md
       - Choosing models: operations/models.md

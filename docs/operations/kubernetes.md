@@ -60,7 +60,7 @@ values`, and in whatever stores your release history.
 
 | Secret | Keys |
 | --- | --- |
-| `postgresql.existingSecret` | `database-url` |
+| `postgresql.existingSecret` | `database-url`, or `postgres-password` with `postgresql.bundled.enabled` |
 | `rabbitmq.existingSecret` | `broker-url` |
 | `auth.oidc.existingSecret` | `client-secret`, `cookie-secret` |
 | `inference.*.existingSecret` | API keys, if your endpoint needs them |
@@ -182,7 +182,56 @@ Run as a `pre-install,pre-upgrade` hook, once per release. An init container
 would run once per pod, so a three-replica rollout would have three
 processes racing to alter the same schema.
 
-A failed migration fails the release before any new pod starts.
+A failed migration fails the release before any new pod starts. With a
+bundled PostgreSQL the first install is the exception: the server does not
+exist before the release does, so the hook is `post-install,pre-upgrade`
+and waits up to five minutes for the server to accept connections.
+
+## The database
+
+Name a Secret holding the URI of a PostgreSQL you run, with pgvector
+available if it is also the vector store:
+
+```yaml
+postgresql:
+  existingSecret: primer-postgres     # key: database-url
+```
+
+Or have the chart run one:
+
+```yaml
+postgresql:
+  bundled:
+    enabled: true
+    persistence:
+      size: 20Gi
+  existingSecret: primer-postgres     # key: postgres-password
+```
+
+`postgresql.bundled.enabled` runs `pgvector/pgvector`, the image Compose
+uses, as a one-replica StatefulSet. It runs under the same hardening as
+Primer's own pods, and the `allow-postgresql` NetworkPolicy admits only the
+workloads that are given the database: Control, Chat, Retrieval, the workers,
+and the migration hooks. Its user and database are both `primer`. The
+password reaches the clients as `PGPASSWORD` rather than inside the URI, so
+it may contain any characters.
+
+- **It holds the library.** Unlike the bundled Neo4j, nothing rebuilds it:
+  documents, conversations and settings live here. Back up its volume, or
+  use a PostgreSQL you already back up. There is one replica and no
+  failover; [ADR 0003](../adr/0003-bundle-postgresql.md) says why that is
+  offered anyway.
+- **The Secret sets the password once.** PostgreSQL reads it when it first
+  initialises its volume. To change it later, change it in PostgreSQL first,
+  then update the Secret and restart the deployments:
+
+    ```bash
+    kubectl exec -it primer-postgresql-0 -- psql -U primer -d primer \
+      -c "ALTER USER primer PASSWORD 'new'"
+    ```
+
+- **Switching is a data migration.** Moving between bundled and external
+  does not move the data. Dump and restore it before changing the setting.
 
 ## Scale
 
@@ -358,15 +407,11 @@ and the schema hook:
 
 ## What is not here
 
-No PostgreSQL, RabbitMQ, or model server. A chart that shipped its own
-database is one people run in production by accident, and Primer's whole
-premise is that you already have the infrastructure you want to keep your
-documents on.
-
-Neo4j is the exception, because what it holds is derived. Every entity and
-relation in it was read out of passages that live in PostgreSQL and the
-vector store, so losing it costs a reindex, not a library. That makes a
-bundled one safe to offer, and few deployments have a Neo4j already.
+No RabbitMQ or model server. PostgreSQL and Neo4j can each be run by the
+release, and both are off by default. Primer assumes you already have the
+infrastructure you want to keep your documents on, and a database you
+already run and back up is a better home for a library than one this chart
+started.
 
 ## Object storage
 

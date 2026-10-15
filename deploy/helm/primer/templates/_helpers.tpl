@@ -45,11 +45,7 @@ with read access to the namespace has it.
 {{- define "primer.commonEnv" -}}
 - name: PRIMER_AUTH_MODE
   value: {{ .Values.auth.mode | quote }}
-- name: PRIMER_DATABASE_URL
-  valueFrom:
-    secretKeyRef:
-      name: {{ required "postgresql.existingSecret is required" .Values.postgresql.existingSecret }}
-      key: {{ .Values.postgresql.urlKey }}
+{{- include "primer.databaseEnv" . }}
 - name: PRIMER_SOURCE_STORE_URL
   value: {{ .Values.sourceStore.url | quote }}
 - name: PRIMER_INTERNAL_API_TOKEN
@@ -82,6 +78,36 @@ the alternative is that every user of a shared deployment can repoint it.
   value: {{ .Values.auth.adminGroup | quote }}
 {{- end }}
 {{- include "primer.extraEnv" . }}
+{{- end -}}
+
+{{/*
+How to reach PostgreSQL. An operator's database comes as one URI from their
+Secret. A bundled one is addressed by the release, with the password passed
+as PGPASSWORD rather than spliced into the URI: asyncpg and psycopg both
+read it, and a password is then free to hold characters a URI would need
+escaped.
+*/}}
+{{- define "primer.databaseEnv" -}}
+{{- $secret := required "postgresql.existingSecret is required: name a Secret holding the database URI under postgresql.urlKey, or its password under postgresql.passwordKey with postgresql.bundled.enabled" .Values.postgresql.existingSecret -}}
+{{- if .Values.postgresql.bundled.enabled }}
+- name: PGPASSWORD
+  valueFrom:
+    secretKeyRef:
+      name: {{ $secret }}
+      key: {{ .Values.postgresql.passwordKey }}
+- name: PRIMER_DATABASE_URL
+  value: {{ printf "postgresql://primer@%s:5432/primer" (include "primer.postgresqlHost" .) | quote }}
+{{- else }}
+- name: PRIMER_DATABASE_URL
+  valueFrom:
+    secretKeyRef:
+      name: {{ $secret }}
+      key: {{ .Values.postgresql.urlKey }}
+{{- end }}
+{{- end -}}
+
+{{- define "primer.postgresqlHost" -}}
+{{- printf "%s-postgresql" (include "primer.fullname" .) -}}
 {{- end -}}
 
 {{/*
