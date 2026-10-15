@@ -374,10 +374,23 @@ port and nothing else; the workers extract graphs but never open one.
   from the node rather than the container, so `graph.neo4j.heapSize` and
   `pageCacheSize` are set explicitly and must fit inside
   `graph.neo4j.resources.limits.memory` with room for the JVM itself.
-- **The schema hook runs after install, not before.** A pre-install hook
-  would run before the StatefulSet exists. With a bundled Neo4j the hook is
-  `post-install,post-upgrade` and waits up to five minutes for Neo4j to
-  answer; with `graph.url` it stays beside the SQL migrations.
+- **The schema hook runs after install, and before upgrades.** A
+  pre-install hook would run before the StatefulSet exists. With a bundled
+  Neo4j the hook is `post-install,pre-upgrade`, as it is for a bundled
+  PostgreSQL, and waits up to five minutes for Neo4j to answer; with
+  `graph.url` it stays beside the SQL migrations.
+- **Turning a bundled Neo4j on for an existing release takes two
+  upgrades.** The pre-upgrade hook runs before the new StatefulSet exists,
+  so it waits five minutes and fails the upgrade. Create Neo4j first without
+  hooks, then upgrade again so the schema is applied:
+
+    ```bash
+    helm upgrade primer deploy/helm/primer -f values.yaml --no-hooks
+    helm upgrade primer deploy/helm/primer -f values.yaml
+    ```
+
+    `--no-hooks` skips the SQL migrations too, so do it with the chart
+    version you are already running.
 - **The Secret sets the password once.** Neo4j reads it on first start, when
   its store is empty. To change it later, change it in Neo4j first, then
   update the Secret and restart Retrieval:

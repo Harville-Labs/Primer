@@ -88,14 +88,18 @@ replica. Not Alembic, because there is no history to record - every
 statement is `IF NOT EXISTS`, so rerunning it on each upgrade is the whole
 design.
 
-A Neo4j this release runs moves it to after the release. A pre-install hook
-runs before the release's own resources exist, so it would wait for a Neo4j
-that cannot start until it gives up. Afterwards it waits for Neo4j to
-answer, and Retrieval writing first is harmless: nothing is indexed into a
-graph before the first library is, and on an upgrade the constraints are
-already there.
+A Neo4j this release runs moves the first run to after install, as a
+bundled PostgreSQL does for the SQL migrations. A pre-install hook runs
+before the release's own resources exist, so it would wait for a Neo4j that
+cannot start until it gives up. On upgrades Neo4j already exists, so the
+schema still leads the code. Retrieval writing before the first run is
+harmless: nothing is indexed into a graph before the first library is.
+
+The cost: turning a bundled Neo4j on in an upgrade fails the same way,
+because its StatefulSet does not exist yet. docs/operations/kubernetes.md
+gives the workaround.
 */}}
-{{- $phase := ternary "post-install,post-upgrade" "pre-install,pre-upgrade" .Values.graph.neo4j.enabled }}
+{{- $phase := ternary "post-install,pre-upgrade" "pre-install,pre-upgrade" .Values.graph.neo4j.enabled }}
 ---
 apiVersion: batch/v1
 kind: Job

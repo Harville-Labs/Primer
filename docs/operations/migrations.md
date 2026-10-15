@@ -44,8 +44,9 @@ rather than succeeding at nothing. It waits up to five minutes for Neo4j to
 answer, since a Neo4j started alongside it may still be opening its store,
 and fails at once on a wrong password. Compose runs it as `migrate-graph`
 under the `graph` profile. The chart runs it as a hook when the graph is on:
-beside these migrations for a Neo4j you run, and after the release for one
-the chart runs, which does not exist before it.
+beside these migrations for a Neo4j you run. For one the chart runs, it
+runs after install, since that Neo4j does not exist before it, and before
+upgrades, like a bundled PostgreSQL.
 
 The URL comes from the environment, never from a file in the repository, so
 no deployment's credentials live in version control. It may name an async

@@ -184,12 +184,12 @@ def test_a_bundled_neo4j_runs_under_the_charts_hardening() -> None:
     assert {"/data", "/var/lib/neo4j/conf", "/logs", "/tmp"} <= mounts  # noqa: S108
 
 
-def test_a_bundled_neo4j_is_given_its_schema_after_it_exists() -> None:
-    """A pre-install hook runs before the StatefulSet does, and would wait for nothing."""
+def test_a_bundled_neo4j_is_given_its_schema_after_install_and_before_upgrade() -> None:
+    """The StatefulSet does not exist before install; afterwards, the schema leads the code."""
     bundled = named(render(*BUNDLED), "Job", "-migrate-graph")
     external = named(render(*GRAPH_ON), "Job", "-migrate-graph")
 
-    assert bundled["metadata"]["annotations"]["helm.sh/hook"] == "post-install,post-upgrade"
+    assert bundled["metadata"]["annotations"]["helm.sh/hook"] == "post-install,pre-upgrade"
     assert external["metadata"]["annotations"]["helm.sh/hook"] == "pre-install,pre-upgrade"
 
 
