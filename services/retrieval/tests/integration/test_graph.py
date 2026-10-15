@@ -271,3 +271,27 @@ def test_purging_a_version_erases_its_graph(graph_client: TestClient) -> None:
 
     assert response.status_code == 200, response.text
     assert reached(graph, library, [old, current], "A", "B") == {kept.chunk_id}
+
+
+def test_an_indexed_graph_is_counted_by_verify(graph_client: TestClient) -> None:
+    """Activation compares this count with the chunks it expected.
+
+    A chunk that named nothing is still counted, so a document of passages
+    with no entities in them verifies rather than looking half-extracted.
+    """
+    library, version, generation = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
+    graphs = [chunk_graph(("A", "B"), relate("A", "B")), chunk_graph(())]
+    body = delete_body(library, version, generation)
+
+    response = graph_client.post(
+        "/internal/v1/graph/index",
+        json={**body, "graphs": [g.model_dump(mode="json") for g in graphs]},
+        headers=TOKEN_HEADER,
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["written"] == 2
+
+    verified = graph_client.post("/internal/v1/verify", json=body, headers=TOKEN_HEADER)
+    assert verified.status_code == 200, verified.text
+    assert verified.json()["graph_count"] == 2
+    assert verified.json()["count"] == 0

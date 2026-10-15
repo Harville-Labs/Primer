@@ -2673,8 +2673,10 @@ source = { editable = "services/ingestion" }
 dependencies = [
     { name = "celery" },
     { name = "docling" },
+    { name = "haystack-ai" },
     { name = "httpx2" },
     { name = "onnxruntime" },
+    { name = "openai" },
     { name = "primer-contracts" },
     { name = "primer-observability" },
     { name = "primer-storage" },
@@ -2695,8 +2697,10 @@ dev = [
 requires-dist = [
     { name = "celery" },
     { name = "docling" },
+    { name = "haystack-ai" },
     { name = "httpx2" },
     { name = "onnxruntime" },
+    { name = "openai" },
     { name = "primer-contracts", editable = "packages/contracts" },
     { name = "primer-observability", editable = "packages/observability" },
     { name = "primer-storage", editable = "packages/storage" },

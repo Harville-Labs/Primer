@@ -6,7 +6,13 @@ requires-python = ">=3.13"
 dependencies = [
     "celery",
     "docling",
+    # Graph extraction, when an operator turns it on: the same client Chat
+    # uses for any OpenAI-compatible endpoint, with structured output.
+    "haystack-ai",
     "onnxruntime",
+    # Imported directly to tell a refused request from an unreachable model,
+    # not only reached through Haystack.
+    "openai",
     "httpx2",
     "primer-contracts",
     "primer-observability",

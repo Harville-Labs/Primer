@@ -137,3 +137,26 @@ Each passage keeps two texts: the document's own words, which is what a
 citation quotes, and a version with its section heading prepended, which is
 what gets embedded. A heading helps a passage keep the subject it is about;
 putting it in the citation would quote words the document does not contain.
+
+## The knowledge graph
+
+When an extraction model is configured, the embed stage also asks it, for
+each passage, which entities the passage names and which relations it
+states. The answers go to Retrieval batch by batch, into the same pending
+generation as the vectors, so the two are activated together.
+
+Extraction runs in the worker rather than inside Retrieval's index call. It
+is a model call per passage: slow, and failing in ways worth retrying. A
+worker has a retry budget; a synchronous request that timed out would throw
+the work away.
+
+The model's reply is untrusted. The passage is sent as data after the
+instructions, never as them. The reply is fitted to the graph contract
+before it leaves the worker: an entity name too long to be a name is
+dropped, descriptions are shortened, and a relation whose ends the passage
+did not name is discarded. One odd reply costs an edge, not the document.
+
+The index stage holds the graph to the same standard as the vectors: it
+refuses to activate a generation whose graph holds fewer passages than were
+parsed. A passage that names nothing still counts, so a document of
+passages with no entities in them is complete rather than empty.

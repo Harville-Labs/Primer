@@ -14,6 +14,7 @@ from pydantic import Field
 
 from primer_contracts.base import WireModel
 from primer_contracts.chunks import DocumentChunk
+from primer_contracts.graph import ChunkGraph
 from primer_contracts.identity import Principal
 from primer_contracts.retrieval import RetrievedChunk
 
@@ -58,6 +59,30 @@ class GenerationCount(WireModel):
 
     generation_id: UUID
     count: int = Field(ge=0)
+    #: Chunks the knowledge graph holds for the generation, counted the same
+    #: way and for the same reason. None when Retrieval has no graph store,
+    #: which a worker that extracted a graph must treat as a deployment
+    #: fault rather than as zero.
+    graph_count: int | None = Field(default=None, ge=0)
+
+
+class GraphIndexRequest(WireModel):
+    """Write what one batch of a generation's chunks say, as a graph.
+
+    Into the same pending generation as the batch's vectors, so the two are
+    activated together and neither is searchable before the other.
+    """
+
+    principal: Principal
+    library_id: UUID
+    document_version_id: UUID
+    generation_id: UUID
+    graphs: tuple[ChunkGraph, ...] = Field(min_length=1)
+
+
+class GraphIndexResult(WireModel):
+    generation_id: UUID
+    written: int = Field(ge=0)
 
 
 class LibraryAccessRequest(WireModel):

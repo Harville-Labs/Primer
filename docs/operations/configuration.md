@@ -33,6 +33,15 @@ instead of silently keeping a default.
 | `PRIMER_MAX_CHUNKS_PER_DOCUMENT` | `5000` | Refuse rather than half-index |
 | `PRIMER_PARSE_DEADLINE_SECONDS` | `900` | Checked between phases |
 | `PRIMER_MAX_RETRIES` | `4` | Control holds its own bound |
+| `PRIMER_GRAPH_EXTRACTION_BASE_URL` | unset | OpenAI-compatible endpoint for knowledge-graph extraction |
+| `PRIMER_GRAPH_EXTRACTION_MODEL` | unset | Must support structured output. Unset, or no base URL, turns extraction off |
+| `PRIMER_GRAPH_EXTRACTION_API_KEY` | unset | Sent as a placeholder when unset; many local servers need the header |
+| `PRIMER_GRAPH_EXTRACTION_TIMEOUT_SECONDS` | `120` | Per passage |
+| `PRIMER_GRAPH_EXTRACTION_CONCURRENCY` | `4` | Passages sent to the model at once |
+
+Graph extraction needs Retrieval to have a graph store. A worker extracting
+for a Retrieval without `PRIMER_GRAPH_URL` fails the document permanently
+and says which setting to change, rather than indexing a graph nobody keeps.
 
 ## Retrieval
 
