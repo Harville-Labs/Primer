@@ -1,0 +1,156 @@
+{{- if .Values.graph.neo4j.enabled }}
+{{/*
+A Neo4j for the knowledge graph, run by this release.
+
+One replica, because clustering is an Enterprise feature; the graph is
+derived from the passages, so losing it costs a reindex rather than data
+nobody else holds.
+
+Run under the same hardening as every other pod here - non-root, read-only
+root filesystem, no capabilities - which the image does not expect. Its
+entrypoint writes settings from the environment into conf/neo4j.conf, so
+the configuration directory is an emptyDir seeded from the image by an init
+container; mounting an empty one would lose the logging configuration the
+image ships. /tmp is an emptyDir too, and must stay executable: the JVM
+unpacks a native library there at start.
+
+The community image accepts only `neo4j` as the initial user and serves only
+the `neo4j` database, so any other name is refused here rather than found at
+the first search.
+*/}}
+{{- if or (ne .Values.graph.username "neo4j") (ne .Values.graph.database "neo4j") }}
+{{- fail "graph.neo4j.enabled runs Neo4j Community, which has one user and one database, both named neo4j. Leave graph.username and graph.database at neo4j, or set graph.url to a Neo4j you run yourself." }}
+{{- end }}
+{{- $full := include "primer.fullname" . }}
+{{- $neo4j := .Values.graph.neo4j }}
+{{- $image := printf "%s:%s" $neo4j.image.repository $neo4j.image.tag }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $full }}-neo4j
+  labels:
+    {{- include "primer.labels" . | nindent 4 }}
+    app.kubernetes.io/component: neo4j
+spec:
+  type: ClusterIP
+  # Bolt only. The HTTP interface is off in the pod, so there is nothing to
+  # publish for the browser even by port-forward.
+  ports:
+    - name: bolt
+      port: 7687
+      targetPort: bolt
+  selector:
+    {{- include "primer.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: neo4j
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ $full }}-neo4j
+  labels:
+    {{- include "primer.labels" . | nindent 4 }}
+    app.kubernetes.io/component: neo4j
+spec:
+  replicas: 1
+  serviceName: {{ $full }}-neo4j
+  selector:
+    matchLabels:
+      {{- include "primer.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: neo4j
+  template:
+    metadata:
+      labels:
+        {{- include "primer.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: neo4j
+    spec:
+      {{- include "primer.podIdentity" (dict "root" . "component" "neo4j") | nindent 6 }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      initContainers:
+        - name: seed-conf
+          image: {{ $image }}
+          imagePullPolicy: {{ $neo4j.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          command: ["cp", "-R", "/var/lib/neo4j/conf/.", "/seed/"]
+          resources:
+            {{- toYaml $neo4j.resources | nindent 12 }}
+          volumeMounts:
+            - name: conf
+              mountPath: /seed
+      containers:
+        - name: neo4j
+          image: {{ $image }}
+          imagePullPolicy: {{ $neo4j.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          env:
+            - name: PRIMER_GRAPH_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "primer.graphSecret" . }}
+                  key: {{ .Values.graph.passwordKey }}
+            # Read on first start only. Changing the Secret afterwards does
+            # not change the password; docs/operations/kubernetes.md says how.
+            - name: NEO4J_AUTH
+              value: neo4j/$(PRIMER_GRAPH_PASSWORD)
+            - name: NEO4J_server_http_enabled
+              value: "false"
+            - name: NEO4J_server_memory_heap_initial__size
+              value: {{ $neo4j.heapSize | quote }}
+            - name: NEO4J_server_memory_heap_max__size
+              value: {{ $neo4j.heapSize | quote }}
+            - name: NEO4J_server_memory_pagecache_size
+              value: {{ $neo4j.pageCacheSize | quote }}
+          ports:
+            - name: bolt
+              containerPort: 7687
+          # TCP rather than a query: a probe that logs in would need the
+          # password in its command line.
+          startupProbe:
+            tcpSocket: { port: bolt }
+            periodSeconds: 5
+            failureThreshold: 60
+          readinessProbe:
+            tcpSocket: { port: bolt }
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket: { port: bolt }
+            periodSeconds: 20
+          resources:
+            {{- toYaml $neo4j.resources | nindent 12 }}
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: conf
+              mountPath: /var/lib/neo4j/conf
+            - name: logs
+              mountPath: /logs
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: conf
+          emptyDir:
+            sizeLimit: 16Mi
+        - name: logs
+          emptyDir:
+            sizeLimit: 256Mi
+        - name: tmp
+          emptyDir:
+            sizeLimit: 256Mi
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+        labels:
+          {{- include "primer.selectorLabels" . | nindent 10 }}
+          app.kubernetes.io/component: neo4j
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        {{- with $neo4j.persistence.storageClass }}
+        storageClassName: {{ . | quote }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ $neo4j.persistence.size }}
+{{- end }}

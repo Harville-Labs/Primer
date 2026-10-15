@@ -204,6 +204,17 @@ def test_extraction_is_off_unless_both_endpoint_and_model_are_set(
     assert settings.graph_extraction_enabled is False
 
 
+def test_empty_variables_leave_extraction_off(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Compose passes an unset optional setting through as an empty string."""
+    for name in ("BASE_URL", "MODEL", "API_KEY"):
+        monkeypatch.setenv(f"PRIMER_GRAPH_EXTRACTION_{name}", "")
+
+    settings = Settings()
+
+    assert settings.graph_extraction_enabled is False
+    assert build_graph_extractor(settings) is None
+
+
 def test_extraction_is_on_when_endpoint_and_model_are_set() -> None:
     settings = Settings(
         graph_extraction_base_url="http://model:8000/v1", graph_extraction_model="q"

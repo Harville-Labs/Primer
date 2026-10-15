@@ -4,12 +4,13 @@
 
 | Component | Required | Notes |
 | --- | --- | --- |
-| PostgreSQL | yes | With `pgvector` if using it as the vector store |
+| PostgreSQL | yes | With `pgvector` if using it as the vector store; Compose and the chart can each run one |
 | Object storage | yes | A directory is fine for a single node |
 | RabbitMQ | for ingestion | Without it, uploads stay `queued` |
 | Embedding endpoint | for retrieval | Any OpenAI-compatible API |
 | `oauth2-proxy` | for multi-user | Not needed with auth off |
 | Qdrant | optional | Alternative to pgvector |
+| Neo4j | optional | For the knowledge graph; Compose and the chart can each run one |
 
 ## Running it with Compose
 
@@ -42,6 +43,44 @@ deploy/compose/scripts/smoke.sh
 
     That deletes the database along with the volume, so only do it on a stack
     you can recreate.
+
+## Using your own PostgreSQL with Compose
+
+Compose runs PostgreSQL for you unless `PRIMER_DATABASE_URL` is set. Set it
+in `.env` and every service, and every migration, uses that server instead.
+The bundled one does not start, and `POSTGRES_PASSWORD` is not needed:
+
+```bash
+PRIMER_DATABASE_URL=postgresql://primer:...@db.example.internal:5432/primer
+```
+
+The server needs pgvector installed. The migrations create the `vector`
+extension and the `control`, `chat` and `vectors` schemas, so the user needs
+to own the database, and either be allowed to create the extension or find
+it already created by an administrator. Write the URL as plain `postgresql://`; each service
+chooses its own driver from it. Characters such as `@`, `/` and `:` in the
+password must be percent-encoded.
+
+A container reaches a server on the host as `host.docker.internal`, not
+`localhost`.
+
+## Turning on the knowledge graph with Compose
+
+The graph runs under a Compose profile, so a stack without one starts no
+Neo4j. Uncomment the graph block in `.env`:
+
+```bash
+COMPOSE_PROFILES=graph
+PRIMER_GRAPH_URL=bolt://neo4j:7687
+PRIMER_GRAPH_PASSWORD=...   # openssl rand -hex 32
+PRIMER_GRAPH_EXTRACTION_BASE_URL=http://host.docker.internal:11434/v1
+PRIMER_GRAPH_EXTRACTION_MODEL=qwen2.5:7b-instruct
+```
+
+Neo4j's port is not published; only Retrieval and the `migrate-graph` step
+reach it. Like PostgreSQL, it reads its password only when it first creates
+its volume. Documents indexed before the graph was on need a reindex to get
+one.
 
 ## Published images
 

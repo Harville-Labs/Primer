@@ -12,6 +12,14 @@ schema has no Primer-defined tables - the vector integration creates its
 own - but nothing else creates the schema to put them in, or the extension
 its embedding column needs.
 */}}
+{{/*
+A PostgreSQL this release runs does not exist before the release does, so on
+install the SQL migrations run after it instead, behind an init container
+that waits for the server to accept connections. On an upgrade it is already
+there, so they stay pre-upgrade: new pods never start against the old schema.
+*/}}
+{{- $bundled := .Values.postgresql.bundled }}
+{{- $sqlPhase := ternary "post-install,pre-upgrade" "pre-install,pre-upgrade" $bundled.enabled }}
 {{- range $service, $directory := dict "control" "control-api" "chat" "chat" "vectors" "retrieval" }}
 ---
 apiVersion: batch/v1
@@ -21,7 +29,7 @@ metadata:
   labels:
     {{- include "primer.labels" $ | nindent 4 }}
   annotations:
-    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook": {{ $sqlPhase }}
     "helm.sh/hook-weight": "-5"
     # Kept after success so the logs of a failed migration survive long
     # enough to read. A deleted job takes its explanation with it.
@@ -38,6 +46,24 @@ spec:
       {{- include "primer.podIdentity" (dict "root" $ "component" "migrate") | nindent 6 }}
       securityContext:
         {{- toYaml $.Values.podSecurityContext | nindent 8 }}
+      {{- if $bundled.enabled }}
+      initContainers:
+        # Bounded, so a server that never comes up fails the hook with a
+        # reason instead of holding the release open.
+        - name: wait-for-postgresql
+          image: {{ printf "%s:%s" $bundled.image.repository $bundled.image.tag }}
+          imagePullPolicy: {{ $bundled.image.pullPolicy }}
+          securityContext:
+            {{- toYaml $.Values.securityContext | nindent 12 }}
+          command:
+            - sh
+            - -c
+            - >-
+              timeout 300 sh -c 'until pg_isready -h {{ include "primer.postgresqlHost" $ }} -U primer -d primer;
+              do sleep 2; done' || { echo "the bundled PostgreSQL did not accept connections within five minutes; see kubectl logs {{ include "primer.postgresqlHost" $ }}-0" >&2; exit 1; }
+          resources:
+            {{- toYaml $.Values.migrations.resources | nindent 12 }}
+      {{- end }}
       containers:
         - name: migrate
           image: {{ include "primer.image" (dict "root" $ "component" "api") }}
@@ -53,5 +79,64 @@ spec:
             {{- include "primer.scratchMounts" $ | nindent 12 }}
       volumes:
         {{- include "primer.scratchVolumes" $ | nindent 8 }}
+{{- end }}
+{{- if include "primer.graphUrl" . }}
+{{/*
+The knowledge graph's constraints and indexes, beside the SQL migrations and
+for the same reason: once per release, rather than raced by every Retrieval
+replica. Not Alembic, because there is no history to record - every
+statement is `IF NOT EXISTS`, so rerunning it on each upgrade is the whole
+design.
+
+A Neo4j this release runs moves the first run to after install, as a
+bundled PostgreSQL does for the SQL migrations. A pre-install hook runs
+before the release's own resources exist, so it would wait for a Neo4j that
+cannot start until it gives up. On upgrades Neo4j already exists, so the
+schema still leads the code. Retrieval writing before the first run is
+harmless: nothing is indexed into a graph before the first library is.
+
+The cost: turning a bundled Neo4j on in an upgrade fails the same way,
+because its StatefulSet does not exist yet. docs/operations/kubernetes.md
+gives the workaround.
+*/}}
+{{- $phase := ternary "post-install,pre-upgrade" "pre-install,pre-upgrade" .Values.graph.neo4j.enabled }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "primer.fullname" . }}-migrate-graph
+  labels:
+    {{- include "primer.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": {{ $phase }}
+    "helm.sh/hook-weight": "-5"
+    "helm.sh/hook-delete-policy": before-hook-creation
+spec:
+  backoffLimit: {{ .Values.migrations.backoffLimit }}
+  template:
+    metadata:
+      labels:
+        {{- include "primer.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: migrate-graph
+    spec:
+      restartPolicy: Never
+      {{- include "primer.podIdentity" (dict "root" . "component" "migrate") | nindent 6 }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: migrate
+          image: {{ include "primer.image" (dict "root" . "component" "api") }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          command: ["python", "-m", "primer_retrieval.graph_schema"]
+          env:
+            {{- include "primer.graphEnv" . | trim | nindent 12 }}
+            {{- with include "primer.extraEnv" . }}{{ . | trim | nindent 12 }}{{- end }}
+          resources:
+            {{- toYaml .Values.migrations.resources | nindent 12 }}
+          volumeMounts:
+            {{- include "primer.scratchMounts" . | nindent 12 }}
+      volumes:
+        {{- include "primer.scratchVolumes" . | nindent 8 }}
 {{- end }}
 {{- end }}

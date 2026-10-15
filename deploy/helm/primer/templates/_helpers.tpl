@@ -45,11 +45,7 @@ with read access to the namespace has it.
 {{- define "primer.commonEnv" -}}
 - name: PRIMER_AUTH_MODE
   value: {{ .Values.auth.mode | quote }}
-- name: PRIMER_DATABASE_URL
-  valueFrom:
-    secretKeyRef:
-      name: {{ required "postgresql.existingSecret is required" .Values.postgresql.existingSecret }}
-      key: {{ .Values.postgresql.urlKey }}
+{{- include "primer.databaseEnv" . }}
 - name: PRIMER_SOURCE_STORE_URL
   value: {{ .Values.sourceStore.url | quote }}
 - name: PRIMER_INTERNAL_API_TOKEN
@@ -82,6 +78,36 @@ the alternative is that every user of a shared deployment can repoint it.
   value: {{ .Values.auth.adminGroup | quote }}
 {{- end }}
 {{- include "primer.extraEnv" . }}
+{{- end -}}
+
+{{/*
+How to reach PostgreSQL. An operator's database comes as one URI from their
+Secret. A bundled one is addressed by the release, with the password passed
+as PGPASSWORD rather than spliced into the URI: asyncpg and psycopg both
+read it, and a password is then free to hold characters a URI would need
+escaped.
+*/}}
+{{- define "primer.databaseEnv" -}}
+{{- $secret := required "postgresql.existingSecret is required: name a Secret holding the database URI under postgresql.urlKey, or its password under postgresql.passwordKey with postgresql.bundled.enabled" .Values.postgresql.existingSecret -}}
+{{- if .Values.postgresql.bundled.enabled }}
+- name: PGPASSWORD
+  valueFrom:
+    secretKeyRef:
+      name: {{ $secret }}
+      key: {{ .Values.postgresql.passwordKey }}
+- name: PRIMER_DATABASE_URL
+  value: {{ printf "postgresql://primer@%s:5432/primer" (include "primer.postgresqlHost" .) | quote }}
+{{- else }}
+- name: PRIMER_DATABASE_URL
+  valueFrom:
+    secretKeyRef:
+      name: {{ $secret }}
+      key: {{ .Values.postgresql.urlKey }}
+{{- end }}
+{{- end -}}
+
+{{- define "primer.postgresqlHost" -}}
+{{- printf "%s-postgresql" (include "primer.fullname" .) -}}
 {{- end -}}
 
 {{/*
@@ -167,6 +193,88 @@ is what keeps a deployment without one behaving exactly as it did before.
     secretKeyRef:
       name: {{ .Values.inference.rerank.existingSecret }}
       key: {{ .Values.inference.rerank.apiKeyKey }}
+{{- end }}
+{{- end }}
+{{- end -}}
+
+{{/*
+Where the knowledge graph is, or nothing when it is off. The one place that
+decides it: every template that asks whether the graph is on asks this, so
+a bundled Neo4j and an operator's one cannot be told apart downstream.
+
+Both at once is refused rather than resolved. Either choice would quietly
+leave the other unused, and the one ignored is usually the one meant.
+*/}}
+{{- define "primer.graphUrl" -}}
+{{- if .Values.graph.neo4j.enabled -}}
+{{- if .Values.graph.url -}}
+{{- fail "graph.url and graph.neo4j.enabled are both set. Set graph.url to use a Neo4j you run, or graph.neo4j.enabled to have this release run one - not both." -}}
+{{- end -}}
+{{- printf "bolt://%s-neo4j:7687" (include "primer.fullname" .) -}}
+{{- else -}}
+{{- .Values.graph.url -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+The Secret holding the graph's password. Retrieval reads it, and a bundled
+Neo4j takes its initial password from it, so the two cannot disagree.
+*/}}
+{{- define "primer.graphSecret" -}}
+{{- required "graph.existingSecret is required when the graph is on: name a Secret holding the Neo4j password under graph.passwordKey" .Values.graph.existingSecret -}}
+{{- end -}}
+
+{{/*
+How to reach the knowledge graph. Given to Retrieval, which owns it, and to
+the step that prepares its schema - nothing else opens a connection to it.
+
+Included only where the graph is on; each caller guards it, so a deployment
+without a graph renders exactly as it did before there was one.
+*/}}
+{{- define "primer.graphEnv" -}}
+- name: PRIMER_GRAPH_URL
+  value: {{ include "primer.graphUrl" . | quote }}
+- name: PRIMER_GRAPH_USERNAME
+  value: {{ .Values.graph.username | quote }}
+- name: PRIMER_GRAPH_DATABASE
+  value: {{ .Values.graph.database | quote }}
+- name: PRIMER_GRAPH_PASSWORD
+  valueFrom:
+    secretKeyRef:
+      name: {{ include "primer.graphSecret" . }}
+      key: {{ .Values.graph.passwordKey }}
+{{- end -}}
+
+{{/*
+The model that reads a graph out of each passage. Only the index worker gets
+it: extraction runs in the embed stage, beside the call that embeds the
+same passages.
+
+Refused without a graph rather than rendered anyway. Retrieval with nowhere
+to put a graph refuses every one it is sent, so the deployment would install
+cleanly and then fail every document it indexed.
+*/}}
+{{- define "primer.graphExtractionEnv" -}}
+{{- with .Values.graph.extraction }}
+{{- if .baseUrl }}
+{{- if not (include "primer.graphUrl" $) }}
+{{- fail "graph.extraction.baseUrl is set but the graph is off, so every extracted graph would be refused and every document would fail to index. Set graph.url or graph.neo4j.enabled, or unset graph.extraction.baseUrl." }}
+{{- end }}
+- name: PRIMER_GRAPH_EXTRACTION_BASE_URL
+  value: {{ .baseUrl | quote }}
+- name: PRIMER_GRAPH_EXTRACTION_MODEL
+  value: {{ required "graph.extraction.model is required when graph.extraction.baseUrl is set" .model | quote }}
+- name: PRIMER_GRAPH_EXTRACTION_CONCURRENCY
+  value: {{ .concurrency | quote }}
+- name: PRIMER_GRAPH_EXTRACTION_TIMEOUT_SECONDS
+  value: {{ .timeoutSeconds | quote }}
+{{- if .existingSecret }}
+- name: PRIMER_GRAPH_EXTRACTION_API_KEY
+  valueFrom:
+    secretKeyRef:
+      name: {{ .existingSecret }}
+      key: {{ .apiKeyKey }}
+{{- end }}
 {{- end }}
 {{- end }}
 {{- end -}}

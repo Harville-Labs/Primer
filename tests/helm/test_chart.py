@@ -417,7 +417,7 @@ def workloads(manifests: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
     """Every pod-bearing manifest, by name, whatever kind it is."""
     found: dict[str, dict[str, Any]] = {}
     for doc in manifests:
-        if doc.get("kind") in ("Deployment", "Job"):
+        if doc.get("kind") in ("Deployment", "StatefulSet", "Job"):
             found[doc["metadata"]["name"]] = doc
     return found
 

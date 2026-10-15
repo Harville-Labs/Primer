@@ -16,7 +16,8 @@
 #   auth.oidc.clientId
 #   auth.oidc.existingSecret         holding client-secret and cookie-secret
 #   auth.adminGroup                  who may open the settings page
-#   postgresql.existingSecret        holding a connection URI
+#   postgresql.existingSecret        holding a connection URI, or the
+#                                    password for a bundled PostgreSQL
 #   rabbitmq.existingSecret          holding a broker URL
 #   sourceStore.existingSecret       credentials for the document bucket
 #   inference.embeddings.baseUrl     an OpenAI-compatible /v1/embeddings
@@ -111,11 +112,39 @@ ingress:
 
 # --- Data ---------------------------------------------------------------
 #
-# No database or broker is bundled. A chart that shipped its own PostgreSQL
-# would be one people run in production by accident.
+# No broker is bundled. PostgreSQL can be, for a deployment with nowhere
+# else to put one, but a database you already run and back up is the better
+# home for a library: see docs/adr/0003-bundle-postgresql.md.
 postgresql:
+  # Required. For a PostgreSQL you run, a Secret holding its connection URI
+  # under `urlKey`. With `bundled` on, a Secret holding the password under
+  # `passwordKey` instead; the bundled server takes its password from the
+  # same Secret, so the two cannot disagree.
   existingSecret: ""
   urlKey: database-url
+  passwordKey: postgres-password
+  # A PostgreSQL with pgvector run by this release, as one replica with a
+  # persistent volume. It is reachable only from the pods that use the
+  # database. Its user and database are both `primer`.
+  #
+  # Unlike the bundled Neo4j, this holds the library itself: every document,
+  # conversation and setting. Back up its volume, or use a PostgreSQL you
+  # already back up.
+  bundled:
+    enabled: false
+    image:
+      repository: pgvector/pgvector
+      tag: "pg17"
+      pullPolicy: IfNotPresent
+    persistence:
+      size: 20Gi
+      storageClass: ""   # the cluster default
+    resources:
+      requests:
+        cpu: 250m
+        memory: 512Mi
+      limits:
+        memory: 1Gi
 
 rabbitmq:
   existingSecret: ""
@@ -221,6 +250,73 @@ inference:
 vectorStore:
   kind: pgvector          # pgvector | qdrant
   qdrantUrl: ""
+
+# --- Knowledge graph ----------------------------------------------------
+#
+# Optional, and off unless `url` is set. With it, the index worker asks a
+# model for the entities and relations each passage names, and search
+# follows them to passages that share no words with the question. See
+# docs/architecture/retrieval.md for what it finds and what it costs.
+#
+# Neo4j Community is enough: the schema uses only uniqueness constraints and
+# range indexes.
+graph:
+  # bolt:// or neo4j:// for a Neo4j you run yourself. Empty, with `neo4j`
+  # below off, turns the graph off: nothing below is rendered and no pod
+  # opens a connection to it.
+  url: ""
+  # A Neo4j run by this release instead, for a deployment with nowhere else
+  # to put one. Set this or `url`, not both. It is reachable only from
+  # Retrieval and the step that prepares its schema, on the Bolt port, and
+  # its HTTP interface and browser are switched off.
+  neo4j:
+    enabled: false
+    image:
+      repository: neo4j
+      tag: "5.26-community"
+      pullPolicy: IfNotPresent
+    # Neo4j sizes its heap and page cache from the machine, not the pod's
+    # limit, and is killed for it. Keep the two together under the limit.
+    heapSize: 512m
+    pageCacheSize: 256m
+    persistence:
+      size: 10Gi
+      storageClass: ""   # the cluster default
+    resources:
+      requests:
+        cpu: 250m
+        memory: 1Gi
+      limits:
+        memory: 1Gi
+  username: neo4j
+  database: neo4j
+  # Required once the graph is on. A Secret holding the Neo4j password under
+  # `passwordKey`. A bundled Neo4j takes its initial password from the same
+  # Secret, so it needs at least eight characters.
+  existingSecret: ""
+  passwordKey: graph-password
+  # How far search follows relations from the entities a question names,
+  # 0 to 2. Two reaches what is related to what is related to the question,
+  # which is where a vector search has the least chance on its own.
+  hops: 2
+  # Passages the graph adds to a search before the two rankings are fused.
+  # About as wide as the reranker's candidates, so neither drowns the other.
+  candidates: 20
+  # The model that reads entities out of passages: one call per passage,
+  # which on a large library is the most expensive thing ingestion does. Any
+  # OpenAI-compatible endpoint whose model supports structured output.
+  #
+  # Leaving it empty with the graph on is allowed and almost never wanted:
+  # nothing writes to the graph, so search consults an empty one.
+  extraction:
+    baseUrl: ""
+    model: ""
+    existingSecret: ""
+    apiKeyKey: graph-extraction-api-key
+    # Passages sent to the model at once, per document being indexed. The
+    # index worker's own concurrency multiplies it.
+    concurrency: 4
+    timeoutSeconds: 120
 
 # --- Tools --------------------------------------------------------------
 tools:

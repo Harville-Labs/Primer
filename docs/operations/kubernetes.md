@@ -60,10 +60,12 @@ values`, and in whatever stores your release history.
 
 | Secret | Keys |
 | --- | --- |
-| `postgresql.existingSecret` | `database-url` |
+| `postgresql.existingSecret` | `database-url`, or `postgres-password` with `postgresql.bundled.enabled` |
 | `rabbitmq.existingSecret` | `broker-url` |
 | `auth.oidc.existingSecret` | `client-secret`, `cookie-secret` |
 | `inference.*.existingSecret` | API keys, if your endpoint needs them |
+| `graph.existingSecret` | `graph-password`, when the graph is on |
+| `graph.extraction.existingSecret` | `graph-extraction-api-key`, if the extraction endpoint needs one |
 
 The one it does create is Primer's own cluster-internal service token, which
 means nothing outside the release. It is generated once and preserved across
@@ -180,7 +182,56 @@ Run as a `pre-install,pre-upgrade` hook, once per release. An init container
 would run once per pod, so a three-replica rollout would have three
 processes racing to alter the same schema.
 
-A failed migration fails the release before any new pod starts.
+A failed migration fails the release before any new pod starts. With a
+bundled PostgreSQL the first install is the exception: the server does not
+exist before the release does, so the hook is `post-install,pre-upgrade`
+and waits up to five minutes for the server to accept connections.
+
+## The database
+
+Name a Secret holding the URI of a PostgreSQL you run, with pgvector
+available if it is also the vector store:
+
+```yaml
+postgresql:
+  existingSecret: primer-postgres     # key: database-url
+```
+
+Or have the chart run one:
+
+```yaml
+postgresql:
+  bundled:
+    enabled: true
+    persistence:
+      size: 20Gi
+  existingSecret: primer-postgres     # key: postgres-password
+```
+
+`postgresql.bundled.enabled` runs `pgvector/pgvector`, the image Compose
+uses, as a one-replica StatefulSet. It runs under the same hardening as
+Primer's own pods, and the `allow-postgresql` NetworkPolicy admits only the
+workloads that are given the database: Control, Chat, Retrieval, the workers,
+and the migration hooks. Its user and database are both `primer`. The
+password reaches the clients as `PGPASSWORD` rather than inside the URI, so
+it may contain any characters.
+
+- **It holds the library.** Unlike the bundled Neo4j, nothing rebuilds it:
+  documents, conversations and settings live here. Back up its volume, or
+  use a PostgreSQL you already back up. There is one replica and no
+  failover; [ADR 0003](../adr/0003-bundle-postgresql.md) says why that is
+  offered anyway.
+- **The Secret sets the password once.** PostgreSQL reads it when it first
+  initialises its volume. To change it later, change it in PostgreSQL first,
+  then update the Secret and restart the deployments:
+
+    ```bash
+    kubectl exec -it primer-postgresql-0 -- psql -U primer -d primer \
+      -c "ALTER USER primer PASSWORD 'new'"
+    ```
+
+- **Switching is a data migration.** Moving between bundled and external
+  does not move the data. Dump and restore it before changing the setting.
 
 ## Scale
 
@@ -266,12 +317,114 @@ because it sounds thorough.
     answer. Until then `workers.parse.replicas` and `workers.index.replicas`
     are set by hand.
 
+## The knowledge graph
+
+Off until you choose a Neo4j for it. The chart can run one for you:
+
+```yaml
+graph:
+  neo4j:
+    enabled: true
+    persistence:
+      size: 10Gi
+  existingSecret: primer-neo4j        # key: graph-password, 8+ characters
+  extraction:
+    baseUrl: http://vllm.models.svc:8000/v1
+    model: Qwen/Qwen2.5-7B-Instruct
+```
+
+Or point it at one you already run, with `graph.url` in place of
+`graph.neo4j`. Setting both is refused.
+
+```yaml
+graph:
+  url: bolt://neo4j.graph.svc:7687
+  existingSecret: primer-neo4j
+```
+
+Either way, Retrieval is given the graph and a `migrate-graph` hook applies
+its constraints and indexes on every install and upgrade. Nothing else is
+told the graph exists: the index worker hands each extracted graph to
+Retrieval rather than writing it, so the password stays with the one
+service that owns the store.
+
+`graph.extraction` is the model that reads entities and relations out of
+each passage, and it runs on the index worker. It is optional - without it
+the graph stays empty and search answers from vectors alone - but setting it
+with the graph off is refused at render time, because every document would
+then extract a graph that Retrieval has nowhere to put and fail to index.
+Documents indexed before extraction was turned on have no graph until they
+are reindexed.
+
+Search tolerates the graph being down: it answers from vectors and says so
+in its logs. Indexing and deletion do not, since a graph missing what the
+vectors hold would answer from passages that no longer exist; they fail and
+are retried.
+
+### The bundled Neo4j
+
+`graph.neo4j.enabled` runs Neo4j Community as a one-replica StatefulSet with
+a persistent volume for its store. It runs under the same hardening as
+Primer's own pods - non-root, read-only root filesystem, no capabilities -
+with its HTTP interface and browser turned off, so its only port is Bolt.
+The `allow-neo4j` NetworkPolicy admits Retrieval and the schema hook to that
+port and nothing else; the workers extract graphs but never open one.
+
+- **Size the heap and page cache with the limit.** Neo4j sizes its memory
+  from the node rather than the container, so `graph.neo4j.heapSize` and
+  `pageCacheSize` are set explicitly and must fit inside
+  `graph.neo4j.resources.limits.memory` with room for the JVM itself.
+- **The schema hook runs after install, and before upgrades.** A
+  pre-install hook would run before the StatefulSet exists. With a bundled
+  Neo4j the hook is `post-install,pre-upgrade`, as it is for a bundled
+  PostgreSQL, and waits up to five minutes for Neo4j to answer; with
+  `graph.url` it stays beside the SQL migrations.
+- **Turning a bundled Neo4j on for an existing release takes two
+  upgrades.** The pre-upgrade hook runs before the new StatefulSet exists,
+  so it waits five minutes and fails the upgrade. Create Neo4j first without
+  hooks, then upgrade again so the schema is applied:
+
+    ```bash
+    helm upgrade primer deploy/helm/primer -f values.yaml --no-hooks
+    helm upgrade primer deploy/helm/primer -f values.yaml
+    ```
+
+    `--no-hooks` skips the SQL migrations too, so do it with the chart
+    version you are already running.
+- **The Secret sets the password once.** Neo4j reads it on first start, when
+  its store is empty. To change it later, change it in Neo4j first, then
+  update the Secret and restart Retrieval:
+
+    ```bash
+    kubectl exec -it primer-neo4j-0 -- cypher-shell -u neo4j \
+      "ALTER CURRENT USER SET PASSWORD FROM 'old' TO 'new'"
+    ```
+
+- **One user and one database, both `neo4j`.** That is what Community has;
+  any other `graph.username` or `graph.database` is refused.
+
+An operator-run Neo4j is outside the chart's policies. If yours runs in the
+cluster, give it an ingress policy that admits only Primer's Retrieval pods
+and the schema hook:
+
+```yaml
+- podSelector:
+    matchExpressions:
+      - key: app.kubernetes.io/component
+        operator: In
+        values: [retrieval, migrate-graph]
+  namespaceSelector:
+    matchLabels:
+      kubernetes.io/metadata.name: primer
+```
+
 ## What is not here
 
-No PostgreSQL, RabbitMQ, or model server. A chart that shipped its own
-database is one people run in production by accident, and Primer's whole
-premise is that you already have the infrastructure you want to keep your
-documents on.
+No RabbitMQ or model server. PostgreSQL and Neo4j can each be run by the
+release, and both are off by default. Primer assumes you already have the
+infrastructure you want to keep your documents on, and a database you
+already run and back up is a better home for a library than one this chart
+started.
 
 ## Object storage
 

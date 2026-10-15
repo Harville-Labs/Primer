@@ -14,7 +14,11 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     """Deployment configuration for an ingestion worker."""
 
-    model_config = SettingsConfigDict(env_prefix="PRIMER_", extra="forbid")
+    #: An empty variable is an unset one. Compose can only pass an optional
+    #: setting through as `${VAR:-}`, which arrives as "" rather than absent,
+    #: and "" for the extraction endpoint and model would otherwise turn
+    #: extraction on with nowhere to send it.
+    model_config = SettingsConfigDict(env_prefix="PRIMER_", extra="forbid", env_ignore_empty=True)
 
     broker_url: str = Field(
         default="amqp://guest:guest@localhost:5672//",

@@ -38,7 +38,7 @@ RESOLVE_ENV = {
 }
 
 
-def resolve(*files: Path) -> dict[str, Any]:
+def resolve(*files: Path, env: dict[str, str] | None = None) -> dict[str, Any]:
     """Ask Docker to resolve the files, so the test sees what Compose sees.
 
     `--env-file` names `env.example` explicitly, because Compose otherwise
@@ -59,7 +59,7 @@ def resolve(*files: Path) -> dict[str, Any]:
         command,
         capture_output=True,
         text=True,
-        env={**os.environ, **RESOLVE_ENV},
+        env={**os.environ, **RESOLVE_ENV, **(env or {})},
         check=False,
     )
     if result.returncode != 0:
@@ -105,7 +105,11 @@ def test_credentials_have_no_defaults(compose_config: dict[str, Any]) -> None:
     text = BASE.read_text()
     for variable in ("POSTGRES_PASSWORD", "RABBITMQ_PASSWORD", "PRIMER_INTERNAL_API_TOKEN"):
         assert f"${{{variable}:?" in text, f"{variable} must be required, not defaulted"
-        assert f"${{{variable}:-" not in text, f"{variable} must not have a default"
+        # The bundled PostgreSQL's own copy may be empty, never a value: it
+        # is interpolated even when the server is off, and refuses to start
+        # without one when it is on.
+        rest = text.replace("POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}", "")
+        assert f"${{{variable}:-" not in rest, f"{variable} must not have a default"
 
 
 def test_the_resolved_configuration_contains_no_real_secrets(
@@ -233,3 +237,87 @@ def test_every_documented_variable_appears_in_the_example(
     example = (COMPOSE_DIR / "env.example").read_text()
     for variable in RESOLVE_ENV:
         assert variable in example, f"{variable} is required but absent from env.example"
+
+
+#: What turns the graph on: the profile, and a URL and password for it.
+GRAPH_ENV = {
+    "COMPOSE_PROFILES": "graph",
+    "PRIMER_GRAPH_URL": "bolt://neo4j:7687",
+    "PRIMER_GRAPH_PASSWORD": "resolve-only",
+}
+
+
+def resolve_with_graph() -> dict[str, Any]:
+    if shutil.which("docker") is None:
+        pytest.skip("docker is not installed")
+    return resolve(BASE, env=GRAPH_ENV)
+
+
+def test_the_graph_is_off_unless_its_profile_is_on(compose_config: dict[str, Any]) -> None:
+    """A stack started as it always was must not start a Neo4j it never asked for."""
+    assert "neo4j" not in compose_config["services"]
+    assert "migrate-graph" not in compose_config["services"]
+
+
+def test_the_graph_schema_is_applied_before_retrieval_starts() -> None:
+    """Retrieval writing into a graph with no constraints duplicates every entity."""
+    services = resolve_with_graph()["services"]
+
+    assert services["migrate-graph"]["restart"] == "no"
+    assert services["migrate-graph"]["depends_on"]["neo4j"]["condition"] == "service_healthy"
+    waits = services["retrieval"]["depends_on"]["migrate-graph"]
+    assert waits["condition"] == "service_completed_successfully"
+    assert services["retrieval"]["environment"]["PRIMER_GRAPH_URL"] == "bolt://neo4j:7687"
+
+
+def test_the_graph_password_has_no_default() -> None:
+    """Empty when unset, never a value, so Neo4j refuses to start without one.
+
+    It cannot be `:?` like the others: Compose interpolates every service
+    whichever profiles are on, so that would refuse every stack without a graph.
+    """
+    text = BASE.read_text()
+    assert "${PRIMER_GRAPH_PASSWORD:-}" in text
+    assert "${PRIMER_GRAPH_PASSWORD:-" not in text.replace("${PRIMER_GRAPH_PASSWORD:-}", "")
+    assert "neo4j/${PRIMER_GRAPH_PASSWORD:-}" in text
+
+
+def test_neo4j_is_not_published() -> None:
+    """Only Retrieval and the schema step talk to it, both on the Compose network."""
+    assert "ports" not in resolve_with_graph()["services"]["neo4j"]
+
+
+#: An operator's own PostgreSQL, in place of the bundled one.
+EXTERNAL_DATABASE_URL = "postgresql://primer:theirs@db.example:5432/primer"
+
+
+def database_users(config: dict[str, Any]) -> dict[str, str]:
+    return {
+        name: service["environment"]["PRIMER_DATABASE_URL"]
+        for name, service in config["services"].items()
+        if "PRIMER_DATABASE_URL" in (service.get("environment") or {})
+    }
+
+
+def test_every_database_user_shares_the_bundled_url(compose_config: dict[str, Any]) -> None:
+    """One plain URL: the services choose their driver, Retrieval passes it on as is."""
+    users = database_users(compose_config)
+
+    assert set(users) >= {"control", "chat", "retrieval", "worker", "migrate-vectors"}
+    assert set(users.values()) == {"postgresql://primer:resolve-only@postgres:5432/primer"}
+    assert "postgres" in compose_config["services"]
+
+
+def test_your_own_postgresql_replaces_the_bundled_one() -> None:
+    """No server started, nothing waiting on it, and no bundled password asked for."""
+    if shutil.which("docker") is None:
+        pytest.skip("docker is not installed")
+    config = resolve(
+        BASE, env={"PRIMER_DATABASE_URL": EXTERNAL_DATABASE_URL, "POSTGRES_PASSWORD": ""}
+    )
+    users = database_users(config)
+
+    assert "postgres" not in config["services"]
+    assert set(users.values()) == {EXTERNAL_DATABASE_URL}
+    for migration in ("migrate-control", "migrate-chat", "migrate-vectors"):
+        assert config["services"][migration]["depends_on"]["postgres"]["required"] is False

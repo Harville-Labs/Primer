@@ -187,6 +187,70 @@ spec:
               {{- include "primer.selectorLabels" $ | nindent 14 }}
               app.kubernetes.io/component: {{ $component }}
         {{- end }}
+{{- if .Values.graph.neo4j.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ $full }}-allow-neo4j
+  labels:
+    {{- include "primer.labels" . | nindent 4 }}
+spec:
+  # Retrieval, which owns the graph, and the step that applies its schema.
+  # Neo4j's own authentication is one password shared by both; this is what
+  # stops every other pod in the cluster from trying it. The workers extract
+  # graphs but hand them to Retrieval, so they are not on the list.
+  podSelector:
+    matchLabels:
+      {{- include "primer.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: neo4j
+  policyTypes:
+    - Ingress
+  ingress:
+    - ports:
+        - port: 7687
+          protocol: TCP
+      from:
+        {{- range $component := list "retrieval" "migrate-graph" }}
+        - podSelector:
+            matchLabels:
+              {{- include "primer.selectorLabels" $ | nindent 14 }}
+              app.kubernetes.io/component: {{ $component }}
+        {{- end }}
+{{- end }}
+{{- if .Values.postgresql.bundled.enabled }}
+{{- $migrations := list }}
+{{- if .Values.migrations.enabled }}
+{{- $migrations = list "migrate-control" "migrate-chat" "migrate-vectors" }}
+{{- end }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ $full }}-allow-postgresql
+  labels:
+    {{- include "primer.labels" . | nindent 4 }}
+spec:
+  # The services and workers that are given the database, and the hooks that
+  # migrate it. The web app and the proxy never open it.
+  podSelector:
+    matchLabels:
+      {{- include "primer.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: postgresql
+  policyTypes:
+    - Ingress
+  ingress:
+    - ports:
+        - port: 5432
+          protocol: TCP
+      from:
+        {{- range $component := concat (list "control" "chat" "retrieval") $workers $migrations }}
+        - podSelector:
+            matchLabels:
+              {{- include "primer.selectorLabels" $ | nindent 14 }}
+              app.kubernetes.io/component: {{ $component }}
+        {{- end }}
+{{- end }}
 {{- with .Values.networkPolicies.extra }}
 {{- range . }}
 ---

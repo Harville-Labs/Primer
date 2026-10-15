@@ -39,6 +39,10 @@ instead of silently keeping a default.
 | `PRIMER_GRAPH_EXTRACTION_TIMEOUT_SECONDS` | `120` | Per passage |
 | `PRIMER_GRAPH_EXTRACTION_CONCURRENCY` | `4` | Passages sent to the model at once |
 
+An empty value counts as unset for the extraction settings, so Compose's
+`${VAR:-}` leaves extraction off rather than turning it on with nowhere to
+send it.
+
 Graph extraction needs Retrieval to have a graph store. A worker extracting
 for a Retrieval without `PRIMER_GRAPH_URL` fails the document permanently
 and says which setting to change, rather than indexing a graph nobody keeps.
