@@ -20,6 +20,7 @@ spec:
         app.kubernetes.io/component: control
     spec:
       {{- include "primer.podIdentity" (dict "root" . "component" "control") | nindent 6 }}
+      {{- include "primer.topologySpread" (dict "root" . "component" "control") | nindent 6 }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:

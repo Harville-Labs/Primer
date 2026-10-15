@@ -20,6 +20,7 @@ spec:
         app.kubernetes.io/component: web
     spec:
       {{- include "primer.podIdentity" (dict "root" . "component" "web") | nindent 6 }}
+      {{- include "primer.topologySpread" (dict "root" . "component" "web") | nindent 6 }}
       securityContext:
         runAsNonRoot: true
         # The Node image's own user; overriding it to Primer's would leave

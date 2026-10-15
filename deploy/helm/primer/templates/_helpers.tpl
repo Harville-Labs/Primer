@@ -221,6 +221,27 @@ automountServiceAccountToken: false
 {{- end -}}
 
 {{/*
+Spread one component against its own pods. Keeping the selector component-
+scoped means a busy worker does not affect where the web replicas land.
+*/}}
+{{- define "primer.topologySpread" -}}
+{{- if .root.Values.podTopologySpread.enabled }}
+topologySpreadConstraints:
+  - maxSkew: {{ .root.Values.podTopologySpread.maxSkew }}
+    topologyKey: {{ .root.Values.podTopologySpread.topologyKey | quote }}
+    whenUnsatisfiable: {{ .root.Values.podTopologySpread.whenUnsatisfiable }}
+    labelSelector:
+      matchLabels:
+        {{- include "primer.selectorLabels" .root | nindent 8 }}
+        app.kubernetes.io/component: {{ .component }}
+    {{- with .root.Values.podTopologySpread.matchLabelKeys }}
+    matchLabelKeys:
+      {{- toYaml . | nindent 6 }}
+    {{- end }}
+{{- end }}
+{{- end -}}
+
+{{/*
 Autoscaling settings for one component, with the shared defaults underneath.
 
 Per component so that one service can be autoscaled without turning it on

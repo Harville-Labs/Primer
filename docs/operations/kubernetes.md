@@ -223,6 +223,13 @@ unevictable, and a drain that never finishes is a worse failure than the
 restart it was avoiding. The rule is the replica count rather than the
 component, so a worker scaled to three is protected like anything else.
 
+`podTopologySpread` can place each component's replicas on separate topology
+domains. It is off by default; `ScheduleAnyway` is the safe default for a
+single-node cluster. Set `whenUnsatisfiable: DoNotSchedule` when the cluster
+has enough nodes to satisfy the rule. On Kubernetes 1.27 or newer,
+`matchLabelKeys: [pod-template-hash]` keeps pods from an older ReplicaSet from
+blocking a rollout.
+
 ### Autoscaling
 
 Off unless you ask for it, and then only for the services whose load is
