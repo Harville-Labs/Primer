@@ -14,6 +14,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 
 from fastapi import status
+from neo4j.exceptions import AuthError, ServiceUnavailable, SessionExpired, TransientError
 from primer_contracts.errors import ErrorCode
 from primer_service.errors import ProblemError
 
@@ -145,4 +146,34 @@ def vector_store(consequence: str) -> Iterator[None]:
         logger.warning("the vector store refused a write", exc_info=True)
         raise dependency_unavailable(
             f"The vector store could not be written to, so {consequence}."
+        ) from error
+
+
+@contextmanager
+def graph_store(consequence: str) -> Iterator[None]:
+    """Mark a block that cannot run without the knowledge graph.
+
+    Named apart from the vector store because it is a different server. An
+    operator told the vector store was unreachable would check PostgreSQL
+    while Neo4j was the one down.
+
+    Unlike the embedder and the vector store, this catches named exceptions
+    rather than everything. The graph is reached through one driver whose
+    errors are a closed hierarchy, so a Cypher mistake can be told apart
+    from an outage - and it has to be, because reporting a bug in Primer as
+    an unreachable dependency sends whoever reads it to restart a database
+    that is fine.
+    """
+    try:
+        yield
+    except AuthError as error:
+        logger.warning("the graph store refused Primer's credentials", exc_info=True)
+        raise dependency_unavailable(
+            f"The graph store refused Primer's credentials, so {consequence}. "
+            "Check PRIMER_GRAPH_USERNAME and PRIMER_GRAPH_PASSWORD."
+        ) from error
+    except (ServiceUnavailable, SessionExpired, TransientError) as error:
+        logger.warning("the graph store could not be reached", exc_info=True)
+        raise dependency_unavailable(
+            f"The graph store could not be reached, so {consequence}."
         ) from error

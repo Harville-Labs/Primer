@@ -70,6 +70,15 @@ class Settings(BaseSettings):
     #: and a passage that answers the question around 0.63 to 0.69.
     min_score: float | None = Field(default=None, ge=0.0, le=1.0)
 
+    #: Neo4j, holding the entities each passage mentions and the relations
+    #: between them. Off unless a URL is named, and a deployment without one
+    #: never opens a connection to it.
+    graph_url: str | None = Field(default=None)
+    graph_username: str = Field(default="neo4j")
+    graph_password: SecretStr | None = Field(default=None)
+    graph_database: str = Field(default="neo4j")
+    graph_timeout_seconds: float = Field(default=30.0, gt=0)
+
     @property
     def reranking_enabled(self) -> bool:
         """Both are needed. An endpoint with no model cannot be called."""
