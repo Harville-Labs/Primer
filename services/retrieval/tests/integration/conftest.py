@@ -19,10 +19,13 @@ from fastapi.testclient import TestClient
 from haystack import Document
 from primer_retrieval.app import create_app
 from primer_retrieval.config import Settings
+from primer_retrieval.graph import GraphStore, build_graph_store
 from primer_retrieval.migrations import upgrade_to_head
+from testcontainers.community.neo4j import Neo4jContainer
 from testcontainers.community.postgres import PostgresContainer
 
 POSTGRES_IMAGE = "pgvector/pgvector:pg17"
+NEO4J_IMAGE = "neo4j:5.26-community"
 SERVICE_TOKEN = "retrieval-service-token"  # noqa: S105 - a fixture value, not a real credential
 DIMENSIONS = 32
 
@@ -65,6 +68,31 @@ def pgvector_url() -> Iterator[str]:
         yield url
 
 
+@pytest.fixture(scope="session")
+def neo4j() -> Iterator[Neo4jContainer]:
+    """One Neo4j for the session, its schema applied the way a deployment's is.
+
+    Shared rather than one per test because every graph test writes into
+    libraries it made up, and isolation between libraries is the property
+    under test - a fresh database per test would hide a leak between them.
+    """
+    with Neo4jContainer(NEO4J_IMAGE) as container:
+        store = build_graph_store(graph_settings(container))
+        assert store is not None
+        store.apply_schema()
+        store.close()
+        yield container
+
+
+def graph_settings(container: Neo4jContainer, **overrides: Any) -> Settings:
+    return Settings(
+        graph_url=container.get_connection_url(),
+        graph_username=container.username,
+        graph_password=container.password,
+        **overrides,
+    )
+
+
 @pytest.fixture
 def client(pgvector_url: str, request: pytest.FixtureRequest) -> TestClient:
     """A service with its own table, so no test can see another's writes."""
@@ -81,3 +109,33 @@ def client(pgvector_url: str, request: pytest.FixtureRequest) -> TestClient:
         settings, document_embedder=StubDocumentEmbedder(), text_embedder=StubTextEmbedder()
     )
     return TestClient(app)
+
+
+@pytest.fixture
+def graph(neo4j: Neo4jContainer) -> Iterator[GraphStore]:
+    store = build_graph_store(graph_settings(neo4j))
+    assert store is not None
+    yield store
+    store.close()
+
+
+@pytest.fixture
+def graph_client(pgvector_url: str, neo4j: Neo4jContainer, request: pytest.FixtureRequest):
+    """The service with both stores, the way a graph deployment runs it."""
+    unique = abs(hash(request.node.nodeid)) % 10**9
+    settings = graph_settings(
+        neo4j,
+        vector_store="pgvector",
+        database_url=pgvector_url,
+        vector_schema="public",
+        vector_table=f"service_{unique}",
+        embedding_dimensions=DIMENSIONS,
+        internal_api_token=SERVICE_TOKEN,
+    )
+    app = create_app(
+        settings, document_embedder=StubDocumentEmbedder(), text_embedder=StubTextEmbedder()
+    )
+    with TestClient(app) as client:
+        yield client
+    graph = app.state.retrieval.graph
+    graph.close()

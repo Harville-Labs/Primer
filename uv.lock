@@ -2051,6 +2051,18 @@ wheels = [
 ]
 
 [[package]]
+name = "neo4j"
+version = "6.4.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pytz" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/80/db/024bd576bde5d97436d0acb71b41cf928c036ed8fec95ea1122eb05e47d1/neo4j-6.4.0.tar.gz", hash = "sha256:056676698f080b5af5b24b0fc5abb485b8db1b95edf366d01dcfd63bcff9b71d", size = 287786, upload-time = "2026-10-05T15:37:45.216Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/c9/5d/519aefe3b38a490924641e980a16ea6c70f6c96c08d84cf661d32c4a08c2/neo4j-6.4.0-py3-none-any.whl", hash = "sha256:fdd048ba827be138063b045cf59e40056fbf0405ac02dadc24f64e369fbd9d3d", size = 390611, upload-time = "2026-10-05T15:37:43.491Z" },
+]
+
+[[package]]
 name = "networkx"
 version = "3.6.1"
 source = { registry = "https://pypi.org/simple" }
@@ -2726,6 +2738,7 @@ dependencies = [
     { name = "alembic" },
     { name = "fastapi" },
     { name = "haystack-ai" },
+    { name = "neo4j" },
     { name = "pgvector-haystack" },
     { name = "primer-contracts" },
     { name = "primer-observability" },
@@ -2739,7 +2752,7 @@ dependencies = [
 [package.dev-dependencies]
 dev = [
     { name = "httpx2" },
-    { name = "testcontainers", extra = ["qdrant"] },
+    { name = "testcontainers", extra = ["neo4j", "qdrant"] },
 ]
 server = [
     { name = "uvicorn", extra = ["standard"] },
@@ -2750,6 +2763,7 @@ requires-dist = [
     { name = "alembic" },
     { name = "fastapi" },
     { name = "haystack-ai" },
+    { name = "neo4j", specifier = ">=6.4.0" },
     { name = "pgvector-haystack" },
     { name = "primer-contracts", editable = "packages/contracts" },
     { name = "primer-observability", editable = "packages/observability" },
@@ -2763,7 +2777,7 @@ requires-dist = [
 [package.metadata.requires-dev]
 dev = [
     { name = "httpx2" },
-    { name = "testcontainers", extras = ["postgres", "qdrant"] },
+    { name = "testcontainers", extras = ["neo4j", "postgres", "qdrant"] },
 ]
 server = [{ name = "uvicorn", extras = ["standard"] }]
 
@@ -3272,6 +3286,15 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/52/a9/0c0db8d37b2b8a645666f7fd8accea4c6224e013c42b1d5c17c93590cd06/python_pptx-1.0.2.tar.gz", hash = "sha256:479a8af0eaf0f0d76b6f00b0887732874ad2e3188230315290cd1f9dd9cc7095", size = 10109297, upload-time = "2024-08-07T17:33:37.772Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/d9/4f/00be2196329ebbff56ce564aa94efb0fbc828d00de250b1980de1a34ab49/python_pptx-1.0.2-py3-none-any.whl", hash = "sha256:160838e0b8565a8b1f67947675886e9fea18aa5e795db7ae531606d68e785cba", size = 472788, upload-time = "2024-08-07T17:33:28.192Z" },
+]
+
+[[package]]
+name = "pytz"
+version = "2026.5"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/14/21/d83d6ef28c4c912c4bb4d1dcf591f7b8c6bde87b9c66f9f454677314e16d/pytz-2026.5.tar.gz", hash = "sha256:fa23724b9c486543b9ff54a327ee7569ac83ade54bb9afd0fc18676620401c86", size = 318572, upload-time = "2026-10-04T02:37:58.719Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/4f/ef/c66110d46fb800dda0bf33164182dfadabe26a90e4476844d502a23dca8e/pytz-2026.5-py2.py3-none-any.whl", hash = "sha256:e658af3757f9e26a9d25dd2aff38335acd92bc9104f890a894b2c1ba28311b03", size = 506342, upload-time = "2026-10-04T02:37:56.814Z" },
 ]
 
 [[package]]
@@ -3953,6 +3976,9 @@ wheels = [
 ]
 
 [package.optional-dependencies]
+neo4j = [
+    { name = "neo4j" },
+]
 qdrant = [
     { name = "qdrant-client" },
 ]

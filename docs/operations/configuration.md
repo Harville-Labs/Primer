@@ -46,6 +46,11 @@ instead of silently keeping a default.
 | `PRIMER_EMBEDDING_DIMENSIONS` | `1536` | Must match the model |
 | `PRIMER_EMBEDDING_BASE_URL` | unset | Any OpenAI-compatible endpoint |
 | `PRIMER_EMBEDDING_API_KEY` | unset | |
+| `PRIMER_GRAPH_URL` | unset | Neo4j `bolt://` or `neo4j://` URL. Unset turns the knowledge graph off |
+| `PRIMER_GRAPH_USERNAME` | `neo4j` | |
+| `PRIMER_GRAPH_PASSWORD` | unset | |
+| `PRIMER_GRAPH_DATABASE` | `neo4j` | Community edition has only this one |
+| `PRIMER_GRAPH_TIMEOUT_SECONDS` | `30` | Per transaction, and for connecting |
 | `PRIMER_INTERNAL_API_TOKEN` | unset | **Unset denies the internal API** |
 
 

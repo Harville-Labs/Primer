@@ -53,6 +53,29 @@ is to leave nothing behind.
 Superseded generations are retired **after** activation, never before. Until
 Control has switched, the older generation is what searches are reading.
 
+## The knowledge graph
+
+When `PRIMER_GRAPH_URL` is set, Retrieval also keeps a knowledge graph in
+Neo4j: the entities each passage mentions, and the relations between them.
+See [ADR 0002](../adr/0002-knowledge-graph-in-neo4j.md).
+
+The graph is scoped differently from the vectors, on purpose. A chunk
+belongs to one generation, as it does in the vector store. An entity
+belongs to the library, so one name mentioned in two documents is one node
+and a traversal can cross from one document to the other. That crossing is
+what a graph finds and a vector search does not.
+
+Everything that records where an entity was seen carries its generation:
+the chunk that mentions it, and every relation. A traversal follows only
+mentions and relations in the generations it was given, so a pending build
+is invisible here as well. That includes its relations: a path through a
+pending relation cannot lead to an active passage.
+
+Deleting a generation or purging a version erases its graph in the same
+request, along with any entity no remaining passage mentions. An
+unreachable Neo4j fails that request with a 503 that names the graph store,
+so cleanup is retried rather than reported done.
+
 ## No Primer vector adapter
 
 Haystack's `DocumentStore` protocol is already that abstraction. Wrapping it

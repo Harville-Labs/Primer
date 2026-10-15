@@ -33,7 +33,8 @@ from primer_service.errors import ProblemError, problem_response
 
 from primer_retrieval import __version__
 from primer_retrieval.config import Settings
-from primer_retrieval.errors import embedding_endpoint, vector_store
+from primer_retrieval.errors import embedding_endpoint, graph_store, vector_store
+from primer_retrieval.graph import GraphStore, build_graph_store
 from primer_retrieval.pipelines import (
     GENERATION_ID,
     DocumentEmbedder,
@@ -79,6 +80,8 @@ class RetrievalState:
         # None unless an endpoint is configured, and None is what makes a
         # deployment without one behave exactly as it did before.
         self.reranker = reranker if reranker is not None else build_reranker(settings)
+        # None unless Neo4j is configured, for the same reason as above.
+        self.graph: GraphStore | None = build_graph_store(settings)
 
 
 def build_reranker(settings: Settings) -> Reranker | None:
@@ -240,12 +243,21 @@ def delete_generation(payload: DeleteRequest, state: State) -> DeleteResult:
 
     Deleting nothing is success. A repeated delete has to be safe: it is
     exactly what a redelivered cleanup message asks for.
+
+    The graph is erased in the same request. Removing the passages and
+    keeping the names they mentioned would leave part of a document in the
+    library after the document had gone.
     """
     documents = state.store.filter_documents(
         filters=scope_filter(payload.library_id, (payload.generation_id,))
     )
     if documents:
         state.store.delete_documents([document.id for document in documents])
+    if state.graph is not None:
+        with graph_store("this document's graph cannot be erased"):
+            state.graph.erase(
+                payload.library_id, payload.document_version_id, only=payload.generation_id
+            )
     return DeleteResult(generation_id=payload.generation_id, deleted=len(documents))
 
 
@@ -269,6 +281,11 @@ def purge_version(payload: PurgeRequest, state: State) -> DeleteResult:
     ]
     if doomed:
         state.store.delete_documents(doomed)
+    if state.graph is not None:
+        with graph_store("this document's graph cannot be erased"):
+            state.graph.erase(
+                payload.library_id, payload.document_version_id, keep=payload.keep_generation_id
+            )
     return DeleteResult(
         generation_id=payload.keep_generation_id or payload.document_version_id,
         deleted=len(doomed),
