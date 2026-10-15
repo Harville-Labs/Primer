@@ -105,7 +105,11 @@ def test_credentials_have_no_defaults(compose_config: dict[str, Any]) -> None:
     text = BASE.read_text()
     for variable in ("POSTGRES_PASSWORD", "RABBITMQ_PASSWORD", "PRIMER_INTERNAL_API_TOKEN"):
         assert f"${{{variable}:?" in text, f"{variable} must be required, not defaulted"
-        assert f"${{{variable}:-" not in text, f"{variable} must not have a default"
+        # The bundled PostgreSQL's own copy may be empty, never a value: it
+        # is interpolated even when the server is off, and refuses to start
+        # without one when it is on.
+        rest = text.replace("POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}", "")
+        assert f"${{{variable}:-" not in rest, f"{variable} must not have a default"
 
 
 def test_the_resolved_configuration_contains_no_real_secrets(
@@ -281,3 +285,39 @@ def test_the_graph_password_has_no_default() -> None:
 def test_neo4j_is_not_published() -> None:
     """Only Retrieval and the schema step talk to it, both on the Compose network."""
     assert "ports" not in resolve_with_graph()["services"]["neo4j"]
+
+
+#: An operator's own PostgreSQL, in place of the bundled one.
+EXTERNAL_DATABASE_URL = "postgresql://primer:theirs@db.example:5432/primer"
+
+
+def database_users(config: dict[str, Any]) -> dict[str, str]:
+    return {
+        name: service["environment"]["PRIMER_DATABASE_URL"]
+        for name, service in config["services"].items()
+        if "PRIMER_DATABASE_URL" in (service.get("environment") or {})
+    }
+
+
+def test_every_database_user_shares_the_bundled_url(compose_config: dict[str, Any]) -> None:
+    """One plain URL: the services choose their driver, Retrieval passes it on as is."""
+    users = database_users(compose_config)
+
+    assert set(users) >= {"control", "chat", "retrieval", "worker", "migrate-vectors"}
+    assert set(users.values()) == {"postgresql://primer:resolve-only@postgres:5432/primer"}
+    assert "postgres" in compose_config["services"]
+
+
+def test_your_own_postgresql_replaces_the_bundled_one() -> None:
+    """No server started, nothing waiting on it, and no bundled password asked for."""
+    if shutil.which("docker") is None:
+        pytest.skip("docker is not installed")
+    config = resolve(
+        BASE, env={"PRIMER_DATABASE_URL": EXTERNAL_DATABASE_URL, "POSTGRES_PASSWORD": ""}
+    )
+    users = database_users(config)
+
+    assert "postgres" not in config["services"]
+    assert set(users.values()) == {EXTERNAL_DATABASE_URL}
+    for migration in ("migrate-control", "migrate-chat", "migrate-vectors"):
+        assert config["services"][migration]["depends_on"]["postgres"]["required"] is False

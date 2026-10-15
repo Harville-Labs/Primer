@@ -32,18 +32,30 @@ x-hardening: &hardening
     - /tmp:size=256m,mode=1777
     - /home/primer:size=32m,mode=0700,uid=10001,gid=10001
 
+# One URL for every database user. Setting PRIMER_DATABASE_URL points them
+# all at your own PostgreSQL and leaves the bundled one stopped; unset, they
+# use the bundled one, which then needs POSTGRES_PASSWORD. It is a plain
+# postgresql:// URL because Retrieval hands it to pgvector as it is, and the
+# other services pick their own driver from it.
+x-database-url: &database-url ${PRIMER_DATABASE_URL:-postgresql://primer:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD, or PRIMER_DATABASE_URL to use your own PostgreSQL}@postgres:5432/primer}
+
 x-service-env: &service-env
-  PRIMER_DATABASE_URL: postgresql+asyncpg://primer:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@postgres:5432/primer
+  PRIMER_DATABASE_URL: *database-url
   PRIMER_INTERNAL_API_TOKEN: ${PRIMER_INTERNAL_API_TOKEN:?set PRIMER_INTERNAL_API_TOKEN}
   PRIMER_SERVICE_TOKEN: ${PRIMER_INTERNAL_API_TOKEN:?set PRIMER_INTERNAL_API_TOKEN}
   PRIMER_SOURCE_STORE_URL: file:///var/lib/primer/sources
 
 services:
+  # Stopped when PRIMER_DATABASE_URL names your own server: the profile is
+  # empty, so always on, until that variable gives it a name nobody enables.
   postgres:
     image: pgvector/pgvector:pg17
+    profiles: ["${PRIMER_DATABASE_URL:+external-database}"]
     environment:
       POSTGRES_USER: primer
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      # Empty rather than required, because Compose interpolates this
+      # service even when it is off. The image refuses to start without one.
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}
       POSTGRES_DB: primer
     volumes:
       - postgres-data:/var/lib/postgresql/data
@@ -76,8 +88,9 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+        required: false
     environment:
-      PRIMER_DATABASE_URL: postgresql://primer:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@postgres:5432/primer
+      PRIMER_DATABASE_URL: *database-url
     working_dir: /app/services/control-api
     command: ["alembic", "upgrade", "head"]
     restart: "no"
@@ -87,8 +100,9 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+        required: false
     environment:
-      PRIMER_DATABASE_URL: postgresql://primer:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@postgres:5432/primer
+      PRIMER_DATABASE_URL: *database-url
     working_dir: /app/services/chat
     command: ["alembic", "upgrade", "head"]
     restart: "no"
@@ -98,8 +112,9 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+        required: false
     environment:
-      PRIMER_DATABASE_URL: postgresql://primer:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@postgres:5432/primer
+      PRIMER_DATABASE_URL: *database-url
     working_dir: /app/services/retrieval
     command: ["alembic", "upgrade", "head"]
     restart: "no"
@@ -191,8 +206,6 @@ services:
         required: false
     environment:
       <<: *service-env
-      # Retrieval reads pgvector synchronously; it does not use asyncpg.
-      PRIMER_DATABASE_URL: postgresql://primer:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@postgres:5432/primer
       PRIMER_VECTOR_STORE: ${PRIMER_VECTOR_STORE:-pgvector}
       PRIMER_EMBEDDING_BASE_URL: ${PRIMER_EMBEDDING_BASE_URL:?set PRIMER_EMBEDDING_BASE_URL}
       PRIMER_EMBEDDING_MODEL: ${PRIMER_EMBEDDING_MODEL:?set PRIMER_EMBEDDING_MODEL}

@@ -44,6 +44,26 @@ deploy/compose/scripts/smoke.sh
     That deletes the database along with the volume, so only do it on a stack
     you can recreate.
 
+## Using your own PostgreSQL with Compose
+
+Compose runs PostgreSQL for you unless `PRIMER_DATABASE_URL` is set. Set it
+in `.env` and every service, and every migration, uses that server instead.
+The bundled one does not start, and `POSTGRES_PASSWORD` is not needed:
+
+```bash
+PRIMER_DATABASE_URL=postgresql://primer:...@db.example.internal:5432/primer
+```
+
+The server needs pgvector installed. The migrations create the `vector`
+extension and the `control`, `chat` and `vectors` schemas, so the user needs
+to own the database, and either be allowed to create the extension or find
+it already created by an administrator. Write the URL as plain `postgresql://`; each service
+chooses its own driver from it. Characters such as `@`, `/` and `:` in the
+password must be percent-encoded.
+
+A container reaches a server on the host as `host.docker.internal`, not
+`localhost`.
+
 ## Turning on the knowledge graph with Compose
 
 The graph runs under a Compose profile, so a stack without one starts no
