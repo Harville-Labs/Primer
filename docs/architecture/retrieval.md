@@ -76,6 +76,11 @@ request, along with any entity no remaining passage mentions. An
 unreachable Neo4j fails that request with a 503 that names the graph store,
 so cleanup is retried rather than reported done.
 
+The graph is written through `/internal/v1/graph/index`, by the ingestion
+worker that extracted it. Retrieval without a graph store refuses that call
+with a 409 rather than accepting and dropping it, and `/verify` reports how
+many chunks the graph holds so activation can refuse a partial one.
+
 ## No Primer vector adapter
 
 Haystack's `DocumentStore` protocol is already that abstraction. Wrapping it

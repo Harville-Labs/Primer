@@ -140,6 +140,11 @@ LIMIT $limit
 #: generation of a version, or all of a version but the generation in use.
 #: The library and version are matched in the pattern and are never
 #: optional, so the widest this can reach is one version.
+_COUNT_CHUNKS = """
+MATCH (chunk:Chunk {library_id: $library_id, generation_id: $generation_id})
+RETURN count(chunk) AS n
+"""
+
 _ERASE_RELATIONS = """
 MATCH ()-[relation:RELATES {
     library_id: $library_id,
@@ -290,6 +295,16 @@ class GraphStore:
             )
             for record in records
         ]
+
+    def count(self, library_id: UUID, generation_id: UUID) -> int:
+        """Chunks this generation's graph holds, whether or not they named anything."""
+        records = self._driver.execute_query(
+            Query(_COUNT_CHUNKS, timeout=self._timeout),
+            parameters_={"library_id": str(library_id), "generation_id": str(generation_id)},
+            routing_=RoutingControl.READ,
+            database_=self._database,
+        ).records
+        return records[0]["n"]
 
     def erase(
         self,

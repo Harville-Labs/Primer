@@ -149,6 +149,25 @@ def vector_store(consequence: str) -> Iterator[None]:
         ) from error
 
 
+def no_graph_store(consequence: str) -> ProblemError:
+    """A worker extracted a graph for a Retrieval that has nowhere to put it.
+
+    A conflict between two halves of one deployment's configuration, not an
+    outage, so a 4xx: the worker must stop rather than retry, because every
+    retry is refused the same way until an operator changes one side.
+    """
+    return ProblemError(
+        code=ErrorCode.CONFLICT,
+        title="Retrieval has no graph store",
+        status_code=status.HTTP_409_CONFLICT,
+        detail=(
+            f"Retrieval has no graph store configured, so {consequence}. Set PRIMER_GRAPH_URL "
+            "on Retrieval, or turn graph extraction off on the ingestion worker by unsetting "
+            "PRIMER_GRAPH_EXTRACTION_MODEL."
+        ),
+    )
+
+
 @contextmanager
 def graph_store(consequence: str) -> Iterator[None]:
     """Mark a block that cannot run without the knowledge graph.

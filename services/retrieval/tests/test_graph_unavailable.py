@@ -74,3 +74,34 @@ def test_without_a_graph_url_there_is_no_graph() -> None:
     )
 
     assert response.status_code == 200, response.text
+
+
+def test_a_graph_sent_to_a_retrieval_without_one_is_refused_not_dropped() -> None:
+    """A 409 that names the missing setting, so the worker stops.
+
+    Accepting and discarding would let a worker activate a generation it
+    believes has a graph.
+    """
+    client = build_client()
+    body = {
+        **delete_body(),
+        "graphs": [{"chunk_id": str(uuid.uuid4()), "entities": [{"name": "A"}]}],
+    }
+
+    response = client.post(
+        "/internal/v1/graph/index", json=body, headers={"X-Primer-Service-Token": SERVICE_TOKEN}
+    )
+
+    assert response.status_code == 409, response.text
+    assert "PRIMER_GRAPH_URL" in response.json()["detail"]
+
+
+def test_verify_without_a_graph_reports_no_graph_count_rather_than_zero() -> None:
+    client = build_client()
+
+    response = client.post(
+        "/internal/v1/verify", json=delete_body(), headers={"X-Primer-Service-Token": SERVICE_TOKEN}
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["graph_count"] is None

@@ -24,6 +24,8 @@ from primer_contracts.indexing import (
     DeleteResult,
     GenerationCount,
     GenerationQuery,
+    GraphIndexRequest,
+    GraphIndexResult,
     IndexRequest,
     IndexResult,
     PurgeRequest,
@@ -39,6 +41,8 @@ class VectorIndex(Protocol):
     """What a stage needs from Retrieval, so a test can supply it."""
 
     def index(self, request: IndexRequest) -> IndexResult: ...
+
+    def index_graph(self, request: GraphIndexRequest) -> GraphIndexResult: ...
 
     def verify(self, request: GenerationQuery) -> GenerationCount: ...
 
@@ -86,6 +90,11 @@ class RetrievalClient:
     def index(self, request: IndexRequest) -> IndexResult:
         return IndexResult.model_validate(
             self._post("/internal/v1/index", request.model_dump(mode="json"))
+        )
+
+    def index_graph(self, request: GraphIndexRequest) -> GraphIndexResult:
+        return GraphIndexResult.model_validate(
+            self._post("/internal/v1/graph/index", request.model_dump(mode="json"))
         )
 
     def verify(self, request: GenerationQuery) -> GenerationCount:

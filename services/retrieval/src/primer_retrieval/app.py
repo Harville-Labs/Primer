@@ -23,6 +23,8 @@ from primer_contracts.indexing import (
     DeleteResult,
     GenerationCount,
     GenerationQuery,
+    GraphIndexRequest,
+    GraphIndexResult,
     IndexRequest,
     IndexResult,
     PurgeRequest,
@@ -33,7 +35,12 @@ from primer_service.errors import ProblemError, problem_response
 
 from primer_retrieval import __version__
 from primer_retrieval.config import Settings
-from primer_retrieval.errors import embedding_endpoint, graph_store, vector_store
+from primer_retrieval.errors import (
+    embedding_endpoint,
+    graph_store,
+    no_graph_store,
+    vector_store,
+)
 from primer_retrieval.graph import GraphStore, build_graph_store
 from primer_retrieval.pipelines import (
     GENERATION_ID,
@@ -172,7 +179,32 @@ def verify_generation(payload: GenerationQuery, state: State) -> GenerationCount
     documents = state.store.filter_documents(
         filters=scope_filter(payload.library_id, (payload.generation_id,))
     )
-    return GenerationCount(generation_id=payload.generation_id, count=len(documents))
+    graph_count = None
+    if state.graph is not None:
+        with graph_store("this document's graph cannot be verified"):
+            graph_count = state.graph.count(payload.library_id, payload.generation_id)
+    return GenerationCount(
+        generation_id=payload.generation_id, count=len(documents), graph_count=graph_count
+    )
+
+
+@router.post("/graph/index", summary="Write what one generation's chunks say, as a graph")
+def index_graph(payload: GraphIndexRequest, state: State) -> GraphIndexResult:
+    """Write extracted entities and relations into a pending generation.
+
+    Refused rather than ignored when there is no graph store. Accepting and
+    discarding would let a worker activate a generation it believes has a
+    graph, and the only symptom would be hybrid search quietly never
+    finding anything.
+    """
+    consequence = "this document's graph cannot be indexed"
+    if state.graph is None:
+        raise no_graph_store(consequence)
+    with graph_store(consequence):
+        state.graph.write(
+            payload.library_id, payload.document_version_id, payload.generation_id, payload.graphs
+        )
+    return GraphIndexResult(generation_id=payload.generation_id, written=len(payload.graphs))
 
 
 @router.post("/search", summary="Search one library")

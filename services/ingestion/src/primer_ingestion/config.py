@@ -106,6 +106,27 @@ class Settings(BaseSettings):
         description="Budget for converting one document, checked between phases",
     )
 
+    #: Off unless both are set. Any OpenAI-compatible endpoint that supports
+    #: structured output; a small instruction-tuned model is enough, and it
+    #: need not be the one Chat answers with.
+    graph_extraction_base_url: str | None = Field(
+        default=None,
+        description="OpenAI-compatible base URL of the model that extracts the knowledge graph",
+    )
+    graph_extraction_model: str | None = Field(
+        default=None,
+        description="Model that extracts entities and relations; unset turns extraction off",
+    )
+    graph_extraction_api_key: SecretStr | None = Field(default=None)
+    graph_extraction_timeout_seconds: float = Field(default=120.0, gt=0)
+    #: Passages are extracted in parallel within a batch. Bounded by what the
+    #: model server can take, not by this worker, which only waits.
+    graph_extraction_concurrency: int = Field(
+        default=4,
+        gt=0,
+        description="Passages sent to the extraction model at once",
+    )
+
     max_retries: int = Field(
         default=4,
         ge=0,
@@ -118,3 +139,9 @@ class Settings(BaseSettings):
     #: expires and the job is re-claimed rather than lost.
     task_time_limit_seconds: int = Field(default=1800, gt=0)
     task_soft_time_limit_seconds: int = Field(default=1500, gt=0)
+
+    @property
+    def graph_extraction_enabled(self) -> bool:
+        return (
+            self.graph_extraction_base_url is not None and self.graph_extraction_model is not None
+        )

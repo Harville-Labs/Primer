@@ -3,14 +3,19 @@
 from __future__ import annotations
 
 import uuid
+from collections.abc import Sequence
 from pathlib import Path
 
 import pytest
+from primer_contracts.chunks import DocumentChunk
+from primer_contracts.graph import ChunkGraph, GraphEntity
 from primer_contracts.indexing import (
     DeleteRequest,
     DeleteResult,
     GenerationCount,
     GenerationQuery,
+    GraphIndexRequest,
+    GraphIndexResult,
     IndexRequest,
     IndexResult,
     PurgeRequest,
@@ -32,10 +37,14 @@ LIBRARY = uuid.uuid5(uuid.NAMESPACE_URL, "library")
 class RecordingIndex:
     """A Retrieval that records what it was asked to store."""
 
-    def __init__(self, reported_count: int | None = None) -> None:
+    def __init__(
+        self, reported_count: int | None = None, reported_graph_count: int | None = None
+    ) -> None:
         self.requests: list[IndexRequest] = []
+        self.graph_requests: list[GraphIndexRequest] = []
         self.purges: list[PurgeRequest] = []
         self.reported_count = reported_count
+        self.reported_graph_count = reported_graph_count
 
     @property
     def stored(self) -> int:
@@ -45,9 +54,17 @@ class RecordingIndex:
         self.requests.append(request)
         return IndexResult(generation_id=request.generation_id, written=len(request.chunks))
 
+    def index_graph(self, request: GraphIndexRequest) -> GraphIndexResult:
+        self.graph_requests.append(request)
+        return GraphIndexResult(generation_id=request.generation_id, written=len(request.graphs))
+
     def verify(self, request: GenerationQuery) -> GenerationCount:
         count = self.reported_count if self.reported_count is not None else self.stored
-        return GenerationCount(generation_id=request.generation_id, count=count)
+        return GenerationCount(
+            generation_id=request.generation_id,
+            count=count,
+            graph_count=self.reported_graph_count,
+        )
 
     def delete(self, request: DeleteRequest) -> DeleteResult:
         return DeleteResult(generation_id=request.generation_id, deleted=0)
@@ -57,6 +74,20 @@ class RecordingIndex:
         return DeleteResult(
             generation_id=request.keep_generation_id or request.document_version_id, deleted=0
         )
+
+
+class RecordingExtractor:
+    """A model that names one entity per passage, and records what it read."""
+
+    def __init__(self) -> None:
+        self.batches: list[list[DocumentChunk]] = []
+
+    def extract(self, chunks: Sequence[DocumentChunk]) -> list[ChunkGraph]:
+        self.batches.append(list(chunks))
+        return [
+            ChunkGraph(chunk_id=chunk.chunk_id, entities=(GraphEntity(name=chunk.content),))
+            for chunk in chunks
+        ]
 
 
 def chunk_payload(ordinal: int) -> dict[str, object]:
@@ -164,6 +195,76 @@ def test_a_short_generation_is_refused_and_retried(
 
     assert raised.value.code == "incomplete_index"
     assert type(raised.value) is StageError
+
+
+def test_without_an_extraction_model_no_graph_is_written(
+    settings: Settings, artifacts: ArtifactStore, claim: JobClaim
+) -> None:
+    """Extraction costs a model call per passage, so it is never on by default."""
+    write_chunks(artifacts, 3)
+    index = RecordingIndex()
+
+    EmbedStage(settings, artifacts=artifacts, index=index)(claim)
+
+    assert index.stored == 3
+    assert index.graph_requests == []
+
+
+def test_each_batch_is_extracted_into_the_same_pending_generation(
+    settings: Settings, artifacts: ArtifactStore, claim: JobClaim
+) -> None:
+    """The graph and the vectors are activated together, so they share a generation."""
+    write_chunks(artifacts, 3)
+    index, extractor = RecordingIndex(), RecordingExtractor()
+
+    EmbedStage(settings, artifacts=artifacts, index=index, extractor=extractor)(claim)
+
+    assert [len(batch) for batch in extractor.batches] == [2, 1]
+    assert [len(request.graphs) for request in index.graph_requests] == [2, 1]
+    assert {request.generation_id for request in index.graph_requests} == {GENERATION}
+    assert {request.library_id for request in index.graph_requests} == {LIBRARY}
+
+
+def extraction_on(settings: Settings) -> Settings:
+    return settings.model_copy(
+        update={"graph_extraction_base_url": "http://model:8000/v1", "graph_extraction_model": "m"}
+    )
+
+
+def test_a_complete_graph_passes_verification(
+    settings: Settings, artifacts: ArtifactStore, claim: JobClaim
+) -> None:
+    write_chunks(artifacts, 3)
+    index = RecordingIndex(reported_count=3, reported_graph_count=3)
+
+    IndexStage(extraction_on(settings), artifacts=artifacts, index=index)(claim)
+
+
+def test_a_short_graph_is_refused_and_retried(
+    settings: Settings, artifacts: ArtifactStore, claim: JobClaim
+) -> None:
+    """Complete vectors are not enough: a partial graph answers from part of the document."""
+    write_chunks(artifacts, 3)
+    index = RecordingIndex(reported_count=3, reported_graph_count=2)
+
+    with pytest.raises(StageError) as raised:
+        IndexStage(extraction_on(settings), artifacts=artifacts, index=index)(claim)
+
+    assert raised.value.code == "incomplete_graph"
+    assert type(raised.value) is StageError
+
+
+def test_extraction_against_a_retrieval_with_no_graph_fails_permanently(
+    settings: Settings, artifacts: ArtifactStore, claim: JobClaim
+) -> None:
+    """Two services configured differently disagree on every retry."""
+    write_chunks(artifacts, 3)
+    index = RecordingIndex(reported_count=3, reported_graph_count=None)
+
+    with pytest.raises(PermanentStageError) as raised:
+        IndexStage(extraction_on(settings), artifacts=artifacts, index=index)(claim)
+
+    assert raised.value.code == "graph_not_configured"
 
 
 def test_the_worker_registers_a_handler_for_every_pipeline_stage() -> None:
