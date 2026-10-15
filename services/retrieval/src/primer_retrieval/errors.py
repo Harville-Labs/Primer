@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import logging
 import re
-from collections.abc import Iterator
+from collections.abc import Generator
 from contextlib import contextmanager
 
 from fastapi import status
@@ -19,6 +19,11 @@ from primer_contracts.errors import ErrorCode
 from primer_service.errors import ProblemError
 
 logger = logging.getLogger(__name__)
+
+#: What the Neo4j driver raises when the graph is down, busy or gone, as
+#: opposed to when Primer sent it something wrong. Shared by the write path,
+#: which fails over it, and search, which carries on without the graph.
+GRAPH_OUTAGES = (ServiceUnavailable, SessionExpired, TransientError)
 
 
 def dependency_unavailable(detail: str) -> ProblemError:
@@ -44,7 +49,7 @@ class UnembeddedChunks(RuntimeError):
 
 
 @contextmanager
-def embedding_endpoint(consequence: str) -> Iterator[None]:
+def embedding_endpoint(consequence: str) -> Generator[None]:
     """Mark a block that cannot run without the embedding endpoint.
 
     An unreachable embedder is a deployment fault, not a bad request, and it
@@ -122,7 +127,7 @@ def wrong_dimensions(stored: str, offered: str, consequence: str) -> ProblemErro
 
 
 @contextmanager
-def vector_store(consequence: str) -> Iterator[None]:
+def vector_store(consequence: str) -> Generator[None]:
     """Mark a block that cannot run unless the vector store accepts a write.
 
     Writing is the half of the store that was never guarded. A search that
@@ -169,7 +174,7 @@ def no_graph_store(consequence: str) -> ProblemError:
 
 
 @contextmanager
-def graph_store(consequence: str) -> Iterator[None]:
+def graph_store(consequence: str) -> Generator[None]:
     """Mark a block that cannot run without the knowledge graph.
 
     Named apart from the vector store because it is a different server. An
@@ -191,7 +196,7 @@ def graph_store(consequence: str) -> Iterator[None]:
             f"The graph store refused Primer's credentials, so {consequence}. "
             "Check PRIMER_GRAPH_USERNAME and PRIMER_GRAPH_PASSWORD."
         ) from error
-    except (ServiceUnavailable, SessionExpired, TransientError) as error:
+    except GRAPH_OUTAGES as error:
         logger.warning("the graph store could not be reached", exc_info=True)
         raise dependency_unavailable(
             f"The graph store could not be reached, so {consequence}."

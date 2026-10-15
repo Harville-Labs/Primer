@@ -13,6 +13,8 @@ from typing import Literal
 from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from primer_retrieval.graph import MAX_HOPS
+
 VectorStore = Literal["pgvector", "qdrant"]
 
 
@@ -78,6 +80,14 @@ class Settings(BaseSettings):
     graph_password: SecretStr | None = Field(default=None)
     graph_database: str = Field(default="neo4j")
     graph_timeout_seconds: float = Field(default=30.0, gt=0)
+    #: How far search walks from the entities a question names. One reaches
+    #: passages about what those entities are directly related to; two
+    #: reaches what is related to that, which is where a vector search has
+    #: the least chance of finding anything on its own.
+    graph_hops: int = Field(default=2, ge=0, le=MAX_HOPS)
+    #: How many passages the graph contributes before fusion. Kept about as
+    #: wide as the vector candidates so neither ranking drowns the other.
+    graph_candidates: int = Field(default=20, ge=1, le=200)
 
     @property
     def reranking_enabled(self) -> bool:

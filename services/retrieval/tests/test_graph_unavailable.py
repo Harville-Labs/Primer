@@ -1,19 +1,23 @@
 """The graph store, reported as itself when it cannot be reached.
 
-Erasing a document is the one thing that touches Neo4j today, and it is the
-operation that must not quietly half-succeed: a delete that removed the
+Erasing a document must not quietly half-succeed: a delete that removed the
 vectors and shrugged at the graph would report a document gone while the
 names it contained stayed behind. So an unreachable graph fails the request
 with a 503 that says which store was down, and the cleanup is retried.
+
+Search is the opposite. The vector results are a correct answer without the
+graph, so an unreachable graph makes search worse, not broken.
 """
 
 from __future__ import annotations
 
+import time
 import uuid
 from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
+from haystack import Document
 from primer_contracts.identity import Principal
 from primer_retrieval.app import create_app
 from primer_retrieval.config import Settings
@@ -28,13 +32,38 @@ class EmptyStore:
         return []
 
 
+class FixedEmbedder:
+    def run(self, text: str) -> dict[str, Any]:
+        return {"embedding": [0.1] * 8}
+
+
+class OneHitRetriever:
+    """A vector search that always finds the same passage."""
+
+    def __init__(self) -> None:
+        self.document = Document(
+            id=str(uuid.uuid4()),
+            content="Marie Curie discovered polonium.",
+            score=0.7,
+            meta={
+                "library_id": str(uuid.uuid4()),
+                "document_id": str(uuid.uuid4()),
+                "document_version_id": str(uuid.uuid4()),
+                "generation_id": str(uuid.uuid4()),
+            },
+        )
+
+    def run(self, **kwargs: Any) -> dict[str, Any]:
+        return {"documents": [self.document]}
+
+
 def build_client(**settings: Any) -> TestClient:
     app = create_app(
         Settings(internal_api_token=SERVICE_TOKEN, embedding_dimensions=8, **settings),
         store=EmptyStore(),  # ty: ignore[invalid-argument-type]
         document_embedder=object(),  # ty: ignore[invalid-argument-type]
-        text_embedder=object(),  # ty: ignore[invalid-argument-type]
-        retriever=object(),
+        text_embedder=FixedEmbedder(),
+        retriever=OneHitRetriever(),
     )
     return TestClient(app, raise_server_exceptions=False)
 
@@ -105,3 +134,26 @@ def test_verify_without_a_graph_reports_no_graph_count_rather_than_zero() -> Non
 
     assert response.status_code == 200, response.text
     assert response.json()["graph_count"] is None
+
+
+def test_an_unreachable_graph_leaves_search_answering_from_vectors() -> None:
+    """Through the real driver, so the error a refused connection raises is
+    the one search knows to search past. Since the graph is optional, waiting
+    the driver's full transaction retry budget before falling back is not
+    useful to the searcher."""
+    client = build_client(graph_url="bolt://127.0.0.1:1", graph_timeout_seconds=2)
+    body = delete_body()
+    body.pop("document_version_id")
+    body["generation_ids"] = [body.pop("generation_id")]
+
+    started = time.monotonic()
+    response = client.post(
+        "/internal/v1/search",
+        json={**body, "query": "Who did Marie Curie work with?"},
+        headers={"X-Primer-Service-Token": SERVICE_TOKEN},
+    )
+    elapsed = time.monotonic() - started
+
+    assert response.status_code == 200, response.text
+    assert [c["content"] for c in response.json()["chunks"]] == ["Marie Curie discovered polonium."]
+    assert elapsed < 10, f"vector fallback took {elapsed:.1f}s with an unavailable graph"

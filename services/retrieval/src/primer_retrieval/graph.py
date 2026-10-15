@@ -23,7 +23,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
 from neo4j import (
@@ -36,7 +36,10 @@ from neo4j import (
 )
 from primer_contracts.graph import ChunkGraph, entity_key
 
-from primer_retrieval.config import Settings
+if TYPE_CHECKING:
+    # Only for annotations: config bounds its hop setting by MAX_HOPS, so
+    # importing it here at runtime would be a cycle.
+    from primer_retrieval.config import Settings
 
 #: The furthest a neighbourhood reaches from the entities a question names.
 #: Written into `_NEIGHBOURHOOD` as a literal, because Cypher cannot take a
@@ -44,6 +47,11 @@ from primer_retrieval.config import Settings
 #: two, a well-connected entity reaches most of a library and the
 #: neighbourhood stops meaning anything about the question.
 MAX_HOPS = 2
+
+# The graph enriches search but is optional. A short retry window gives a
+# transient failure a chance to clear without making vector fallback wait
+# for the driver's 30-second default.
+MAX_TRANSACTION_RETRY_SECONDS = 2.0
 
 #: Applied by the migration entrypoint, never at service startup: creating
 #: a constraint takes schema privileges a serving process should not hold.
@@ -355,5 +363,6 @@ def build_graph_store(settings: Settings) -> GraphStore | None:
         auth=(settings.graph_username, password) if password else None,
         connection_timeout=settings.graph_timeout_seconds,
         connection_acquisition_timeout=settings.graph_timeout_seconds,
+        max_transaction_retry_time=MAX_TRANSACTION_RETRY_SECONDS,
     )
     return GraphStore(driver, settings.graph_database, settings.graph_timeout_seconds)

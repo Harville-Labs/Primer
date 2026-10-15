@@ -81,6 +81,33 @@ worker that extracted it. Retrieval without a graph store refuses that call
 with a 409 rather than accepting and dropping it, and `/verify` reports how
 many chunks the graph holds so activation can refuse a partial one.
 
+### Hybrid search
+
+With a graph, search runs two rankings and fuses them. The vector ranking
+is the one Primer always had. The graph ranking starts from every entity
+whose name is a run of words in the question, matched exactly, and follows
+relations up to `PRIMER_GRAPH_HOPS` away; the passages that mention what it
+reaches are ranked nearest first. That finds a passage that shares no words
+with the question, because another passage connects it to something the
+question names.
+
+The two are fused by reciprocal rank before the reranker reads them, so the
+reranker sees the passages both agree on first. Fusion sets the order and
+nothing else. Each passage the graph adds is read back through the vector
+store with the search's scope filter narrowed to its id, which gives it the
+store's own similarity score and means an id the graph offers is never
+returned unless the caller could already see it.
+
+Keeping the store's score has a consequence worth knowing. A relevance
+floor applies to graph passages as well, and they are the ones most likely
+to fall under it: the point of them is that they do not resemble the
+question. A deployment with a floor and no reranker will drop many of
+them.
+
+An unreachable graph does not fail a search. It is logged, and the vector
+results are returned alone. Without a graph, search returns exactly what it
+returned before the graph existed.
+
 ## No Primer vector adapter
 
 Haystack's `DocumentStore` protocol is already that abstraction. Wrapping it

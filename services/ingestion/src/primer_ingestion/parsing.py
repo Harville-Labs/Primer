@@ -17,7 +17,7 @@ import logging
 import shutil
 import stat
 import time
-from collections.abc import Iterator
+from collections.abc import Generator
 from contextlib import contextmanager
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -84,7 +84,7 @@ def build_converter(*, enable_ocr: bool = True) -> DocumentConverter:
 
 
 @contextmanager
-def working_copy(source: Path, suffix: str) -> Iterator[Path]:
+def working_copy(source: Path, suffix: str) -> Generator[Path]:
     """A private, read-only copy of the source, deleted on every path out.
 
     Conversion is the first code to touch bytes a stranger uploaded. It gets

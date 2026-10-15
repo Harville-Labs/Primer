@@ -14,7 +14,7 @@ own their own connections without fighting over process state.
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator, AsyncIterator
 from contextlib import asynccontextmanager
 
 from fastapi import Request
@@ -69,7 +69,7 @@ class Database:
         self._sessions = async_sessionmaker(self.engine, expire_on_commit=False)
 
     @asynccontextmanager
-    async def session(self) -> AsyncIterator[AsyncSession]:
+    async def session(self) -> AsyncGenerator[AsyncSession]:
         """A session whose transaction commits on success and rolls back on error."""
         async with self._sessions() as session:
             try:
