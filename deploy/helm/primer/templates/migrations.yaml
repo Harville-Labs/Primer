@@ -54,13 +54,22 @@ spec:
       volumes:
         {{- include "primer.scratchVolumes" $ | nindent 8 }}
 {{- end }}
-{{- if .Values.graph.url }}
+{{- if include "primer.graphUrl" . }}
 {{/*
 The knowledge graph's constraints and indexes, beside the SQL migrations and
-for the same reason: once per release, before any Retrieval replica writes.
-Not Alembic, because there is no history to record - every statement is
-`IF NOT EXISTS`, so rerunning it on each upgrade is the whole design.
+for the same reason: once per release, rather than raced by every Retrieval
+replica. Not Alembic, because there is no history to record - every
+statement is `IF NOT EXISTS`, so rerunning it on each upgrade is the whole
+design.
+
+A Neo4j this release runs moves it to after the release. A pre-install hook
+runs before the release's own resources exist, so it would wait for a Neo4j
+that cannot start until it gives up. Afterwards it waits for Neo4j to
+answer, and Retrieval writing first is harmless: nothing is indexed into a
+graph before the first library is, and on an upgrade the constraints are
+already there.
 */}}
+{{- $phase := ternary "post-install,post-upgrade" "pre-install,pre-upgrade" .Values.graph.neo4j.enabled }}
 ---
 apiVersion: batch/v1
 kind: Job
@@ -69,7 +78,7 @@ metadata:
   labels:
     {{- include "primer.labels" . | nindent 4 }}
   annotations:
-    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook": {{ $phase }}
     "helm.sh/hook-weight": "-5"
     "helm.sh/hook-delete-policy": before-hook-creation
 spec:

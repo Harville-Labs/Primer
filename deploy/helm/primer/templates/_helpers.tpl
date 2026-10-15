@@ -172,15 +172,42 @@ is what keeps a deployment without one behaving exactly as it did before.
 {{- end -}}
 
 {{/*
+Where the knowledge graph is, or nothing when it is off. The one place that
+decides it: every template that asks whether the graph is on asks this, so
+a bundled Neo4j and an operator's one cannot be told apart downstream.
+
+Both at once is refused rather than resolved. Either choice would quietly
+leave the other unused, and the one ignored is usually the one meant.
+*/}}
+{{- define "primer.graphUrl" -}}
+{{- if .Values.graph.neo4j.enabled -}}
+{{- if .Values.graph.url -}}
+{{- fail "graph.url and graph.neo4j.enabled are both set. Set graph.url to use a Neo4j you run, or graph.neo4j.enabled to have this release run one - not both." -}}
+{{- end -}}
+{{- printf "bolt://%s-neo4j:7687" (include "primer.fullname" .) -}}
+{{- else -}}
+{{- .Values.graph.url -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+The Secret holding the graph's password. Retrieval reads it, and a bundled
+Neo4j takes its initial password from it, so the two cannot disagree.
+*/}}
+{{- define "primer.graphSecret" -}}
+{{- required "graph.existingSecret is required when the graph is on: name a Secret holding the Neo4j password under graph.passwordKey" .Values.graph.existingSecret -}}
+{{- end -}}
+
+{{/*
 How to reach the knowledge graph. Given to Retrieval, which owns it, and to
 the step that prepares its schema - nothing else opens a connection to it.
 
-Included only where `graph.url` is set; each caller guards it, so a
-deployment without a graph renders exactly as it did before there was one.
+Included only where the graph is on; each caller guards it, so a deployment
+without a graph renders exactly as it did before there was one.
 */}}
 {{- define "primer.graphEnv" -}}
 - name: PRIMER_GRAPH_URL
-  value: {{ .Values.graph.url | quote }}
+  value: {{ include "primer.graphUrl" . | quote }}
 - name: PRIMER_GRAPH_USERNAME
   value: {{ .Values.graph.username | quote }}
 - name: PRIMER_GRAPH_DATABASE
@@ -188,7 +215,7 @@ deployment without a graph renders exactly as it did before there was one.
 - name: PRIMER_GRAPH_PASSWORD
   valueFrom:
     secretKeyRef:
-      name: {{ required "graph.existingSecret is required when graph.url is set: name a Secret holding the Neo4j password under graph.passwordKey" .Values.graph.existingSecret }}
+      name: {{ include "primer.graphSecret" . }}
       key: {{ .Values.graph.passwordKey }}
 {{- end -}}
 
@@ -204,8 +231,8 @@ cleanly and then fail every document it indexed.
 {{- define "primer.graphExtractionEnv" -}}
 {{- with .Values.graph.extraction }}
 {{- if .baseUrl }}
-{{- if not $.Values.graph.url }}
-{{- fail "graph.extraction.baseUrl is set but graph.url is not, so every extracted graph would be refused and every document would fail to index. Set graph.url to a Neo4j, or unset graph.extraction.baseUrl." }}
+{{- if not (include "primer.graphUrl" $) }}
+{{- fail "graph.extraction.baseUrl is set but the graph is off, so every extracted graph would be refused and every document would fail to index. Set graph.url or graph.neo4j.enabled, or unset graph.extraction.baseUrl." }}
 {{- end }}
 - name: PRIMER_GRAPH_EXTRACTION_BASE_URL
   value: {{ .baseUrl | quote }}

@@ -46,7 +46,7 @@ spec:
             - name: PRIMER_QDRANT_URL
               value: {{ required "vectorStore.qdrantUrl is required for qdrant" .Values.vectorStore.qdrantUrl | quote }}
             {{- end }}
-            {{- if .Values.graph.url }}
+            {{- if include "primer.graphUrl" . }}
             {{- include "primer.graphEnv" . | trim | nindent 12 }}
             - name: PRIMER_GRAPH_HOPS
               value: {{ .Values.graph.hops | quote }}

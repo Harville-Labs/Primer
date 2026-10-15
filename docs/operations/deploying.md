@@ -10,7 +10,7 @@
 | Embedding endpoint | for retrieval | Any OpenAI-compatible API |
 | `oauth2-proxy` | for multi-user | Not needed with auth off |
 | Qdrant | optional | Alternative to pgvector |
-| Neo4j | optional | For the knowledge graph; Compose bundles one under the `graph` profile |
+| Neo4j | optional | For the knowledge graph; Compose and the chart can each run one |
 
 ## Running it with Compose
 

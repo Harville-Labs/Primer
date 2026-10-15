@@ -233,13 +233,38 @@ vectorStore:
 # edition is enough: the schema uses only uniqueness constraints and range
 # indexes.
 graph:
-  # bolt:// or neo4j://. Empty turns the graph off: nothing below is
-  # rendered and no pod opens a connection to it.
+  # bolt:// or neo4j:// for a Neo4j you run yourself. Empty, with `neo4j`
+  # below off, turns the graph off: nothing below is rendered and no pod
+  # opens a connection to it.
   url: ""
+  # A Neo4j run by this release instead, for a deployment with nowhere else
+  # to put one. Set this or `url`, not both. It is reachable only from
+  # Retrieval and the step that prepares its schema, on the Bolt port, and
+  # its HTTP interface and browser are switched off.
+  neo4j:
+    enabled: false
+    image:
+      repository: neo4j
+      tag: "5.26-community"
+      pullPolicy: IfNotPresent
+    # Neo4j sizes its heap and page cache from the machine, not the pod's
+    # limit, and is killed for it. Keep the two together under the limit.
+    heapSize: 512m
+    pageCacheSize: 256m
+    persistence:
+      size: 10Gi
+      storageClass: ""   # the cluster default
+    resources:
+      requests:
+        cpu: 250m
+        memory: 1Gi
+      limits:
+        memory: 1Gi
   username: neo4j
   database: neo4j
-  # Required once `url` is set. A Secret holding the Neo4j password under
-  # `passwordKey`.
+  # Required once the graph is on. A Secret holding the Neo4j password under
+  # `passwordKey`. A bundled Neo4j takes its initial password from the same
+  # Secret, so it needs at least eight characters.
   existingSecret: ""
   passwordKey: graph-password
   # How far search follows relations from the entities a question names,
@@ -253,7 +278,7 @@ graph:
   # which on a large library is the most expensive thing ingestion does. Any
   # OpenAI-compatible endpoint whose model supports structured output.
   #
-  # Leaving it empty with `url` set is allowed and almost never wanted:
+  # Leaving it empty with the graph on is allowed and almost never wanted:
   # nothing writes to the graph, so search consults an empty one.
   extraction:
     baseUrl: ""

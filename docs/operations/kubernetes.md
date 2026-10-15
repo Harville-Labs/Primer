@@ -64,7 +64,7 @@ values`, and in whatever stores your release history.
 | `rabbitmq.existingSecret` | `broker-url` |
 | `auth.oidc.existingSecret` | `client-secret`, `cookie-secret` |
 | `inference.*.existingSecret` | API keys, if your endpoint needs them |
-| `graph.existingSecret` | `graph-password`, when `graph.url` is set |
+| `graph.existingSecret` | `graph-password`, when the graph is on |
 | `graph.extraction.existingSecret` | `graph-extraction-api-key`, if the extraction endpoint needs one |
 
 The one it does create is Primer's own cluster-internal service token, which
@@ -270,28 +270,39 @@ because it sounds thorough.
 
 ## The knowledge graph
 
-Off until `graph.url` names a Neo4j. The chart does not run one, for the
-same reason it runs no PostgreSQL: see below.
+Off until you choose a Neo4j for it. The chart can run one for you:
 
 ```yaml
 graph:
-  url: bolt://neo4j.graph.svc:7687
-  existingSecret: primer-neo4j        # key: graph-password
+  neo4j:
+    enabled: true
+    persistence:
+      size: 10Gi
+  existingSecret: primer-neo4j        # key: graph-password, 8+ characters
   extraction:
     baseUrl: http://vllm.models.svc:8000/v1
     model: Qwen/Qwen2.5-7B-Instruct
 ```
 
-With a URL set, Retrieval is given the graph and a `migrate-graph` hook
-applies its constraints and indexes before every install and upgrade, beside
-the SQL migrations. Nothing else is told the graph exists: the index worker
-hands each extracted graph to Retrieval rather than writing it, so the
-password stays with the one service that owns the store.
+Or point it at one you already run, with `graph.url` in place of
+`graph.neo4j`. Setting both is refused.
+
+```yaml
+graph:
+  url: bolt://neo4j.graph.svc:7687
+  existingSecret: primer-neo4j
+```
+
+Either way, Retrieval is given the graph and a `migrate-graph` hook applies
+its constraints and indexes on every install and upgrade. Nothing else is
+told the graph exists: the index worker hands each extracted graph to
+Retrieval rather than writing it, so the password stays with the one
+service that owns the store.
 
 `graph.extraction` is the model that reads entities and relations out of
 each passage, and it runs on the index worker. It is optional - without it
 the graph stays empty and search answers from vectors alone - but setting it
-without `graph.url` is refused at render time, because every document would
+with the graph off is refused at render time, because every document would
 then extract a graph that Retrieval has nowhere to put and fail to index.
 Documents indexed before extraction was turned on have no graph until they
 are reindexed.
@@ -301,28 +312,61 @@ in its logs. Indexing and deletion do not, since a graph missing what the
 vectors hold would answer from passages that no longer exist; they fail and
 are retried.
 
-!!! note "Admit only Retrieval to Neo4j"
-    The chart's policies cover the pods it runs, and Neo4j is not one of
-    them. If yours runs in the cluster, give it an ingress policy that
-    admits only Primer's Retrieval pods and the schema hook:
+### The bundled Neo4j
 
-    ```yaml
-    - podSelector:
-        matchExpressions:
-          - key: app.kubernetes.io/component
-            operator: In
-            values: [retrieval, migrate-graph]
-      namespaceSelector:
-        matchLabels:
-          kubernetes.io/metadata.name: primer
+`graph.neo4j.enabled` runs Neo4j Community as a one-replica StatefulSet with
+a persistent volume for its store. It runs under the same hardening as
+Primer's own pods - non-root, read-only root filesystem, no capabilities -
+with its HTTP interface and browser turned off, so its only port is Bolt.
+The `allow-neo4j` NetworkPolicy admits Retrieval and the schema hook to that
+port and nothing else; the workers extract graphs but never open one.
+
+- **Size the heap and page cache with the limit.** Neo4j sizes its memory
+  from the node rather than the container, so `graph.neo4j.heapSize` and
+  `pageCacheSize` are set explicitly and must fit inside
+  `graph.neo4j.resources.limits.memory` with room for the JVM itself.
+- **The schema hook runs after install, not before.** A pre-install hook
+  would run before the StatefulSet exists. With a bundled Neo4j the hook is
+  `post-install,post-upgrade` and waits up to five minutes for Neo4j to
+  answer; with `graph.url` it stays beside the SQL migrations.
+- **The Secret sets the password once.** Neo4j reads it on first start, when
+  its store is empty. To change it later, change it in Neo4j first, then
+  update the Secret and restart Retrieval:
+
+    ```bash
+    kubectl exec -it primer-neo4j-0 -- cypher-shell -u neo4j \
+      "ALTER CURRENT USER SET PASSWORD FROM 'old' TO 'new'"
     ```
+
+- **One user and one database, both `neo4j`.** That is what Community has;
+  any other `graph.username` or `graph.database` is refused.
+
+An operator-run Neo4j is outside the chart's policies. If yours runs in the
+cluster, give it an ingress policy that admits only Primer's Retrieval pods
+and the schema hook:
+
+```yaml
+- podSelector:
+    matchExpressions:
+      - key: app.kubernetes.io/component
+        operator: In
+        values: [retrieval, migrate-graph]
+  namespaceSelector:
+    matchLabels:
+      kubernetes.io/metadata.name: primer
+```
 
 ## What is not here
 
-No PostgreSQL, RabbitMQ, Neo4j, or model server. A chart that shipped its own
+No PostgreSQL, RabbitMQ, or model server. A chart that shipped its own
 database is one people run in production by accident, and Primer's whole
 premise is that you already have the infrastructure you want to keep your
 documents on.
+
+Neo4j is the exception, because what it holds is derived. Every entity and
+relation in it was read out of passages that live in PostgreSQL and the
+vector store, so losing it costs a reindex, not a library. That makes a
+bundled one safe to offer, and few deployments have a Neo4j already.
 
 ## Object storage
 

@@ -242,12 +242,73 @@
     },
     "graph": {
       "type": "object",
-      "description": "Optional knowledge graph in Neo4j. Off unless url is set.",
+      "description": "Optional knowledge graph in Neo4j. Off unless url is set or neo4j.enabled is true.",
       "properties": {
         "url": {
-          "description": "bolt:// or neo4j://. Empty turns the graph off.",
+          "description": "bolt:// or neo4j:// for a Neo4j you run. Empty, with neo4j.enabled false, turns the graph off.",
           "type": "string",
           "pattern": "^$|^(bolt|neo4j)(\\+s|\\+ssc)?://"
+        },
+        "neo4j": {
+          "type": "object",
+          "description": "A Neo4j run by this release. Exclusive with url.",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "image": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "repository",
+                "tag"
+              ],
+              "properties": {
+                "repository": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "tag": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "pullPolicy": {
+                  "type": "string",
+                  "enum": [
+                    "Always",
+                    "IfNotPresent",
+                    "Never"
+                  ]
+                }
+              }
+            },
+            "heapSize": {
+              "description": "Neo4j's heap, as Neo4j writes sizes: 512m, 2g.",
+              "type": "string",
+              "pattern": "^[0-9]+[kmg]$"
+            },
+            "pageCacheSize": {
+              "description": "Neo4j's page cache, as Neo4j writes sizes.",
+              "type": "string",
+              "pattern": "^[0-9]+[kmg]$"
+            },
+            "persistence": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "size": {
+                  "type": "string"
+                },
+                "storageClass": {
+                  "type": "string"
+                }
+              }
+            },
+            "resources": {
+              "type": "object"
+            }
+          }
         },
         "username": {
           "type": "string"
@@ -256,7 +317,7 @@
           "type": "string"
         },
         "existingSecret": {
-          "description": "Required when url is set: a Secret holding the Neo4j password.",
+          "description": "Required when the graph is on: a Secret holding the Neo4j password.",
           "type": "string"
         },
         "passwordKey": {
