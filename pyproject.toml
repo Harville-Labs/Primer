@@ -1,6 +1,6 @@
 [project]
 name = "primer"
-version = "0.1.0"
+version = "0.1.14"
 description = "Self-hosted, multi-user retrieval-augmented search over your own documents"
 requires-python = ">=3.13"
 dependencies = []
