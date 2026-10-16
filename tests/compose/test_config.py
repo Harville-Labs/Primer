@@ -312,9 +312,7 @@ def test_your_own_postgresql_replaces_the_bundled_one() -> None:
     """No server started, nothing waiting on it, and no bundled password asked for."""
     if shutil.which("docker") is None:
         pytest.skip("docker is not installed")
-    config = resolve(
-        BASE, env={"PRIMER_DATABASE_URL": EXTERNAL_DATABASE_URL, "POSTGRES_PASSWORD": ""}
-    )
+    config = resolve(BASE, env={"PRIMER_DATABASE_URL": EXTERNAL_DATABASE_URL})
     users = database_users(config)
 
     assert "postgres" not in config["services"]

@@ -1,6 +1,6 @@
 [project]
 name = "primer-chat"
-version = "0.1.0"
+version = "0.1.14"
 description = "Primer chat: cited, streamed answers grounded in a user's own library"
 requires-python = ">=3.13"
 dependencies = [

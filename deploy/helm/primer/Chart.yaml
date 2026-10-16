@@ -2,8 +2,8 @@ apiVersion: v2
 name: primer
 description: Self-hosted, multi-user retrieval-augmented search over your own documents
 type: application
-version: 0.1.0
-appVersion: "0.1.0"
+version: 0.1.14
+appVersion: "0.1.14"
 home: https://github.com/isaiah-harville/Primer
 sources:
   - https://github.com/isaiah-harville/Primer

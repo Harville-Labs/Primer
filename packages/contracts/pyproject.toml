@@ -1,6 +1,6 @@
 [project]
 name = "primer-contracts"
-version = "0.1.0"
+version = "0.1.14"
 description = "Shared Primer cross-service wire models"
 requires-python = ">=3.13"
 dependencies = ["pydantic"]

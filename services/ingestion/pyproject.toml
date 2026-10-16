@@ -1,6 +1,6 @@
 [project]
 name = "primer-ingestion"
-version = "0.1.0"
+version = "0.1.14"
 description = "Primer ingestion workers: parsing, chunking, embedding, and indexing"
 requires-python = ">=3.13"
 dependencies = [

@@ -1,6 +1,6 @@
 [project]
 name = "primer-storage"
-version = "0.1.0"
+version = "0.1.14"
 description = "Primer content-addressed source storage, shared by services"
 requires-python = ">=3.13"
 dependencies = [

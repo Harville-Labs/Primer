@@ -2815,7 +2815,7 @@ wheels = [
 
 [[package]]
 name = "primer"
-version = "0.1.0"
+version = "0.1.14"
 source = { virtual = "." }
 
 [package.dev-dependencies]
@@ -2850,7 +2850,7 @@ docs = [
 
 [[package]]
 name = "primer-chat"
-version = "0.1.0"
+version = "0.1.14"
 source = { editable = "services/chat" }
 dependencies = [
     { name = "alembic" },
@@ -2901,7 +2901,7 @@ tools = [{ name = "mcp-haystack" }]
 
 [[package]]
 name = "primer-contracts"
-version = "0.1.0"
+version = "0.1.14"
 source = { editable = "packages/contracts" }
 dependencies = [
     { name = "pydantic" },
@@ -2912,7 +2912,7 @@ requires-dist = [{ name = "pydantic" }]
 
 [[package]]
 name = "primer-control"
-version = "0.1.0"
+version = "0.1.14"
 source = { editable = "services/control-api" }
 dependencies = [
     { name = "alembic" },
@@ -2963,7 +2963,7 @@ server = [{ name = "uvicorn", extras = ["standard"] }]
 
 [[package]]
 name = "primer-ingestion"
-version = "0.1.0"
+version = "0.1.14"
 source = { editable = "services/ingestion" }
 dependencies = [
     { name = "celery" },
@@ -3012,7 +3012,7 @@ dev = [{ name = "python-pptx" }]
 
 [[package]]
 name = "primer-observability"
-version = "0.1.0"
+version = "0.1.14"
 source = { editable = "packages/observability" }
 dependencies = [
     { name = "opentelemetry-api" },
@@ -3031,7 +3031,7 @@ requires-dist = [
 
 [[package]]
 name = "primer-retrieval"
-version = "0.1.0"
+version = "0.1.14"
 source = { editable = "services/retrieval" }
 dependencies = [
     { name = "alembic" },
@@ -3082,7 +3082,7 @@ server = [{ name = "uvicorn", extras = ["standard"] }]
 
 [[package]]
 name = "primer-service"
-version = "0.1.0"
+version = "0.1.14"
 source = { editable = "packages/service" }
 dependencies = [
     { name = "fastapi" },
@@ -3093,7 +3093,7 @@ requires-dist = [{ name = "fastapi" }]
 
 [[package]]
 name = "primer-storage"
-version = "0.1.0"
+version = "0.1.14"
 source = { editable = "packages/storage" }
 dependencies = [
     { name = "anyio" },
