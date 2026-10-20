@@ -17,7 +17,7 @@ A document reports one of these states while you wait:
 | `queued` | Stored and waiting for a worker |
 | `parsing` | Being read and split into passages |
 | `chunking` | Read; waiting to be embedded |
-| `embedding` | Passages being turned into vectors |
+| `embedding` | Passages being turned into vectors, and into a knowledge graph if your deployment has one |
 | `indexing` | Written to the index; being checked |
 | `ready` | Searchable |
 | `failed` | Something went wrong; see the detail |

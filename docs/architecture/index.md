@@ -10,8 +10,8 @@ Primer is four processes, each owning exactly one thing.
 | Process | Owns |
 | --- | --- |
 | Control API | What exists, and who may see it |
-| Ingestion workers | Turning files into passages |
-| Retrieval | The vector store — exclusively |
+| Ingestion workers | Turning files into passages, and passages into graphs |
+| Retrieval | The vector store and the knowledge graph — exclusively |
 | Web app | What the user sees |
 
 ## The rules that shape it
@@ -24,11 +24,19 @@ the one doing the work.
 **Workers hold no database credentials.** Every transition is a request to
 Control. A compromised worker cannot read a library it was not handed.
 
-**Retrieval is the only vector-store client.** Nothing else names a
-collection, a table, or a filter syntax. Swapping pgvector for Qdrant is a
+**Retrieval is the only index client.** Nothing else names a collection, a
+table, a filter syntax, or a Cypher query. Swapping pgvector for Qdrant is a
 configuration change, and a
 [conformance suite](retrieval.md#the-conformance-suite) proves both behave
-identically where it matters.
+identically where it matters. The workers extract a graph but hand it to
+Retrieval rather than opening Neo4j themselves.
+
+**The graph is optional and additive.** Without `PRIMER_GRAPH_URL`, Primer
+never opens a connection to Neo4j and search returns exactly what it did
+before the graph existed. With it, search fuses two rankings, and a graph
+that goes down degrades search to vectors alone rather than failing it. See
+[the knowledge graph](retrieval.md#the-knowledge-graph) and
+[ADR 0002](../adr/0002-knowledge-graph-in-neo4j.md).
 
 **Authorization is a SQL predicate, not a check.** Listing many libraries
 applies the same rule as fetching one, because it is literally the same
@@ -39,9 +47,10 @@ expression. There is no second code path to drift out of agreement.
 
 ## What is deliberately boring
 
-Primer writes no parser, no chunking algorithm, no embedding model, and no
-vector-store abstraction. Each is a solved problem with good libraries, and
+Primer writes no parser, no chunking algorithm, no embedding model, no
+vector-store abstraction, and no graph engine. Each is a solved problem with good libraries, and
 a bespoke version would be a second thing to maintain that worked worse.
 
 What Primer does own is the part nobody else can: which user may see which
-passage, and making sure a half-finished rebuild never answers a question.
+passage, and making sure a half-finished rebuild never answers a question —
+through the graph as much as through the vectors.
