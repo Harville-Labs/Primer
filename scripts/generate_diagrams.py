@@ -35,11 +35,13 @@ def system_architecture() -> Canvas:
 
     postgres = canvas.box(Box(760, 190, 250, 66, "PostgreSQL", "control schema", "store"))
     sources = canvas.box(Box(760, 330, 250, 66, "Source objects", "fsspec: disk or S3", "store"))
-    retrieval = canvas.box(
-        Box(760, 470, 250, 88, "Retrieval", "the only vector-store client", "service")
-    )
+    retrieval = canvas.box(Box(760, 470, 250, 88, "Retrieval", "the only index client", "service"))
     vectors = canvas.box(Box(760, 620, 250, 62, "Vector store", "pgvector or Qdrant", "store"))
     embeddings = canvas.box(Box(1060, 470, 150, 88, "Embeddings", "OpenAI-compatible", "external"))
+    graph = canvas.box(Box(1060, 620, 150, 62, "Knowledge graph", "Neo4j, optional", "store"))
+    extraction = canvas.box(
+        Box(400, 620, 250, 62, "Graph extraction", "OpenAI-compatible, optional", "external")
+    )
 
     canvas.group(30, 36, 270, 396, "Outside the cluster")
     canvas.group(360, 150, 870, 560, "Inside the cluster")
@@ -50,9 +52,20 @@ def system_architecture() -> Canvas:
     canvas.arrow(control.port("bottom"), broker.port("top"), label="job id")
     canvas.arrow(broker.port("bottom"), workers.port("top"))
     canvas.arrow(control.port("right"), postgres.port("left"), label="reads, writes")
-    canvas.arrow(workers.port("right"), retrieval.port("left"), label="chunks")
+    canvas.arrow(workers.port("right"), retrieval.port("left"), label="chunks, graphs")
+    canvas.arrow(workers.port("bottom"), extraction.port("top"), dashed=True)
     canvas.arrow(retrieval.port("bottom"), vectors.port("top"), label="scoped filter")
     canvas.arrow(retrieval.port("right"), embeddings.port("left"), dashed=True)
+    # Below the embeddings arrow and right of the vector store, so neither
+    # line crosses a box.
+    canvas.route(
+        [
+            (retrieval.x + retrieval.w, retrieval.y + 76),
+            (1035, retrieval.y + 76),
+            (1035, graph.cy),
+            (graph.x, graph.cy),
+        ]
+    )
 
     # Control writes uploads; workers read them back. Routed around the
     # Control box rather than through it.
@@ -78,18 +91,19 @@ def system_architecture() -> Canvas:
         label_at=2,
     )
 
-    # Job transitions return to Control along the bottom, where nothing else
-    # runs, rather than crossing back through the column they came from.
+    # Job transitions return to Control down the gutter left of the cluster,
+    # rather than crossing back through the column they came from. The label
+    # sits low on that line, clear of the web app and the broker.
     canvas.route(
         [
-            (workers.x + 60, workers.y + workers.h),
-            (workers.x + 60, 690),
-            (332, 690),
+            (workers.x, workers.cy + 16),
+            (332, workers.cy + 16),
             (332, control.cy + 26),
             (control.x, control.cy + 26),
         ],
         label="claim, complete, fail",
         label_at=2,
+        label_dy=60,
     )
 
     canvas.label(
@@ -110,8 +124,8 @@ def ingestion_pipeline() -> Canvas:
         ("queued", "upload committed"),
         ("parsing", "Docling converts"),
         ("chunking", "awaiting embed"),
-        ("embedding", "Retrieval embeds"),
-        ("indexing", "verifying count"),
+        ("embedding", "vectors and graph"),
+        ("indexing", "verifying counts"),
         ("ready", "searchable"),
     ]
     boxes = [

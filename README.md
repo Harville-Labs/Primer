@@ -32,6 +32,7 @@ endpoints. **Primer ships no model and calls no vendor.**
 | **Private by default** | A library belongs to one person. Nobody else can read it, list it, or discover that it exists. |
 | **Real documents** | `.pdf` `.docx` `.pptx` `.md` `.markdown` `.txt` — including text that exists only inside images. |
 | **Answers you can check** | Every citation names a passage in a specific *version* of a specific document, and is recorded with the answer rather than recomputed later. |
+| **Connections across documents** | Optionally, a knowledge graph of the people, methods, and things your sources name. A question finds passages linked to what it mentions, not only passages that resemble it. |
 | **Your models** | Any OpenAI-compatible endpoint — vLLM, Ollama, llama.cpp, or a hosted API. |
 | **Chat on its own** | Use it as a plain chat interface, and link a library when you want the answer grounded and cited. |
 | **Tools, only with consent** | MCP tools run in the operator's own servers, and only after a person approves that specific call. Primer never touches the host shell. |
@@ -61,6 +62,10 @@ docker compose -f deploy/compose/compose.yaml up --wait
 ```
 
 Then open <http://localhost:3000>.
+
+The knowledge graph is off until you turn it on. It needs a model that
+supports structured output, and runs Neo4j under a Compose profile; see
+[Turning on the knowledge graph](https://isaiah-harville.github.io/Primer/operations/deploying/#turning-on-the-knowledge-graph-with-compose).
 
 > [!WARNING]
 > The Compose profile has **no authentication and is not meant to gain any**.
@@ -106,14 +111,18 @@ Four processes, each owning one thing.
 
 - **Control API** — what exists, and who may see it. Every authorization
   decision is made here and nowhere else.
-- **Ingestion workers** — turn uploaded files into passages. Celery over
-  RabbitMQ, with lease-based claims so a worker dying mid-document is
-  recoverable rather than corrupting.
-- **Retrieval** — the only process that touches a vector store. Every request
-  carries a library and a generation; there is no unscoped search to get
-  wrong.
+- **Ingestion workers** — turn uploaded files into passages, and, with an
+  extraction model configured, into the entities and relations each passage
+  states. Celery over RabbitMQ, with lease-based claims so a worker dying
+  mid-document is recoverable rather than corrupting.
+- **Retrieval** — the only process that touches the index: the vector store,
+  and the Neo4j knowledge graph when there is one. Every request carries a
+  library and a generation; there is no unscoped search to get wrong. With
+  a graph, search fuses the vector ranking with the passages connected to
+  what the question names.
 - **Web** — SvelteKit, and the only thing a browser talks to.
 
 Reindexing writes a new *generation* and swaps it in atomically, so a rebuild
 is invisible until it is complete rather than half-answering questions while
-it runs.
+it runs. The graph is built into the same generation as the vectors, so the
+two change together.
