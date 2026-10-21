@@ -1,0 +1,15 @@
+# Vulnerabilities this project has looked at and decided not to block on.
+#
+# The policy this file is an exception to is in docs/operations/images.md:
+# a scan fails on CRITICAL or HIGH with a fix available, and unfixed
+# findings are reported rather than blocking. Adding a line here waives one
+# of those, which is a decision a maintainer makes in a pull request like
+# any other change - never a thing done to make a red build go green.
+#
+# Every entry needs three things: the identifier, why it does not apply or
+# cannot be fixed today, and when it should be looked at again. An entry
+# past its date is a bug in this file.
+#
+# CVE-2024-00000 exp:2026-12-31
+#   In a transitive dependency of X, reachable only from the CLI entry point
+#   Primer does not ship. Upstream fix expected in X 2.0.

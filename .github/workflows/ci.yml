@@ -164,20 +164,38 @@ jobs:
     # `latest` is main, and only main. A release publishes its own version
     # and moves no alias, so `latest` never silently becomes a release and a
     # release never silently becomes `latest`.
+    #
+    # Two architectures, each built on a runner of its own architecture
+    # rather than emulated. The worker image carries torch and Docling, and
+    # cross-building those under QEMU takes long enough that nobody would
+    # keep it - and a cross-build that quietly falls back to compiling from
+    # source is worse than not offering the platform at all.
+    #
+    # Each build pushes by digest and the job after this one stitches the
+    # digests into a single manifest. Tagging them here would leave whichever
+    # architecture finished last holding the name on its own.
     name: Images (build, publish latest)
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.platform.runner }}
     permissions:
       contents: read
       packages: write
     strategy:
+      fail-fast: false
       matrix:
-        include:
+        image:
           - name: primer-api
             dockerfile: deploy/images/Dockerfile.python
           - name: primer-worker
             dockerfile: deploy/images/Dockerfile.worker
           - name: primer-web
             dockerfile: deploy/images/Dockerfile.gui
+        platform:
+          - key: amd64
+            id: linux/amd64
+            runner: ubuntu-latest
+          - key: arm64
+            id: linux/arm64
+            runner: ubuntu-24.04-arm
     steps:
       - uses: actions/checkout@v5
 
@@ -191,26 +209,164 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # A pull request builds and throws the result away. It is here to prove
+      # the image still builds on this architecture, which is the thing that
+      # breaks.
+      - name: Build
+        if: github.ref != 'refs/heads/main' || github.event_name != 'push'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.image.dockerfile }}
+          platforms: ${{ matrix.platform.id }}
+          cache-from: type=gha,scope=${{ matrix.image.name }}-${{ matrix.platform.key }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image.name }}-${{ matrix.platform.key }}
+
+      - name: Build and push by digest
+        id: build
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.image.dockerfile }}
+          platforms: ${{ matrix.platform.id }}
+          outputs: type=image,name=ghcr.io/${{ github.repository_owner }}/${{ matrix.image.name }},push-by-digest=true,name-canonical=true,push=true
+          # What is in the image, and what built it. Attached to the image
+          # rather than published beside it, so the question can be answered
+          # from the registry without pulling anything.
+          sbom: true
+          provenance: mode=max
+          cache-from: type=gha,scope=${{ matrix.image.name }}-${{ matrix.platform.key }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image.name }}-${{ matrix.platform.key }}
+
+      - name: Hand the digest to the manifest job
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          # Named by the bare hex, because the manifest job puts it back
+          # together as `image@sha256:<name>`.
+          mkdir -p /tmp/digests
+          touch "/tmp/digests/${DIGEST#sha256:}"
+
+      - name: Upload the digest
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        uses: actions/upload-artifact@v4
+        with:
+          name: digest-${{ matrix.image.name }}-${{ matrix.platform.key }}
+          path: /tmp/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  manifest:
+    # One tag over both architectures. Until this runs, the digests pushed
+    # above are in the registry and nothing points at them.
+    name: Images (publish manifest)
+    needs: images
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        image: [primer-api, primer-worker, primer-web]
+    steps:
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: digest-${{ matrix.image }}-*
+          merge-multiple: true
+          path: /tmp/digests
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Tags
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ghcr.io/${{ github.repository_owner }}/${{ matrix.name }}
+          images: ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}
           tags: |
-            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=latest
             type=sha,format=long
 
-      - name: Build
+      - name: Create the manifest
+        working-directory: /tmp/digests
+        run: |
+          set -euo pipefail
+          # A manifest built from every digest this run produced. Missing one
+          # would publish a tag that serves one architecture and fails on the
+          # other, which is worse than not publishing it.
+          test "$(ls -1 | wc -l)" -eq 2
+
+          docker buildx imagetools create \
+            $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
+            $(printf 'ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}@sha256:%s ' *)
+
+      - name: Show what was published
+        run: |
+          docker buildx imagetools inspect \
+            "ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}:latest"
+
+  scan:
+    # Every push and every pull request, against a threshold written down in
+    # docs/operations/images.md. A policy nobody agreed to is a policy that
+    # gets waived the first time it fires.
+    name: Images (scan)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: primer-api
+            dockerfile: deploy/images/Dockerfile.python
+          - name: primer-worker
+            dockerfile: deploy/images/Dockerfile.worker
+          - name: primer-web
+            dockerfile: deploy/images/Dockerfile.gui
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: docker/setup-buildx-action@v3
+
+      # Built here rather than pulled, so a pull request is scanned before it
+      # merges rather than after it ships. One architecture: the packages are
+      # the same on both, and scanning is about what is installed.
+      - name: Build for scanning
         uses: docker/build-push-action@v6
         with:
           context: .
           file: ${{ matrix.dockerfile }}
-          push: ${{ github.ref == 'refs/heads/main' && github.event_name == 'push' }}
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
           platforms: linux/amd64
-          cache-from: type=gha,scope=${{ matrix.name }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.name }}
+          load: true
+          tags: scan/${{ matrix.name }}:${{ github.sha }}
+          cache-from: type=gha,scope=${{ matrix.name }}-amd64
+
+      - name: Scan
+        uses: aquasecurity/trivy-action@0.33.1
+        with:
+          image-ref: scan/${{ matrix.name }}:${{ github.sha }}
+          format: table
+          exit-code: 1
+          # The threshold. Only what someone can actually act on: an
+          # unfixed CVE in a base image is a thing to know about, not a
+          # reason to block a change that has nothing to do with it.
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          trivyignores: .trivyignore
+        env:
+          # The database moved to GHCR and the public rate limit is low
+          # enough to fail a busy day. Authenticated pulls are not.
+          TRIVY_USERNAME: ${{ github.actor }}
+          TRIVY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
 
   web:
     name: Web (lint, types, tests)
