@@ -143,16 +143,22 @@ jobs:
 
       # Rendering with the values a real install needs, so a template error
       # or a missing `required` fails here rather than at install time.
+      # Twice: once as an install comes up out of the box, with the bundled
+      # embedder, and once pointed at an embedding server the operator runs.
       - name: Render
         run: |
-          helm template primer deploy/helm/primer \
-            --set postgresql.existingSecret=primer-postgres \
-            --set rabbitmq.existingSecret=primer-rabbitmq \
-            --set auth.oidc.issuerUrl=https://idp.example.com/ \
-            --set auth.oidc.clientId=primer \
-            --set auth.oidc.existingSecret=primer-oidc \
-            --set inference.chat.baseUrl=http://model/v1 \
-            --set inference.chat.model=chat-model \
+          install=(
+            --set postgresql.existingSecret=primer-postgres
+            --set rabbitmq.existingSecret=primer-rabbitmq
+            --set auth.oidc.issuerUrl=https://idp.example.com/
+            --set auth.oidc.clientId=primer
+            --set auth.oidc.existingSecret=primer-oidc
+            --set inference.chat.baseUrl=http://model/v1
+            --set inference.chat.model=chat-model
+          )
+          helm template primer deploy/helm/primer "${install[@]}" > /dev/null
+          helm template primer deploy/helm/primer "${install[@]}" \
+            --set inference.embeddings.bundled.enabled=false \
             --set inference.embeddings.baseUrl=http://model/v1 \
             --set inference.embeddings.model=embed-model \
             > /dev/null
