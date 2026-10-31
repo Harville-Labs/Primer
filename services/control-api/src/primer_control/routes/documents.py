@@ -7,7 +7,6 @@ nothing about libraries the caller cannot see.
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
 from pathlib import PurePosixPath
 from typing import Annotated
 from urllib.parse import quote
@@ -17,10 +16,8 @@ from fastapi import (
     APIRouter,
     BackgroundTasks,
     Depends,
-    File,
     Request,
     Response,
-    UploadFile,
     status,
 )
 from fastapi.responses import StreamingResponse
@@ -39,6 +36,7 @@ from primer_control.publisher import JobPublisher
 from primer_control.repositories.documents import DocumentRecord, DocumentRepository
 from primer_control.repositories.libraries import LibraryRepository
 from primer_control.services.library_access import LibraryAccess
+from primer_control.upload_stream import REQUEST_BODY, open_upload
 
 router = APIRouter(
     prefix="/api/v1/libraries/{library_id}/documents", tags=["documents"], route_class=DurableRoute
@@ -62,7 +60,6 @@ def get_publisher(request: Request) -> JobPublisher:
 
 Store = Annotated[SourceStore, Depends(get_source_store)]
 Publisher = Annotated[JobPublisher, Depends(get_publisher)]
-Upload = Annotated[UploadFile, File(description="The source file to ingest")]
 
 
 def not_found() -> ProblemError:
@@ -139,14 +136,6 @@ def enqueue(background: BackgroundTasks, publisher: JobPublisher, record: Docume
     background.add_task(publisher.publish, StageName.PARSE, record.job.id)
 
 
-async def _chunks(upload: UploadFile, size: int) -> AsyncIterator[bytes]:
-    while True:
-        chunk = await upload.read(size)
-        if not chunk:
-            return
-        yield chunk
-
-
 async def require_library(
     library_id: UUID,
     principal_id: UUID,
@@ -179,7 +168,7 @@ async def store_version(
     *,
     document: Document | None,
     library_id: UUID,
-    upload: UploadFile,
+    request: Request,
     store: SourceStore,
     session: AsyncSession,
 ) -> DocumentRecord:
@@ -188,9 +177,10 @@ async def store_version(
     The bytes are made durable before any metadata is written, so a failed
     upload leaves no document row promising content that was never stored.
     """
-    filename = safe_filename(upload.filename)
+    upload = open_upload(request, chunk_bytes=store.chunk_bytes)
+    filename = safe_filename(await upload.start())
     try:
-        stored = await store.put(_chunks(upload, store.chunk_bytes), filename=filename)
+        stored = await store.put(upload.chunks(), filename=filename)
     except SourceStoreError as error:
         raise as_problem(error) from error
 
@@ -214,7 +204,12 @@ async def list_documents(
     return [summarize(record) for record in records]
 
 
-@router.post("", status_code=status.HTTP_201_CREATED, summary="Upload a document")
+@router.post(
+    "",
+    status_code=status.HTTP_201_CREATED,
+    summary="Upload a document",
+    openapi_extra=REQUEST_BODY,
+)
 async def upload_document(
     library_id: UUID,
     principal: CurrentPrincipal,
@@ -222,11 +217,11 @@ async def upload_document(
     store: Store,
     publisher: Publisher,
     background: BackgroundTasks,
-    file: Upload,
+    request: Request,
 ) -> DocumentSummary:
     await require_library(library_id, principal.user_id, session, to_manage=True)
     record = await store_version(
-        document=None, library_id=library_id, upload=file, store=store, session=session
+        document=None, library_id=library_id, request=request, store=store, session=session
     )
     enqueue(background, publisher, record)
     return summarize(record)
@@ -236,6 +231,7 @@ async def upload_document(
     "/{document_id}/versions",
     status_code=status.HTTP_201_CREATED,
     summary="Replace a document with a new version",
+    openapi_extra=REQUEST_BODY,
 )
 async def replace_document(
     library_id: UUID,
@@ -245,7 +241,7 @@ async def replace_document(
     store: Store,
     publisher: Publisher,
     background: BackgroundTasks,
-    file: Upload,
+    request: Request,
 ) -> DocumentSummary:
     """Add a version rather than overwriting one.
 
@@ -262,7 +258,7 @@ async def replace_document(
     record = await store_version(
         document=existing.document,
         library_id=library_id,
-        upload=file,
+        request=request,
         store=store,
         session=session,
     )
