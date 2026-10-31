@@ -16,9 +16,9 @@
 #     --set rabbitmq.existingSecret=primer-rabbitmq \
 #     --set sourceStore.existingSecret=primer-s3
 #
-# It assumes you run the embedding and reranking servers yourself.
-# examples/inference/ has manifests for both, with the serving flags this
-# file's numbers depend on.
+# The embedding and reranking servers are the ones the chart runs by
+# default (`inference.*.bundled`), with the serving flags this file's
+# numbers depend on. To run your own instead, see docs/operations/models.md.
 
 inference:
   embeddings:
@@ -27,11 +27,9 @@ inference:
     # measured at a quarter of the throughput, and flat under batching and
     # concurrency alike. Same model, same vectors, same 1024 dimensions.
     #
-    # The server needs `--pooling last-token` with this repository, because
-    # the export omits the pooling config Qwen ships. TEI refuses to start
-    # without it rather than guessing, which is the behaviour you want:
-    # mean-pooling this model returns plausible vectors that retrieve badly.
-    baseUrl: http://primer-embeddings:8080/v1
+    # The bundled server is started with `--pooling last-token` for this
+    # repository, because the export omits the pooling config Qwen ships.
+    # Mean-pooling this model returns plausible vectors that retrieve badly.
     # Primer knows this export as Qwen3-Embedding-0.6B, so its 1024
     # dimensions, its query instruction and its tokenizer follow from the
     # name with nothing else to set.
@@ -46,11 +44,7 @@ inference:
   # sequence classifier, and the conversion that fixes that publishes no
   # ONNX - which on CPU means about twenty seconds per question. This model
   # measured 0.17-0.27s for ten passages.
-  #
-  # No `/v1` on this URL, unlike the embeddings one: Primer posts straight
-  # to `{baseUrl}/rerank`.
   rerank:
-    baseUrl: http://primer-reranker:8080
     model: BAAI/bge-reranker-base
     # Fetched by the vector search, read by the reranker, narrowed to the
     # answer. Wider than the answer needs on purpose - the passage that

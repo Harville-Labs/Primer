@@ -4,6 +4,33 @@ Most upgrades are a new image tag and [the migrations](migrations.md). The
 exceptions are listed here, newest first: changes where something already
 running has to be dealt with before the new version will start.
 
+## The embedder and reranker are bundled
+
+**Affects:** a chart install that sets `inference.embeddings.baseUrl` or
+`inference.rerank.baseUrl`, and a Compose stack that leaves either unset.
+
+The chart now runs its own embedding and reranking servers, and refuses an
+install that names a URL as well, since one of the two would be silently
+ignored. To keep your own servers, turn the bundled ones off:
+
+```yaml
+inference:
+  embeddings:
+    bundled: { enabled: false }
+  rerank:
+    bundled: { enabled: false }
+```
+
+An install that named no rerank URL had no reranker and now gets one. To
+keep searching without, set `inference.rerank.bundled.enabled=false`.
+
+Compose keeps the embedding URL and model an existing `.env` sets, and
+starts no embedder of its own while one is set. It had no reranker setting
+before, so an existing stack now starts the bundled reranker; set
+`PRIMER_RERANK_BASE_URL=` (empty) to keep searching without one. Before
+removing your embedding settings to use the bundled embedder, note that a
+library indexed with a different model has to be reindexed.
+
 ## Ingestion queues became quorum queues
 
 **Affects:** any deployment whose broker already has the `ingestion.*`

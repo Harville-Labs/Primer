@@ -13,10 +13,12 @@ helm install primer deploy/helm/primer \
   --set auth.oidc.clientId=primer \
   --set auth.oidc.existingSecret=primer-oidc \
   --set inference.chat.baseUrl=http://vllm.ai.svc:8000/v1 \
-  --set inference.chat.model=llama-3.1-8b-instruct \
-  --set inference.embeddings.baseUrl=http://vllm.ai.svc:8000/v1 \
-  --set inference.embeddings.model=Qwen/Qwen3-Embedding-0.6B
+  --set inference.chat.model=llama-3.1-8b-instruct
 ```
+
+The release runs its own embedding and reranking servers. To use servers
+you already run instead, see [Connecting model
+providers](providers.md#using-your-own-embedding-server).
 
 ## Installing from the registry
 

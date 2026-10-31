@@ -15,6 +15,7 @@ resolution-markers = [
 [manifest]
 members = [
     "primer",
+    "primer-anomaly",
     "primer-chat",
     "primer-contracts",
     "primer-control",
@@ -2815,6 +2816,21 @@ docs = [
     { name = "mkdocs", specifier = "<2" },
     { name = "mkdocs-material" },
     { name = "mkdocstrings", extras = ["python"] },
+]
+
+[[package]]
+name = "primer-anomaly"
+version = "0.1.14"
+source = { editable = "packages/anomaly" }
+dependencies = [
+    { name = "numpy" },
+    { name = "pydantic" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "numpy" },
+    { name = "pydantic" },
 ]
 
 [[package]]

@@ -89,6 +89,7 @@ nav:
           - Lab local research model: adr/0005-lab-local-research-model.md
   - Operations:
       - Configuration: operations/configuration.md
+      - Connecting model providers: operations/providers.md
       - Choosing models: operations/models.md
       - Deploying: operations/deploying.md
       - Kubernetes: operations/kubernetes.md

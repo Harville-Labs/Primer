@@ -17,7 +17,8 @@ every claim points back at the passage it came from.
 
 It exists for people who cannot or will not send their documents to a hosted
 service. Everything runs on your infrastructure, against your own model
-endpoints. **Primer ships no model and calls no vendor.**
+endpoints. **Primer calls no vendor.** It runs its own embedding model and
+reranker, and answers with whichever chat model you point it at.
 
 <div align="center">
 
@@ -39,8 +40,9 @@ endpoints. **Primer ships no model and calls no vendor.**
 
 ## Local quick start
 
-Primer needs an OpenAI-compatible endpoint for chat and for embeddings. It
-does not provide one.
+The stack runs its own embedding model and reranker. Chat is the one model
+you bring: any OpenAI-compatible endpoint, named here or added later on the
+settings page.
 
 ```bash
 git clone https://github.com/isaiah-harville/Primer.git
@@ -51,14 +53,16 @@ POSTGRES_PASSWORD=change-me
 RABBITMQ_PASSWORD=change-me
 PRIMER_INTERNAL_API_TOKEN=change-me
 PRIMER_CHAT_BASE_URL=http://host.docker.internal:11434/v1
-# Optional - which model a new chat starts on.
-PRIMER_CHAT_MODEL=llama3.1
-PRIMER_EMBEDDING_BASE_URL=http://host.docker.internal:11434/v1
-PRIMER_EMBEDDING_MODEL=qwen3-embedding:0.6b
 ENV
 
 docker compose -f deploy/compose/compose.yaml up --wait
 ```
+
+The first start downloads the embedding and reranking models, a few
+gigabytes. [Connecting model
+providers](https://isaiah-harville.github.io/Primer/operations/providers/)
+covers vLLM, llama.cpp, hosted APIs, and using your own embedder, which is
+much faster on Apple Silicon.
 
 Then open <http://localhost:3000>.
 

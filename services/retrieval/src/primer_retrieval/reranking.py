@@ -12,16 +12,17 @@ a shortlist carefully. Fetching twenty and keeping six costs one reranker
 pass over twenty short texts and buys an ordering that a vector search
 cannot produce at any `top_k`.
 
-Off unless configured. Primer ships no model, and a deployment without a
-reranker endpoint must behave exactly as it did before this existed - the
-vector ordering, truncated to what was asked for.
+Off unless configured. Compose and the chart configure the reranker they
+bundle, but either can be turned off, and a deployment without a reranker
+endpoint must behave exactly as it did before this existed - the vector
+ordering, truncated to what was asked for.
 
 The protocol is a `/rerank` endpoint, which text-embeddings-inference,
 vLLM, Cohere and Jina all serve - though not identically, and the
 differences are load-bearing. TEI reads the passages from `texts` and
 returns `score`; the others read `documents` and return `relevance_score`.
-Primer sends both names and reads either, because holding no model of its
-own means it does not get to pick whose server this is.
+Primer sends both names and reads either, because an operator may swap the
+bundled server for anyone's.
 """
 
 from __future__ import annotations
