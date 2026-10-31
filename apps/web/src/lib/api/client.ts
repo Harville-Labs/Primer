@@ -183,12 +183,27 @@ export class PrimerApi {
 		return response;
 	}
 
-	upload(libraryId: string, file: File): Promise<DocumentSummary> {
-		const body = new FormData();
-		body.append('file', file);
-		// No Content-Type header: the browser sets it with the multipart
-		// boundary, and overriding it produces an unparseable request.
-		return this.request(`/api/v1/libraries/${libraryId}/documents`, { method: 'POST', body });
+	/**
+	 * Hand Control a multipart upload exactly as the browser sent it.
+	 *
+	 * The body is a stream and is passed on unread, with the browser's own
+	 * Content-Type, which carries the multipart boundary. Parsing it into a
+	 * form here and building a new one would hold the whole file in this
+	 * server's memory first: one large upload, or a few at once, and the web
+	 * tier needs as much memory as the biggest file anyone sends.
+	 */
+	upload(
+		libraryId: string,
+		body: ReadableStream<Uint8Array>,
+		contentType: string,
+	): Promise<DocumentSummary> {
+		return this.request(`/api/v1/libraries/${libraryId}/documents`, {
+			method: 'POST',
+			body,
+			headers: { 'content-type': contentType },
+			// Required by fetch for a streamed request body.
+			duplex: 'half',
+		} as RequestInit);
 	}
 
 	/** Rebuild every document in a library, which is why anyone reindexes. */
