@@ -89,3 +89,32 @@ def test_the_schemas_are_written_deterministically() -> None:
     script = (REPO_ROOT / "scripts" / "dump_openapi.py").read_text()
 
     assert "sort_keys=True" in script
+
+
+def test_every_locked_image_copies_every_workspace_member() -> None:
+    """`uv sync --locked` checks the lock against the whole workspace.
+
+    An image that installs three services still has to carry the fourth's
+    pyproject.toml, or uv sees a workspace that no longer matches the lock
+    and refuses to build. Each new service has to be added to every image,
+    and this is where forgetting that fails, rather than in CI's image job.
+    """
+    members = sorted(path.parent for path in REPO_ROOT.glob("services/*/pyproject.toml"))
+    images = [
+        path
+        for path in sorted((REPO_ROOT / "deploy/images").glob("Dockerfile.*"))
+        if "uv sync --locked" in path.read_text()
+    ]
+    assert members
+    assert images
+    for image in images:
+        copied = {
+            line.split()[1].rstrip("/")
+            for line in image.read_text().splitlines()
+            if line.startswith("COPY ") and not line.startswith("COPY --from")
+        }
+        for member in members:
+            name = member.relative_to(REPO_ROOT).as_posix()
+            assert name in copied or f"{name}/pyproject.toml" in copied, (
+                f"{image.name} does not copy {name}/pyproject.toml, so its locked sync fails."
+            )

@@ -36,6 +36,7 @@ COPY services/control-api/ services/control-api/
 COPY services/ingestion/pyproject.toml services/ingestion/
 COPY services/retrieval/ services/retrieval/
 COPY services/chat/ services/chat/
+COPY services/lab/pyproject.toml services/lab/
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --locked --group server \
       --package primer-control --package primer-chat --package primer-retrieval \
