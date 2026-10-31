@@ -7,10 +7,8 @@ three processes racing to alter the same schema. A hook runs once per
 release and everything else waits for it to succeed.
 */}}
 {{/*
-Keyed by the directory each service's alembic.ini lives in. The vector
-schema has no Primer-defined tables - the vector integration creates its
-own - but nothing else creates the schema to put them in, or the extension
-its embedding column needs.
+Keyed by the directory each service's alembic.ini lives in. Retrieval has
+none: Qdrant creates its collection on first use.
 */}}
 {{/*
 A PostgreSQL this release runs does not exist before the release does, so on
@@ -20,7 +18,7 @@ there, so they stay pre-upgrade: new pods never start against the old schema.
 */}}
 {{- $bundled := .Values.postgresql.bundled }}
 {{- $sqlPhase := ternary "post-install,pre-upgrade" "pre-install,pre-upgrade" $bundled.enabled }}
-{{- range $service, $directory := dict "control" "control-api" "chat" "chat" "vectors" "retrieval" }}
+{{- range $service, $directory := dict "control" "control-api" "chat" "chat" }}
 ---
 apiVersion: batch/v1
 kind: Job
@@ -73,6 +71,7 @@ spec:
           command: ["alembic", "upgrade", "head"]
           env:
             {{- include "primer.commonEnv" $ | nindent 12 }}
+            {{- include "primer.databaseEnv" $ | nindent 12 }}
           resources:
             {{- toYaml $.Values.migrations.resources | nindent 12 }}
           volumeMounts:

@@ -4,12 +4,12 @@
 
 | Component | Required | Notes |
 | --- | --- | --- |
-| PostgreSQL | yes | With `pgvector` if using it as the vector store; Compose and the chart can each run one |
+| PostgreSQL | yes | No extensions needed; Compose and the chart can each run one |
 | Object storage | yes | A directory is fine for a single node |
 | RabbitMQ | for ingestion | Without it, uploads stay `queued` |
 | Embedding endpoint | for retrieval | Any OpenAI-compatible API |
 | `oauth2-proxy` | for multi-user | Not needed with auth off |
-| Qdrant | optional | Alternative to pgvector |
+| Qdrant | yes | The vector store; Compose and the chart each run one unless you name your own |
 | Neo4j | optional | For the knowledge graph; Compose and the chart can each run one |
 
 ## Running it with Compose
@@ -54,15 +54,29 @@ The bundled one does not start, and `POSTGRES_PASSWORD` is not needed:
 PRIMER_DATABASE_URL=postgresql://primer:...@db.example.internal:5432/primer
 ```
 
-The server needs pgvector installed. The migrations create the `vector`
-extension and the `control`, `chat` and `vectors` schemas, so the user needs
-to own the database, and either be allowed to create the extension or find
-it already created by an administrator. Write the URL as plain `postgresql://`; each service
+The migrations create the `control` and `chat` schemas, so the user needs
+to be allowed to create schemas in the database. Write the URL as plain
+`postgresql://`; each service
 chooses its own driver from it. Characters such as `@`, `/` and `:` in the
 password must be percent-encoded.
 
 A container reaches a server on the host as `host.docker.internal`, not
 `localhost`.
+
+## Using your own Qdrant with Compose
+
+Compose runs Qdrant for you unless `PRIMER_QDRANT_URL` is set. Set it in
+`.env`, with a key if your server requires one, and the bundled Qdrant does
+not start:
+
+```bash
+PRIMER_QDRANT_URL=https://qdrant.example.internal:6333
+PRIMER_QDRANT_API_KEY=...
+```
+
+Either way the collection is created on first use, with the width of the
+embedding model. Changing the model later means deleting the collection and
+reindexing; [ADR 0004](../adr/0004-qdrant-only.md) has the detail.
 
 ## Turning on the knowledge graph with Compose
 

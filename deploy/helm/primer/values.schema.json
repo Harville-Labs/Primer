@@ -104,7 +104,7 @@
         },
         "bundled": {
           "type": "object",
-          "description": "A PostgreSQL with pgvector run by this release. existingSecret then holds its password, not a URI.",
+          "description": "A PostgreSQL run by this release. existingSecret then holds its password, not a URI.",
           "additionalProperties": false,
           "properties": {
             "enabled": {
@@ -295,18 +295,71 @@
     },
     "vectorStore": {
       "type": "object",
-      "required": [
-        "kind"
-      ],
+      "additionalProperties": false,
       "properties": {
-        "kind": {
-          "enum": [
-            "pgvector",
-            "qdrant"
-          ]
+        "url": {
+          "description": "A Qdrant you run, as an http(s):// URL. Exclusive with qdrant.enabled.",
+          "type": "string",
+          "pattern": "^(https?://.+)?$"
         },
-        "qdrantUrl": {
+        "existingSecret": {
+          "description": "A Secret holding a Qdrant API key under apiKeyKey. Optional.",
           "type": "string"
+        },
+        "apiKeyKey": {
+          "type": "string",
+          "minLength": 1
+        },
+        "qdrant": {
+          "type": "object",
+          "description": "A Qdrant run by this release. Exclusive with url.",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "image": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "repository",
+                "tag"
+              ],
+              "properties": {
+                "repository": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "tag": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "pullPolicy": {
+                  "type": "string",
+                  "enum": [
+                    "Always",
+                    "IfNotPresent",
+                    "Never"
+                  ]
+                }
+              }
+            },
+            "persistence": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "size": {
+                  "type": "string"
+                },
+                "storageClass": {
+                  "type": "string"
+                }
+              }
+            },
+            "resources": {
+              "type": "object"
+            }
+          }
         }
       }
     },

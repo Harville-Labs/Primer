@@ -6,29 +6,25 @@ same schema.
 
 ## Applying them
 
-There are three, one per schema, and each runs from its own service
+There are two, one per schema, and each runs from its own service
 directory:
 
 ```bash
-for service in control-api chat retrieval; do
+for service in control-api chat; do
   (cd "services/$service" \
     && PRIMER_DATABASE_URL=postgresql://user:pass@host/primer uv run alembic upgrade head)
 done
 ```
 
-All three must run. Retrieval's is easy to overlook because its schema holds
-no Primer-defined tables — the vector integration creates its own table — but
-nothing else creates the schema to put that table in, or the `vector`
-extension its embedding column needs. Skip it and the retrieval service never
-becomes ready, which shows up as an unhealthy container rather than as a
-missing migration.
+Retrieval has none. Its vectors are in Qdrant, which creates the collection
+the first time something is indexed.
 
-The Compose profile and the Helm chart both run all three for you: Compose as
+The Compose profile and the Helm chart both run them for you: Compose as
 one-shot `migrate-*` services, the chart as pre-install and pre-upgrade hooks.
 
 ### The knowledge graph
 
-A deployment with `PRIMER_GRAPH_URL` set has a fourth step. It is not an
+A deployment with `PRIMER_GRAPH_URL` set has a third step. It is not an
 Alembic migration - the graph's schema is a handful of idempotent
 constraints and indexes with no history to record - but it runs where the
 migrations do, and for the same reason:
@@ -55,9 +51,10 @@ scheme onto a synchronous one.
 
 ## Privileges
 
-`CREATE EXTENSION` needs rights an application role should not hold, so the
-retrieval migration is where it happens. The running services never issue
-DDL, which means the role they connect as does not need to be able to.
+The migrations create schemas and tables. The running services never issue
+DDL, which means the role they connect as does not need to be able to. No
+extension is needed, so the database can be one an administrator hands you
+without superuser rights.
 
 ## Checking where you are
 
@@ -81,18 +78,13 @@ Alembic's own version table.
 
 ## Schema layout
 
-Control's tables live in a dedicated `control` schema, Chat's in `chat`, and
-Retrieval's vectors in `vectors`. No service's migrations touch another's
-tables, so they can share one PostgreSQL instance without coordinating
-releases.
+Control's tables live in a dedicated `control` schema and Chat's in `chat`.
+Neither service's migrations touch the other's tables, so they can share one
+PostgreSQL instance without coordinating releases. Retrieval has no schema:
+its vectors are in Qdrant, which creates its collection on first use.
 
 ## Drift
 
 CI asserts that the migrations and the models describe the same schema. A
 model changed without a migration fails the build rather than surfacing in
 production as a query against a column that was never created.
-
-The vector schema is deliberately outside this check. Its table belongs to
-the vector integration, so there are no Primer models to compare against, and
-a hand-written copy of that table here would drift silently the first time
-the integration changed a column.

@@ -319,10 +319,10 @@ def database_users(config: dict[str, Any]) -> dict[str, str]:
 
 
 def test_every_database_user_shares_the_bundled_url(compose_config: dict[str, Any]) -> None:
-    """One plain URL: the services choose their driver, Retrieval passes it on as is."""
+    """One plain URL, from which each service chooses its own driver."""
     users = database_users(compose_config)
 
-    assert set(users) >= {"control", "chat", "retrieval", "worker", "migrate-vectors"}
+    assert set(users) >= {"control", "chat", "worker", "migrate-control", "migrate-chat"}
     assert set(users.values()) == {"postgresql://primer:resolve-only@postgres:5432/primer"}
     assert "postgres" in compose_config["services"]
 
@@ -336,5 +336,41 @@ def test_your_own_postgresql_replaces_the_bundled_one() -> None:
 
     assert "postgres" not in config["services"]
     assert set(users.values()) == {EXTERNAL_DATABASE_URL}
-    for migration in ("migrate-control", "migrate-chat", "migrate-vectors"):
+    for migration in ("migrate-control", "migrate-chat"):
         assert config["services"][migration]["depends_on"]["postgres"]["required"] is False
+
+
+def test_retrieval_is_not_given_the_database(compose_config: dict[str, Any]) -> None:
+    """Its vectors are in Qdrant and its graph in Neo4j.
+
+    A password held by a service that never opens the database is one more
+    place for it to leak from, and nothing would notice it being there.
+    """
+    assert "retrieval" not in database_users(compose_config)
+
+
+def test_retrieval_searches_the_bundled_qdrant(compose_config: dict[str, Any]) -> None:
+    services = compose_config["services"]
+
+    assert services["retrieval"]["environment"]["PRIMER_QDRANT_URL"] == "http://qdrant:6333"
+    assert services["retrieval"]["depends_on"]["qdrant"]["condition"] == "service_healthy"
+    assert "ports" not in services["qdrant"]
+
+
+def test_the_bundled_qdrant_reports_nothing_upstream(compose_config: dict[str, Any]) -> None:
+    """Qdrant sends usage telemetry unless told not to, and Primer runs no trackers."""
+    assert (
+        compose_config["services"]["qdrant"]["environment"]["QDRANT__TELEMETRY_DISABLED"] == "true"
+    )
+
+
+def test_your_own_qdrant_replaces_the_bundled_one() -> None:
+    if shutil.which("docker") is None:
+        pytest.skip("docker is not installed")
+    theirs = "https://qdrant.example:6333"
+    config = resolve(BASE, env={"PRIMER_QDRANT_URL": theirs})
+
+    assert "qdrant" not in config["services"]
+    retrieval = config["services"]["retrieval"]
+    assert retrieval["environment"]["PRIMER_QDRANT_URL"] == theirs
+    assert retrieval["depends_on"]["qdrant"]["required"] is False

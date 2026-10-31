@@ -179,7 +179,7 @@ def test_migrations_run_once_per_release_not_once_per_pod(
 ) -> None:
     """Three replicas racing to alter one schema is what a hook avoids."""
     jobs = of_kind(manifests, "Job")
-    assert len(jobs) == 3
+    assert len(jobs) == 2
 
     for job in jobs:
         annotations = job["metadata"]["annotations"]
@@ -193,20 +193,11 @@ def test_migrations_run_once_per_release_not_once_per_pod(
 def test_every_schema_the_deployment_needs_is_migrated(
     manifests: list[dict[str, Any]],
 ) -> None:
-    """Including the vector schema, which has no Primer-defined tables.
-
-    The vector integration creates its own table but nothing creates the
-    schema to put it in, or the extension its embedding column needs. Without
-    this job the retrieval service never becomes ready, and it fails as an
-    unhealthy container rather than as a missing migration.
-    """
+    """Control and Chat. Retrieval keeps nothing in PostgreSQL, so a job for
+    it would migrate a schema nothing reads."""
     directories = {containers(job)[0]["workingDir"] for job in of_kind(manifests, "Job")}
 
-    assert directories == {
-        "/app/services/control-api",
-        "/app/services/chat",
-        "/app/services/retrieval",
-    }
+    assert directories == {"/app/services/control-api", "/app/services/chat"}
 
 
 def test_parsing_and_indexing_scale_separately(manifests: list[dict[str, Any]]) -> None:
@@ -388,19 +379,6 @@ def test_disabling_auth_removes_the_proxy_entirely() -> None:
     names = [d["metadata"]["name"] for d in of_kind(manifests, "Deployment")]
 
     assert not any(name.endswith("-auth") for name in names)
-
-
-def test_qdrant_requires_a_url() -> None:
-    """Discovering this on the first search makes it look like a product bug."""
-    if shutil.which("helm") is None:
-        pytest.skip("helm is not installed")
-    command = ["helm", "template", "primer", str(CHART), "--set", "vectorStore.kind=qdrant"]
-    for value in BASE_VALUES:
-        command += ["--set", value]
-    result = subprocess.run(command, capture_output=True, text=True, check=False)  # noqa: S603
-
-    assert result.returncode != 0
-    assert "qdrantUrl is required" in result.stderr
 
 
 def test_the_internal_token_is_generated_not_configured(

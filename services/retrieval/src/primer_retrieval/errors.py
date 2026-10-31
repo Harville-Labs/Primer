@@ -93,10 +93,22 @@ def embedding_endpoint(consequence: str) -> Generator[None]:
         ) from error
 
 
-#: What a store says when a vector's width does not match its column.
-#: pgvector phrases it "expected 384 dimensions, not 1024"; the numbers are
-#: what matter, and they are the two an operator needs to see.
-DIMENSION_MISMATCH = re.compile(r"expected (\d+) dimensions?, not (\d+)", re.IGNORECASE)
+#: What Qdrant says when a vector's width does not match its collection's,
+#: in the two places it says it. The integration refuses to open a
+#: collection created at another width, naming only the stored one; Qdrant
+#: itself refuses a point of the wrong width, naming both. The stored width
+#: is the one an operator cannot otherwise see.
+COLLECTION_WIDTH = re.compile(r"configured with a vector size '(\d+)'")
+POINT_WIDTH = re.compile(r"expected dim: (\d+), got (\d+)")
+
+
+def dimension_mismatch(message: str, configured: int) -> tuple[str, str] | None:
+    """The stored and offered widths, if `message` is a width mismatch."""
+    if point := POINT_WIDTH.search(message):
+        return point.group(1), point.group(2)
+    if collection := COLLECTION_WIDTH.search(message):
+        return collection.group(1), str(configured)
+    return None
 
 
 def wrong_dimensions(stored: str, offered: str, consequence: str) -> ProblemError:
@@ -108,7 +120,7 @@ def wrong_dimensions(stored: str, offered: str, consequence: str) -> ProblemErro
     and the budget spent before anyone is told.
 
     This is the one failure the chart warns about and cannot check for
-    itself - the vector column keeps the width it was created with, so a
+    itself - a collection keeps the width it was created with, so a
     deployment that swaps embedding models looks healthy right up until the
     first document is indexed.
     """
@@ -118,17 +130,21 @@ def wrong_dimensions(stored: str, offered: str, consequence: str) -> ProblemErro
         status_code=status.HTTP_409_CONFLICT,
         detail=(
             f"The vector store holds {stored}-dimensional vectors and this deployment is "
-            f"producing {offered}-dimensional ones, so {consequence}. A vector column keeps "
-            "the width it was created with, so changing the embedding model means dropping "
-            "the vectors table and reindexing, or setting the model back to the one that "
+            f"producing {offered}-dimensional ones, so {consequence}. A collection keeps "
+            "the width it was created with, so changing the embedding model means deleting "
+            "the Qdrant collection and reindexing, or setting the model back to the one that "
             "matches."
         ),
     )
 
 
 @contextmanager
-def vector_store(consequence: str) -> Generator[None]:
+def vector_store(consequence: str, configured: int) -> Generator[None]:
     """Mark a block that cannot run unless the vector store accepts a write.
+
+    `configured` is the width this deployment embeds at. The integration's
+    refusal to open a collection names only the width it was created with,
+    and an operator needs both numbers to know which side to change.
 
     Writing is the half of the store that was never guarded. A search that
     could not reach its backend said so; an index that could not write to it
@@ -144,10 +160,10 @@ def vector_store(consequence: str) -> Generator[None]:
     try:
         yield
     except Exception as error:
-        mismatch = DIMENSION_MISMATCH.search(str(error))
+        mismatch = dimension_mismatch(str(error), configured)
         if mismatch:
-            logger.error("the vector store column does not match the embedding model")
-            raise wrong_dimensions(mismatch.group(1), mismatch.group(2), consequence) from error
+            logger.error("the vector store collection does not match the embedding model")
+            raise wrong_dimensions(*mismatch, consequence) from error
         logger.warning("the vector store refused a write", exc_info=True)
         raise dependency_unavailable(
             f"The vector store could not be written to, so {consequence}."
@@ -178,8 +194,8 @@ def graph_store(consequence: str) -> Generator[None]:
     """Mark a block that cannot run without the knowledge graph.
 
     Named apart from the vector store because it is a different server. An
-    operator told the vector store was unreachable would check PostgreSQL
-    while Neo4j was the one down.
+    operator told the vector store was unreachable would check Qdrant while
+    Neo4j was the one down.
 
     Unlike the embedder and the vector store, this catches named exceptions
     rather than everything. The graph is reached through one driver whose

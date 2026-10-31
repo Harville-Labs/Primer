@@ -1,22 +1,19 @@
 """Retrieval configuration.
 
-The vector backend is a deployment-wide choice, not a per-library or
-per-request one. Mixing backends would mean two isolation implementations to
-prove correct instead of one, and the conformance suite exists precisely so
-that choosing either is not a change in behavior.
+Qdrant is the only vector store. One backend means one isolation
+implementation to prove correct; see docs/adr/0004-qdrant-only.md for why
+pgvector was dropped rather than kept beside it.
 """
 
 from __future__ import annotations
 
-from typing import Literal, cast
+from typing import cast
 
 from primer_contracts.embedding_models import find_embedding_model
 from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from primer_retrieval.graph import MAX_HOPS
-
-VectorStore = Literal["pgvector", "qdrant"]
 
 
 class Settings(BaseSettings):
@@ -28,15 +25,14 @@ class Settings(BaseSettings):
     #: "use the model's own".
     model_config = SettingsConfigDict(env_prefix="PRIMER_", extra="forbid", env_ignore_empty=True)
 
-    vector_store: VectorStore = "pgvector"
-
-    #: pgvector keeps its tables in their own schema, away from Control's, so
-    #: neither service's migrations touch the other's tables.
-    database_url: str = Field(default="postgresql://primer:primer@localhost:5432/primer")
-    vector_schema: str = Field(default="vectors")
-    vector_table: str = Field(default="chunks")
-
-    qdrant_url: str | None = Field(default=None)
+    #: The default is a Qdrant on this machine, which is what `docker run
+    #: qdrant/qdrant` gives a contributor. Compose and the chart always name one.
+    qdrant_url: str = Field(default="http://localhost:6333")
+    #: Only a Qdrant that asks for one: a hosted cluster, or a self-run one
+    #: with `service.api_key` set. The bundled one sits behind a network
+    #: policy instead.
+    qdrant_api_key: SecretStr | None = Field(default=None)
+    #: The collection. Created on first use at the embedding model's width.
     qdrant_index: str = Field(default="primer_chunks")
 
     #: Any OpenAI-compatible endpoint: a hosted model, or a local server.
@@ -142,15 +138,3 @@ class Settings(BaseSettings):
     def vector_dimensions(self) -> int:
         """`embedding_dimensions`, which `_resolve_embedding_model` always sets."""
         return cast(int, self.embedding_dimensions)
-
-    @model_validator(mode="after")
-    def _qdrant_needs_a_url(self) -> Settings:
-        """Fail at startup rather than on the first search.
-
-        A Qdrant deployment with no URL cannot answer anything. Discovering
-        that when a user asks their first question means the failure surfaces
-        as a broken product rather than a broken deployment.
-        """
-        if self.vector_store == "qdrant" and not self.qdrant_url:
-            raise ValueError("vector_store='qdrant' requires qdrant_url")
-        return self

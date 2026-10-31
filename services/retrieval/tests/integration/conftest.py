@@ -1,6 +1,6 @@
-"""The Retrieval service against a real pgvector.
+"""The Retrieval service against a real Qdrant.
 
-The conformance suite proves each backend meets the contract. This proves
+The conformance suite proves the store meets the isolation contract. This proves
 the service wired on top of one behaves: that routes filter, count, and
 delete the way the endpoints promise.
 """
@@ -20,11 +20,10 @@ from haystack import Document
 from primer_retrieval.app import create_app
 from primer_retrieval.config import Settings
 from primer_retrieval.graph import GraphStore, build_graph_store
-from primer_retrieval.migrations import upgrade_to_head
 from testcontainers.community.neo4j import Neo4jContainer
-from testcontainers.community.postgres import PostgresContainer
+from testcontainers.community.qdrant import QdrantContainer
 
-POSTGRES_IMAGE = "pgvector/pgvector:pg17"
+QDRANT_IMAGE = "qdrant/qdrant:v1.19.0"
 NEO4J_IMAGE = "neo4j:5.26-community"
 SERVICE_TOKEN = "retrieval-service-token"  # noqa: S105 - a fixture value, not a real credential
 DIMENSIONS = 32
@@ -54,18 +53,10 @@ class StubTextEmbedder:
 
 
 @pytest.fixture(scope="session")
-def pgvector_url() -> Iterator[str]:
-    """A database prepared the way a deployment prepares one.
-
-    The migration runs here rather than the extension being created inline,
-    because installing it is exactly what the migration is for: a test that
-    set the database up its own way would keep passing on the day the
-    migration stopped doing it.
-    """
-    with PostgresContainer(POSTGRES_IMAGE) as container:
-        url = container.get_connection_url(driver=None)
-        upgrade_to_head(url)
-        yield url
+def qdrant_url() -> Iterator[str]:
+    """One Qdrant for the session; each test gets its own collection in it."""
+    with QdrantContainer(QDRANT_IMAGE) as container:
+        yield f"http://{container.get_container_host_ip()}:{container.get_exposed_port(6333)}"
 
 
 @pytest.fixture(scope="session")
@@ -94,14 +85,12 @@ def graph_settings(container: Neo4jContainer, **overrides: Any) -> Settings:
 
 
 @pytest.fixture
-def client(pgvector_url: str, request: pytest.FixtureRequest) -> TestClient:
-    """A service with its own table, so no test can see another's writes."""
+def client(qdrant_url: str, request: pytest.FixtureRequest) -> TestClient:
+    """A service with its own collection, so no test can see another's writes."""
     unique = abs(hash(request.node.nodeid)) % 10**9
     settings = Settings(
-        vector_store="pgvector",
-        database_url=pgvector_url,
-        vector_schema="public",
-        vector_table=f"service_{unique}",
+        qdrant_url=qdrant_url,
+        qdrant_index=f"service_{unique}",
         embedding_dimensions=DIMENSIONS,
         internal_api_token=SERVICE_TOKEN,
     )
@@ -126,15 +115,13 @@ def graph(neo4j: Neo4jContainer) -> Iterator[GraphStore]:
 
 
 @pytest.fixture
-def graph_client(pgvector_url: str, neo4j: Neo4jContainer, request: pytest.FixtureRequest):
+def graph_client(qdrant_url: str, neo4j: Neo4jContainer, request: pytest.FixtureRequest):
     """The service with both stores, the way a graph deployment runs it."""
     unique = abs(hash(request.node.nodeid)) % 10**9
     settings = graph_settings(
         neo4j,
-        vector_store="pgvector",
-        database_url=pgvector_url,
-        vector_schema="public",
-        vector_table=f"service_{unique}",
+        qdrant_url=qdrant_url,
+        qdrant_index=f"service_{unique}",
         embedding_dimensions=DIMENSIONS,
         internal_api_token=SERVICE_TOKEN,
     )

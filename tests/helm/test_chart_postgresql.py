@@ -42,7 +42,7 @@ def test_every_database_user_is_pointed_at_the_bundled_server() -> None:
     users = {name: database_env(w) for name, w in workloads(rendered).items()}
     users = {name: env for name, env in users.items() if env}
 
-    assert len(users) >= 7, "services, workers and the three SQL migrations"
+    assert len(users) >= 6, "services, workers and the two SQL migrations"
     for name, env in users.items():
         assert env["PRIMER_DATABASE_URL"]["value"] == DATABASE_URL, name
         reference = env["PGPASSWORD"]["valueFrom"]["secretKeyRef"]
@@ -71,7 +71,7 @@ def test_sql_migrations_run_after_install_and_before_upgrade() -> None:
     """The server does not exist before install; afterwards, the schema leads the code."""
     jobs = of_kind(render(*BUNDLED), "Job")
 
-    assert len(jobs) == 3
+    assert len(jobs) == 2
     for job in jobs:
         assert job["metadata"]["annotations"]["helm.sh/hook"] == "post-install,pre-upgrade"
         (wait,) = job["spec"]["template"]["spec"]["initContainers"]

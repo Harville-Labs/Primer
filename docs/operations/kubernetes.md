@@ -63,6 +63,7 @@ values`, and in whatever stores your release history.
 | `rabbitmq.existingSecret` | `broker-url` |
 | `auth.oidc.existingSecret` | `client-secret`, `cookie-secret` |
 | `inference.*.existingSecret` | API keys, if your endpoint needs them |
+| `vectorStore.existingSecret` | `qdrant-api-key`, if your Qdrant needs one |
 | `graph.existingSecret` | `graph-password`, when the graph is on |
 | `graph.extraction.existingSecret` | `graph-extraction-api-key`, if the extraction endpoint needs one |
 
@@ -113,6 +114,7 @@ names what actually calls it:
 | Control | Web, Chat, both workers |
 | Chat | Web |
 | Retrieval | Chat, both workers |
+| Qdrant, when the chart runs it | Retrieval |
 
 Those paths are asserted by tests that render the chart and read the
 result, so a new dependency has to be declared rather than discovered in
@@ -188,8 +190,8 @@ and waits up to five minutes for the server to accept connections.
 
 ## The database
 
-Name a Secret holding the URI of a PostgreSQL you run, with pgvector
-available if it is also the vector store:
+Name a Secret holding the URI of a PostgreSQL you run. It needs no
+extensions:
 
 ```yaml
 postgresql:
@@ -207,11 +209,11 @@ postgresql:
   existingSecret: primer-postgres     # key: postgres-password
 ```
 
-`postgresql.bundled.enabled` runs `pgvector/pgvector`, the image Compose
-uses, as a one-replica StatefulSet. It runs under the same hardening as
-Primer's own pods, and the `allow-postgresql` NetworkPolicy admits only the
-workloads that are given the database: Control, Chat, Retrieval, the workers,
-and the migration hooks. Its user and database are both `primer`. The
+`postgresql.bundled.enabled` runs `postgres:17`, the image Compose uses, as
+a one-replica StatefulSet. It runs under the same hardening as Primer's own
+pods, and the `allow-postgresql` NetworkPolicy admits only the workloads that
+are given the database: Control, Chat, the workers, and the migration hooks.
+Retrieval keeps nothing in PostgreSQL and is not given it. Its user and database are both `primer`. The
 password reaches the clients as `PGPASSWORD` rather than inside the URI, so
 it may contain any characters.
 
@@ -231,6 +233,41 @@ it may contain any characters.
 
 - **Switching is a data migration.** Moving between bundled and external
   does not move the data. Dump and restore it before changing the setting.
+
+## The vector store
+
+Passages and their embeddings live in Qdrant. By default the chart runs one,
+so an install names nothing here. To use a Qdrant you run instead:
+
+```yaml
+vectorStore:
+  url: https://qdrant.vectors.svc:6333
+  existingSecret: primer-qdrant       # key: qdrant-api-key, if it needs one
+  qdrant:
+    enabled: false
+```
+
+Setting `url` while the bundled one is on, or turning the bundled one off
+without a `url`, is refused at render time.
+
+`vectorStore.qdrant.enabled` runs one replica with a persistent volume, under
+the same hardening as Primer's own pods. Telemetry is off, only its REST
+port is published, and the `allow-qdrant` NetworkPolicy admits Retrieval and
+nothing else. With `existingSecret` set, the bundled Qdrant requires the key
+and Retrieval sends it, both read from the same Secret.
+
+- **It holds derived data.** Losing the volume costs a reindex, not a
+  library, which is why it is on by default when PostgreSQL is not.
+- **Size the volume for the library.** Each passage takes about 4 KiB per
+  1024 dimensions, plus its text and index overhead.
+- **The embedding model is fixed once a collection exists.** The collection
+  keeps the width it was created with. Changing
+  `inference.embeddings.model` means deleting the collection and reindexing;
+  Retrieval refuses mismatched vectors with a message that says so rather
+  than storing them.
+- **Upgrading from pgvector is a reindex.** Nothing copies vectors out of
+  PostgreSQL. [ADR 0004](../adr/0004-qdrant-only.md) says what to drop
+  afterwards.
 
 ## Scale
 
@@ -419,8 +456,9 @@ and the schema hook:
 
 ## What is not here
 
-No RabbitMQ or model server. PostgreSQL and Neo4j can each be run by the
-release, and both are off by default. Primer assumes you already have the
+No RabbitMQ or model server. Qdrant is run by the release unless you name
+your own. PostgreSQL and Neo4j can each be run by it too, and both are off
+by default. Primer assumes you already have the
 infrastructure you want to keep your documents on, and a database you
 already run and back up is a better home for a library than one this chart
 started.

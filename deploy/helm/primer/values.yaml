@@ -121,7 +121,7 @@ postgresql:
   existingSecret: ""
   urlKey: database-url
   passwordKey: postgres-password
-  # A PostgreSQL with pgvector run by this release, as one replica with a
+  # A PostgreSQL run by this release, as one replica with a
   # persistent volume. It is reachable only from the pods that use the
   # database. Its user and database are both `primer`.
   #
@@ -131,8 +131,8 @@ postgresql:
   bundled:
     enabled: false
     image:
-      repository: pgvector/pgvector
-      tag: "pg17"
+      repository: postgres
+      tag: "17"
       pullPolicy: IfNotPresent
     persistence:
       size: 20Gi
@@ -256,9 +256,39 @@ inference:
     # answer needs on purpose; the shortlist is what the reranker reads.
     candidates: 20
 
+# --- Vector store -------------------------------------------------------
+#
+# Qdrant, and only Qdrant: docs/adr/0004-qdrant-only.md says why. This
+# release runs one by default, so an install needs nothing here.
 vectorStore:
-  kind: pgvector          # pgvector | qdrant
-  qdrantUrl: ""
+  # http:// or https:// for a Qdrant you run yourself. Set this or turn
+  # `qdrant.enabled` off - not both, and not neither.
+  url: ""
+  # Optional. A Secret holding a Qdrant API key under `apiKeyKey`. Retrieval
+  # sends it, and a bundled Qdrant requires it, from the same Secret.
+  existingSecret: ""
+  apiKeyKey: qdrant-api-key
+  # A Qdrant run by this release, as one replica with a persistent volume.
+  # It is reachable only from Retrieval, and reports nothing upstream.
+  #
+  # It holds embeddings, not documents: losing it costs a reindex, not a
+  # library. Size the volume for roughly 4 KiB per passage at 1024
+  # dimensions, plus the passage text.
+  qdrant:
+    enabled: true
+    image:
+      repository: qdrant/qdrant
+      tag: "v1.19.0"
+      pullPolicy: IfNotPresent
+    persistence:
+      size: 20Gi
+      storageClass: ""   # the cluster default
+    resources:
+      requests:
+        cpu: 250m
+        memory: 1Gi
+      limits:
+        memory: 2Gi
 
 # --- Knowledge graph ----------------------------------------------------
 #

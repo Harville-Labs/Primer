@@ -116,7 +116,8 @@ isolation bugs to live.
 
 ## The conformance suite
 
-pgvector and Qdrant are both supported, so both run the same tests: write,
+Qdrant runs the tests that say what any vector store under Primer must
+guarantee: write,
 filtered search, cross-library and cross-owner isolation, duplicate
 indexing, pending-generation invisibility, generation swap, delete, repeated
 delete, dimension mismatch, and citation round-trip.
@@ -125,6 +126,7 @@ The isolation cases put the *same words* in two libraries, so nothing but
 the filter separates them. A backend that ignored it fails there rather than
 in production.
 
-That suite has already earned its place: it caught the pgvector integration
-naming its indexes with fixed defaults, which makes two Primer tables in one
-schema collide on creation.
+That suite has already earned its place. It caught one integration naming
+its indexes with fixed defaults, so that two Primer tables in one schema
+collided on creation, and another reporting a wrong embedding width in words
+Primer did not recognise, so a model change looked like an outage.

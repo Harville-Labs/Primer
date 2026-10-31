@@ -36,7 +36,7 @@ def system_architecture() -> Canvas:
     postgres = canvas.box(Box(760, 190, 250, 66, "PostgreSQL", "control schema", "store"))
     sources = canvas.box(Box(760, 330, 250, 66, "Source objects", "fsspec: disk or S3", "store"))
     retrieval = canvas.box(Box(760, 470, 250, 88, "Retrieval", "the only index client", "service"))
-    vectors = canvas.box(Box(760, 620, 250, 62, "Vector store", "pgvector or Qdrant", "store"))
+    vectors = canvas.box(Box(760, 620, 250, 62, "Vector store", "Qdrant", "store"))
     embeddings = canvas.box(Box(1060, 470, 150, 88, "Embeddings", "OpenAI-compatible", "external"))
     graph = canvas.box(Box(1060, 620, 150, 62, "Knowledge graph", "Neo4j, optional", "store"))
     extraction = canvas.box(

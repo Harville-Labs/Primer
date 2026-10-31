@@ -25,10 +25,11 @@ the one doing the work.
 Control. A compromised worker cannot read a library it was not handed.
 
 **Retrieval is the only index client.** Nothing else names a collection, a
-table, a filter syntax, or a Cypher query. Swapping pgvector for Qdrant is a
-configuration change, and a
-[conformance suite](retrieval.md#the-conformance-suite) proves both behave
-identically where it matters. The workers extract a graph but hand it to
+filter syntax, or a Cypher query, and only Retrieval holds Qdrant's address.
+A [conformance suite](retrieval.md#the-conformance-suite) pins down what the
+store must guarantee, and
+[ADR 0004](../adr/0004-qdrant-only.md) says why there is one store rather
+than a choice of them. The workers extract a graph but hand it to
 Retrieval rather than opening Neo4j themselves.
 
 **The graph is optional and additive.** Without `PRIMER_GRAPH_URL`, Primer

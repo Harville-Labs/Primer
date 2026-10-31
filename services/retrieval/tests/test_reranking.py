@@ -130,7 +130,7 @@ class Scored:
 def settings_with(floor: float | None):
     from primer_retrieval.config import Settings
 
-    return Settings(database_url="postgresql://x/y", min_score=floor)
+    return Settings(min_score=floor)
 
 
 def test_nothing_is_dropped_when_no_floor_is_set() -> None:

@@ -40,11 +40,14 @@ spec:
           env:
             {{- include "primer.commonEnv" . | nindent 12 }}
             {{- include "primer.embeddingEnv" . | nindent 12 }}
-            - name: PRIMER_VECTOR_STORE
-              value: {{ .Values.vectorStore.kind | quote }}
-            {{- if eq .Values.vectorStore.kind "qdrant" }}
             - name: PRIMER_QDRANT_URL
-              value: {{ required "vectorStore.qdrantUrl is required for qdrant" .Values.vectorStore.qdrantUrl | quote }}
+              value: {{ include "primer.qdrantUrl" . | quote }}
+            {{- with .Values.vectorStore.existingSecret }}
+            - name: PRIMER_QDRANT_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ . }}
+                  key: {{ $.Values.vectorStore.apiKeyKey }}
             {{- end }}
             {{- if include "primer.graphUrl" . }}
             {{- include "primer.graphEnv" . | trim | nindent 12 }}

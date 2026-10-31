@@ -85,7 +85,7 @@ class RetrievalState:
         self.store = store
         self.document_embedder = document_embedder
         self.text_embedder = text_embedder
-        self.retriever = retriever if retriever is not None else build_retriever(store, settings)
+        self.retriever = retriever if retriever is not None else build_retriever(store)
         # None unless an endpoint is configured, and None is what makes a
         # deployment without one behave exactly as it did before.
         self.reranker = reranker if reranker is not None else build_reranker(settings)
@@ -165,7 +165,7 @@ def index_chunks(payload: IndexRequest, state: State) -> IndexResult:
     """
     with embedding_endpoint("this document cannot be indexed"):
         documents = to_documents(payload.chunks, state.document_embedder)
-    with vector_store("this document cannot be indexed"):
+    with vector_store("this document cannot be indexed", state.settings.vector_dimensions):
         written = state.store.write_documents(documents, policy=DuplicatePolicy.OVERWRITE)
     return IndexResult(generation_id=payload.generation_id, written=written)
 

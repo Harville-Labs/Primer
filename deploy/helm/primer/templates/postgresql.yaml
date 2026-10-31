@@ -1,6 +1,6 @@
 {{- if .Values.postgresql.bundled.enabled }}
 {{/*
-A PostgreSQL with pgvector, run by this release.
+A PostgreSQL run by this release.
 
 One replica: replication and failover are what an operator's own database
 is for, and docs/adr/0003-bundle-postgresql.md says why this is offered

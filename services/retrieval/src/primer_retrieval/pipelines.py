@@ -14,7 +14,6 @@ from haystack import Document
 from haystack.components.embedders import OpenAIDocumentEmbedder, OpenAITextEmbedder
 from haystack.document_stores.types import DocumentStore
 from haystack.utils import Secret
-from haystack_integrations.components.retrievers.pgvector import PgvectorEmbeddingRetriever
 from haystack_integrations.components.retrievers.qdrant import QdrantEmbeddingRetriever
 from primer_contracts.chunks import DocumentChunk
 from primer_contracts.retrieval import RetrievedChunk, SourceLocator
@@ -66,10 +65,8 @@ def build_document_embedder(settings: Settings) -> DocumentEmbedder:
     )
 
 
-def build_retriever(store: DocumentStore, settings: Settings) -> Any:
-    if settings.vector_store == "qdrant":
-        return QdrantEmbeddingRetriever(document_store=store)  # ty: ignore[invalid-argument-type]
-    return PgvectorEmbeddingRetriever(document_store=store)  # ty: ignore[invalid-argument-type]
+def build_retriever(store: DocumentStore) -> Any:
+    return QdrantEmbeddingRetriever(document_store=store)  # ty: ignore[invalid-argument-type]
 
 
 def scope_filter(library_id: UUID, generation_ids: tuple[UUID, ...]) -> dict[str, Any]:

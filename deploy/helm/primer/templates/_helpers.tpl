@@ -41,11 +41,14 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 Settings every service shares. Secrets are referenced, never inlined: a value
 in the manifest is a value in `kubectl get deployment -o yaml`, and anyone
 with read access to the namespace has it.
+
+The database is not among them. Retrieval keeps nothing in PostgreSQL, and a
+service that is handed credentials it never uses widens what a compromise of
+it reaches; the ones that do use it include primer.databaseEnv themselves.
 */}}
 {{- define "primer.commonEnv" -}}
 - name: PRIMER_AUTH_MODE
   value: {{ .Values.auth.mode | quote }}
-{{- include "primer.databaseEnv" . }}
 - name: PRIMER_SOURCE_STORE_URL
   value: {{ .Values.sourceStore.url | quote }}
 - name: PRIMER_INTERNAL_API_TOKEN
@@ -228,6 +231,22 @@ leave the other unused, and the one ignored is usually the one meant.
 {{- printf "bolt://%s-neo4j:7687" (include "primer.fullname" .) -}}
 {{- else -}}
 {{- .Values.graph.url -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Where Qdrant is. The one place that decides it, as primer.graphUrl is for the
+graph. Unlike the graph there is no "off": search has nothing to search
+without a vector store, so having neither is refused, as having both is.
+*/}}
+{{- define "primer.qdrantUrl" -}}
+{{- if .Values.vectorStore.qdrant.enabled -}}
+{{- if .Values.vectorStore.url -}}
+{{- fail "vectorStore.url and vectorStore.qdrant.enabled are both set. Set vectorStore.url to use a Qdrant you run and turn vectorStore.qdrant.enabled off, or leave vectorStore.url empty to have this release run one." -}}
+{{- end -}}
+{{- printf "http://%s-qdrant:6333" (include "primer.fullname" .) -}}
+{{- else -}}
+{{- required "vectorStore.url is required when vectorStore.qdrant.enabled is off: give the http(s):// address of a Qdrant you run, or turn vectorStore.qdrant.enabled back on" .Values.vectorStore.url -}}
 {{- end -}}
 {{- end -}}
 

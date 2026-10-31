@@ -218,10 +218,38 @@ spec:
               app.kubernetes.io/component: {{ $component }}
         {{- end }}
 {{- end }}
+{{- if .Values.vectorStore.qdrant.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ $full }}-allow-qdrant
+  labels:
+    {{- include "primer.labels" . | nindent 4 }}
+spec:
+  # Retrieval alone. Qdrant without an API key answers anyone who reaches
+  # it, and with one it is a single key; either way this is what keeps the
+  # rest of the cluster from reading or deleting every library's passages.
+  podSelector:
+    matchLabels:
+      {{- include "primer.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: qdrant
+  policyTypes:
+    - Ingress
+  ingress:
+    - ports:
+        - port: 6333
+          protocol: TCP
+      from:
+        - podSelector:
+            matchLabels:
+              {{- include "primer.selectorLabels" . | nindent 14 }}
+              app.kubernetes.io/component: retrieval
+{{- end }}
 {{- if .Values.postgresql.bundled.enabled }}
 {{- $migrations := list }}
 {{- if .Values.migrations.enabled }}
-{{- $migrations = list "migrate-control" "migrate-chat" "migrate-vectors" }}
+{{- $migrations = list "migrate-control" "migrate-chat" }}
 {{- end }}
 ---
 apiVersion: networking.k8s.io/v1
@@ -244,7 +272,7 @@ spec:
         - port: 5432
           protocol: TCP
       from:
-        {{- range $component := concat (list "control" "chat" "retrieval") $workers $migrations }}
+        {{- range $component := concat (list "control" "chat") $workers $migrations }}
         - podSelector:
             matchLabels:
               {{- include "primer.selectorLabels" $ | nindent 14 }}

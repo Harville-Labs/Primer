@@ -1,0 +1,128 @@
+{{- if .Values.vectorStore.qdrant.enabled }}
+{{/*
+A Qdrant for the passages' embeddings, run by this release.
+
+One replica. Qdrant's distributed mode shards and replicates across peers,
+which is a deployment of its own; an operator who needs it runs one and
+sets vectorStore.url. What this one holds is derived from the documents, so
+losing it costs a reindex rather than a library.
+
+Run under the same hardening as every other pod here - non-root, read-only
+root filesystem, no capabilities. Qdrant writes to its storage (the volume),
+its snapshots directory and /tmp, each mounted here, and to an "initialized"
+marker in its working directory that is moved to /tmp; without that it
+starts anyway but warns on every boot.
+
+Telemetry is off. Qdrant reports usage upstream by default, and nothing
+Primer publishes sends data anywhere the operator did not configure.
+*/}}
+{{- $full := include "primer.fullname" . }}
+{{- $qdrant := .Values.vectorStore.qdrant }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $full }}-qdrant
+  labels:
+    {{- include "primer.labels" . | nindent 4 }}
+    app.kubernetes.io/component: qdrant
+spec:
+  type: ClusterIP
+  # REST only. Retrieval's client speaks HTTP, so the gRPC port would be one
+  # more way in with nothing using it.
+  ports:
+    - name: http
+      port: 6333
+      targetPort: http
+  selector:
+    {{- include "primer.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: qdrant
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ $full }}-qdrant
+  labels:
+    {{- include "primer.labels" . | nindent 4 }}
+    app.kubernetes.io/component: qdrant
+spec:
+  replicas: 1
+  serviceName: {{ $full }}-qdrant
+  selector:
+    matchLabels:
+      {{- include "primer.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: qdrant
+  template:
+    metadata:
+      labels:
+        {{- include "primer.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: qdrant
+    spec:
+      {{- include "primer.podIdentity" (dict "root" . "component" "qdrant") | nindent 6 }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: qdrant
+          image: {{ printf "%s:%s" $qdrant.image.repository $qdrant.image.tag }}
+          imagePullPolicy: {{ $qdrant.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          env:
+            - name: QDRANT__TELEMETRY_DISABLED
+              value: "true"
+            - name: QDRANT_INIT_FILE_PATH
+              value: /tmp/.qdrant-initialized
+            {{- with .Values.vectorStore.existingSecret }}
+            # The same Secret Retrieval reads, so the two cannot disagree.
+            - name: QDRANT__SERVICE__API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ . }}
+                  key: {{ $.Values.vectorStore.apiKeyKey }}
+            {{- end }}
+          ports:
+            - name: http
+              containerPort: 6333
+          # Qdrant serves its health endpoints without the API key, so the
+          # probes need no secret in their definition.
+          startupProbe:
+            httpGet: { path: /readyz, port: http }
+            periodSeconds: 5
+            failureThreshold: 60
+          readinessProbe:
+            httpGet: { path: /readyz, port: http }
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /livez, port: http }
+            periodSeconds: 20
+          resources:
+            {{- toYaml $qdrant.resources | nindent 12 }}
+          volumeMounts:
+            - name: data
+              mountPath: /qdrant/storage
+            - name: snapshots
+              mountPath: /qdrant/snapshots
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: snapshots
+          emptyDir:
+            sizeLimit: 1Gi
+        - name: tmp
+          emptyDir:
+            sizeLimit: 256Mi
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+        labels:
+          {{- include "primer.selectorLabels" . | nindent 10 }}
+          app.kubernetes.io/component: qdrant
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        {{- with $qdrant.persistence.storageClass }}
+        storageClassName: {{ . | quote }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ $qdrant.persistence.size }}
+{{- end }}
