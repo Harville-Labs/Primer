@@ -7,54 +7,19 @@ through one service is owned by the same person in the other.
 
 from __future__ import annotations
 
-import uuid
 from typing import Annotated
 
 from fastapi import Depends, Request, status
 from primer_contracts.errors import ErrorCode
 from primer_contracts.identity import Principal, is_admin
 from primer_service.errors import ProblemError
+from primer_service.identity import principal_from_request
 
 from primer_chat.config import Settings
 
-#: The same namespace Control uses. A different one here would give the same
-#: person two identities and hide their own libraries from their own chats.
-PRIMER_USER_NAMESPACE = uuid.UUID("6f2f5a10-9f4b-5f0e-9b53-7a1a5c6d8e10")
-LOCAL_SUBJECT = "primer-local-user"
-
-
-def user_id_for_subject(subject: str) -> uuid.UUID:
-    return uuid.uuid5(PRIMER_USER_NAMESPACE, subject)
-
 
 def get_principal(request: Request) -> Principal:
-    settings: Settings = request.app.state.settings
-    if settings.auth_mode != "oidc":
-        # Headers are ignored entirely, not defaulted: a deployment with auth
-        # off must not behave differently because someone sent a header.
-        return Principal(subject=LOCAL_SUBJECT, user_id=user_id_for_subject(LOCAL_SUBJECT))
-
-    subject = request.headers.get(settings.subject_header, "").strip()
-    if not subject:
-        raise ProblemError(
-            code=ErrorCode.IDENTITY_MISSING,
-            title="Identity missing",
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="The authenticating proxy did not supply a trusted subject.",
-        )
-    return Principal(
-        subject=subject,
-        user_id=user_id_for_subject(subject),
-        email=request.headers.get(settings.email_header) or None,
-        groups=_groups_from(request.headers.get(settings.groups_header), settings.groups_delimiter),
-    )
-
-
-def _groups_from(raw: str | None, delimiter: str) -> tuple[str, ...]:
-    """The groups the proxy asserted, which is the whole of the admin test."""
-    if not raw:
-        return ()
-    return tuple(group.strip() for group in raw.split(delimiter) if group.strip())
+    return principal_from_request(request, request.app.state.settings)
 
 
 CurrentPrincipal = Annotated[Principal, Depends(get_principal)]

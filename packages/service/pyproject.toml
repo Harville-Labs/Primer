@@ -5,8 +5,12 @@ description = "HTTP plumbing shared by Primer's FastAPI services"
 requires-python = ">=3.13"
 dependencies = [
     "fastapi",
+    "primer-contracts",
 ]
 
 [build-system]
 requires = ["uv_build>=0.12,<0.13"]
 build-backend = "uv_build"
+
+[tool.uv.sources]
+primer-contracts = { workspace = true }

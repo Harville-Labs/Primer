@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 from fastapi.testclient import TestClient
 from primer_control.config import Settings
-from primer_control.identity import LOCAL_SUBJECT
+from primer_service.identity import LOCAL_SUBJECT
 from pydantic import ValidationError
 
 

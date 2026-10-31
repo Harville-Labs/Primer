@@ -6,7 +6,7 @@
 	"scripts": {
 		"dev": "vite dev",
 		"build": "vite build",
-		"generate:api": "openapi-typescript ../../schemas/control.json -o src/lib/api/generated/control.ts && openapi-typescript ../../schemas/chat.json -o src/lib/api/generated/chat.ts",
+		"generate:api": "openapi-typescript ../../schemas/control.json -o src/lib/api/generated/control.ts && openapi-typescript ../../schemas/chat.json -o src/lib/api/generated/chat.ts && openapi-typescript ../../schemas/lab.json -o src/lib/api/generated/lab.ts",
 		"preview": "vite preview",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"test": "vitest run"
