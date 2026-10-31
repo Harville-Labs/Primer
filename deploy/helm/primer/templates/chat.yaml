@@ -39,6 +39,7 @@ spec:
             - "8000"
           env:
             {{- include "primer.commonEnv" . | nindent 12 }}
+            {{- include "primer.databaseEnv" . | nindent 12 }}
             - name: PRIMER_CONTROL_URL
               value: http://{{ include "primer.fullname" . }}-control:8000
             - name: PRIMER_RETRIEVAL_URL

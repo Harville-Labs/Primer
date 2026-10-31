@@ -67,7 +67,7 @@ def test_the_graph_schema_is_applied_by_a_hook_not_by_retrieval() -> None:
     assert job["metadata"]["annotations"]["helm.sh/hook"] == "pre-install,pre-upgrade"
     assert containers(job)[0]["command"] == ["python", "-m", "primer_retrieval.graph_schema"]
     assert "PRIMER_GRAPH_PASSWORD" in graph_variables(job)
-    assert len(of_kind(rendered, "Job")) == 4
+    assert len(of_kind(rendered, "Job")) == 3
 
 
 def test_only_retrieval_and_its_schema_job_reach_neo4j() -> None:
