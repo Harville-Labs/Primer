@@ -25,7 +25,7 @@ from primer_contracts.chat import (
     StreamError,
 )
 from primer_contracts.identity import Principal
-from primer_contracts.indexing import SearchRequest
+from primer_contracts.indexing import Breadth, SearchRequest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from primer_chat.budget import estimate_tokens, passages_that_fit, split_history
@@ -33,7 +33,7 @@ from primer_chat.clients import (
     LibraryAuthority,
     LibraryForbidden,
     PassageSource,
-    SearchUnavailable,
+    SearchFailed,
 )
 from primer_chat.compaction import Compactor
 from primer_chat.config import Settings
@@ -74,6 +74,10 @@ class Answering:
     #: reopening the conversation can select the same model again. None for
     #: the deployment's own configured endpoint, which is not a provider.
     provider_id: UUID | None = None
+    #: Whether the question is about the passages nearest it or about the
+    #: library as a whole. Chosen by the user per question, never guessed
+    #: from its wording. See ADR 0006.
+    breadth: Breadth = "focused"
 
 
 class Responder:
@@ -243,25 +247,22 @@ class Responder:
                             generation_ids=scope.generation_ids,
                             query=turn.question,
                             limit=self._settings.retrieval_limit,
+                            breadth=turn.breadth,
                         )
                     )
-                except SearchUnavailable as unavailable:
-                    # The library is fine and the question is fine; the thing
-                    # that reads them is not. Said plainly, and terminally -
+                except SearchFailed as failed:
+                    # The question is fine; searching for it is not, and
+                    # Retrieval has said why. Said plainly, and terminally -
                     # answering from the model alone would produce an
                     # uncited answer for a question asked of a library.
                     await repository.finish_message(
                         message,
                         state=MessageState.FAILED,
                         content="",
-                        error_code="search_unavailable",
+                        error_code=failed.code,
                     )
                     await session.commit()
-                    yield StreamError(
-                        id=next_id(),
-                        code="search_unavailable",
-                        detail=str(unavailable),
-                    )
+                    yield StreamError(id=next_id(), code=failed.code, detail=str(failed))
                     return
                 chunks = result.chunks
 

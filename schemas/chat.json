@@ -5,6 +5,15 @@
         "additionalProperties": false,
         "description": "A question, and the library it is asked of, if any.\n\nWithout a library the question is answered by the model rather than from\nthe user's documents, and the answer carries no citations.",
         "properties": {
+          "breadth": {
+            "default": "focused",
+            "enum": [
+              "focused",
+              "library"
+            ],
+            "title": "Breadth",
+            "type": "string"
+          },
           "library_id": {
             "anyOf": [
               {
@@ -246,6 +255,15 @@
       "FollowUpRequest": {
         "additionalProperties": false,
         "properties": {
+          "breadth": {
+            "default": "focused",
+            "enum": [
+              "focused",
+              "library"
+            ],
+            "title": "Breadth",
+            "type": "string"
+          },
           "message": {
             "maxLength": 32000,
             "minLength": 1,

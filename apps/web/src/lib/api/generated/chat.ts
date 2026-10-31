@@ -266,6 +266,12 @@ export interface components {
          *     the user's documents, and the answer carries no citations.
          */
         AskRequest: {
+            /**
+             * Breadth
+             * @default focused
+             * @enum {string}
+             */
+            breadth: "focused" | "library";
             /** Library Id */
             library_id?: string | null;
             /** Message */
@@ -389,6 +395,12 @@ export interface components {
         };
         /** FollowUpRequest */
         FollowUpRequest: {
+            /**
+             * Breadth
+             * @default focused
+             * @enum {string}
+             */
+            breadth: "focused" | "library";
             /** Message */
             message: string;
             /** Model */

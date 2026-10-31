@@ -17,6 +17,7 @@ from primer_contracts.chat import (
     MessageSummary,
 )
 from primer_contracts.errors import ErrorCode
+from primer_contracts.indexing import Breadth
 from primer_service.db import get_session
 from primer_service.durable import DurableRoute
 from primer_service.errors import ProblemError
@@ -63,12 +64,17 @@ class AskRequest(WireModel):
     #: provider serving the name answers.
     provider_id: UUID | None = None
     message: Message
+    #: Whether to answer from the passages nearest the question or from
+    #: passages across the whole library. Ignored without a library.
+    breadth: Breadth = "focused"
 
 
 class FollowUpRequest(WireModel):
     model: str | None = Field(default=None, max_length=200)
     provider_id: UUID | None = None
     message: Message
+    #: Chosen per question, so a follow-up does not inherit the last one's.
+    breadth: Breadth = "focused"
 
 
 @router.get("/conversations", summary="List the caller's conversations")
@@ -252,6 +258,7 @@ async def ask(
         model=model,
         endpoint=endpoint,
         provider_id=served_by,
+        breadth=payload.breadth,
     )
     return stream_response(responder, session, turn)
 
@@ -290,6 +297,7 @@ async def follow_up(
         model=model,
         endpoint=endpoint,
         provider_id=served_by,
+        breadth=payload.breadth,
     )
     return stream_response(responder, session, turn)
 
