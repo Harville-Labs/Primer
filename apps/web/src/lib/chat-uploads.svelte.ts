@@ -1,4 +1,5 @@
 import type { DeploymentCapabilities } from '#lib/api/types.ts';
+import { eachLimited, UPLOAD_CONCURRENCY } from '#lib/concurrency.ts';
 import { rejectionFor } from '#lib/upload.ts';
 import type { UploadResult } from '#lib/upload-client.ts';
 
@@ -64,7 +65,7 @@ export class ChatUploads {
 	}
 
 	/**
-	 * Upload each file in turn and return the library they went into.
+	 * Upload the files, several at once, and return the library they went into.
 	 *
 	 * Returns the destination's library unchanged when nothing landed. The
 	 * caller links what comes back: a file dropped into a conversation was
@@ -82,39 +83,59 @@ export class ChatUploads {
 			);
 			return libraryId;
 		}
+
+		const queue: File[] = [];
 		for (const file of files) {
 			const rejection = rejectionFor(file, destination.capabilities);
-			if (rejection) {
-				this.#fail(rejection.message);
-				continue;
-			}
-
-			const id = crypto.randomUUID();
-			this.pending = [...this.pending, { id, file, status: 'uploading' }];
-			this.#deps.announce(`Uploading ${file.name}.`);
-			try {
-				const result = await this.#deps.upload(file, libraryId || undefined);
-				libraryId = result.libraryId;
-				const offered = this.offered;
-				if (result.created && result.libraryName) {
-					this.offered = { id: result.libraryId, name: result.libraryName, documents: 1 };
-				} else if (offered && offered.id === result.libraryId) {
-					this.offered = { ...offered, documents: offered.documents + 1 };
-				}
-				const named = result.libraryName ?? destination.libraryName ?? 'the library';
-				this.#succeed(`${file.name} added to ${named}.`);
-				this.pending = this.pending.map((upload) =>
-					upload.id === id ? { ...upload, status: 'complete' } : upload,
-				);
-				setTimeout(() => {
-					this.pending = this.pending.filter((upload) => upload.id !== id);
-				}, this.#deps.lingerMs);
-			} catch (error) {
-				this.#fail(error instanceof Error ? error.message : `${file.name} could not be uploaded.`);
-				this.pending = this.pending.filter((upload) => upload.id !== id);
-			}
+			if (rejection) this.#fail(rejection.message);
+			else queue.push(file);
 		}
+
+		// With no library yet, the first file creates one and the rest have to
+		// wait for it: sent together, each would create its own, and the user
+		// would be asked whether to keep three libraries. Files go one at a
+		// time until one lands, since the first may be refused.
+		while (!libraryId && queue.length > 0) {
+			const first = queue.shift() as File;
+			libraryId = (await this.#send(first, undefined, destination)) ?? '';
+		}
+		await eachLimited(queue, UPLOAD_CONCURRENCY, async (file) => {
+			await this.#send(file, libraryId, destination);
+		});
 		return libraryId;
+	}
+
+	/** Upload one file; the library it landed in, or nothing if it did not. */
+	async #send(
+		file: File,
+		libraryId: string | undefined,
+		destination: Destination,
+	): Promise<string | undefined> {
+		const id = crypto.randomUUID();
+		this.pending = [...this.pending, { id, file, status: 'uploading' }];
+		this.#deps.announce(`Uploading ${file.name}.`);
+		try {
+			const result = await this.#deps.upload(file, libraryId || undefined);
+			const offered = this.offered;
+			if (result.created && result.libraryName) {
+				this.offered = { id: result.libraryId, name: result.libraryName, documents: 1 };
+			} else if (offered && offered.id === result.libraryId) {
+				this.offered = { ...offered, documents: offered.documents + 1 };
+			}
+			const named = result.libraryName ?? destination.libraryName ?? 'the library';
+			this.#succeed(`${file.name} added to ${named}.`);
+			this.pending = this.pending.map((upload) =>
+				upload.id === id ? { ...upload, status: 'complete' } : upload,
+			);
+			setTimeout(() => {
+				this.pending = this.pending.filter((upload) => upload.id !== id);
+			}, this.#deps.lingerMs);
+			return result.libraryId;
+		} catch (error) {
+			this.#fail(error instanceof Error ? error.message : `${file.name} could not be uploaded.`);
+			this.pending = this.pending.filter((upload) => upload.id !== id);
+			return undefined;
+		}
 	}
 
 	/** Keep the library a drop created, and stop asking. */
