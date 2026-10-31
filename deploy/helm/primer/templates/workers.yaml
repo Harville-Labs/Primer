@@ -87,6 +87,12 @@ spec:
             # a reason that has nothing to do with the work.
             - --concurrency
             - {{ required (printf "workers.%s.concurrency is required" $name) $worker.concurrency | quote }}
+            # Threads for work that waits on the network, processes for work
+            # that holds the CPU. A prefork child per in-flight embedding
+            # call is a whole Python interpreter, with its own copy of every
+            # client, spent on waiting for a socket.
+            - --pool
+            - {{ required (printf "workers.%s.pool is required" $name) $worker.pool | quote }}
             - -Q
             {{- if eq $name "parse" }}
             - ingestion.parse

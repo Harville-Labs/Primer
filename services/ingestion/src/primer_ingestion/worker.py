@@ -8,7 +8,10 @@ mark documents failed for a deployment reason, so the registration is not
 conditional on anything.
 
 Registration also happens a second time in every forked child, which is the
-subject of the note on `rebuild_after_fork` below.
+subject of the note on `rebuild_after_fork` below. That applies to the
+prefork pool the parse worker uses. The index worker runs on threads, which
+never fork: the stages built at import are the ones every thread shares, and
+everything they hold - HTTP clients, storage handles - is safe to share.
 """
 
 from __future__ import annotations

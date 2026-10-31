@@ -289,18 +289,24 @@ holds whole documents in memory; embedding and indexing mostly wait on a
 network call. Splitting them by queue lets each scale on what constrains it,
 and stops a burst of uploads starving the stage that finishes them.
 
-**Each worker states its own concurrency.** `workers.parse.concurrency` and
-`workers.index.concurrency` are the number of processes in a pod, and they
-are passed to Celery explicitly. Left out, Celery sizes its pool from the
-node's CPU count — so a worker scheduled onto a large machine forks a child
-per CPU against a memory limit set for a couple of them, and is killed on
-startup for a reason that has nothing to do with the work it was given.
+**Each worker states its own concurrency and pool.** `workers.<name>.concurrency`
+is how many documents a pod works on at once, and `workers.<name>.pool` is
+whether each one gets a process or a thread. Both are passed to Celery
+explicitly. Left out, Celery sizes its pool from the node's CPU count — so a
+worker scheduled onto a large machine forks a child per CPU against a memory
+limit set for a couple of them, and is killed on startup for a reason that
+has nothing to do with the work it was given.
 
-Parsing runs one at a time: it holds a whole document in memory and loads
-Docling's layout models, and two of those in one container is two copies of
-both. Scale that component with `replicas`. Indexing runs four, because
-embedding is a network call and a process waiting on a socket is not using
-the memory the limit is protecting. Raise either only alongside the
+Parsing runs one document at a time, in a process: it holds a whole document
+in memory and loads Docling's layout models, and two of those in one
+container is two copies of both. Scale that component with `replicas`.
+
+Indexing runs eight documents on threads, because every task on that worker
+waits on a model endpoint, and a process per wait is an interpreter spent
+on a socket. Each document also sends four batches at once
+(`PRIMER_INDEX_CONCURRENCY`), so the embedding endpoint sees up to
+thirty-two requests from each index pod. Size that endpoint for it, or
+lower one of the two numbers. Raise concurrency only alongside the
 `resources` beside it.
 
 **The parse worker keeps a model cache.** Docling downloads its layout
