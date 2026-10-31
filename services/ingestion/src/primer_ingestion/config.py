@@ -7,6 +7,8 @@ service credential that identifies this process to Control.
 
 from __future__ import annotations
 
+from typing import Literal
+
 from primer_contracts.embedding_models import find_embedding_model, tokenizer_for
 from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -77,6 +79,19 @@ class Settings(BaseSettings):
     enable_ocr: bool = Field(
         default=True,
         description="Read text from images and slides; off makes parsing faster and offline",
+    )
+    #: Docling's layout and table models run on torch, which otherwise takes
+    #: every core the node has, not the share the pod was granted, and then
+    #: contends with itself. Named as strings rather than Docling's enum so
+    #: reading the configuration does not import the parser.
+    parse_device: Literal["auto", "cpu", "cuda", "mps", "xpu"] = Field(
+        default="auto",
+        description="Where Docling runs its models; auto uses a GPU when there is one",
+    )
+    parse_threads: int = Field(
+        default=4,
+        gt=0,
+        description="CPU threads Docling's models use; match the CPU the worker is given",
     )
     #: Pictures are read one at a time and each costs a full OCR pass, so a
     #: deck built entirely of screenshots is the slowest thing this worker

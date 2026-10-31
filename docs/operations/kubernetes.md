@@ -301,6 +301,13 @@ Parsing runs one document at a time, in a process: it holds a whole document
 in memory and loads Docling's layout models, and two of those in one
 container is two copies of both. Scale that component with `replicas`.
 
+Its models run on torch, which otherwise starts a thread per core on the
+node rather than per core the pod was granted, and then contends with
+itself. `workers.parse.accelerator.threads` sets that number; keep it
+level with the CPU in `workers.parse.resources`. `accelerator.device` is
+`auto`, which uses a GPU when the pod is scheduled with one — layout
+analysis is several times faster there, and is the bulk of parsing a PDF.
+
 Indexing runs eight documents on threads, because every task on that worker
 waits on a model endpoint, and a process per wait is an interpreter spent
 on a socket. Each document also sends four batches at once
@@ -361,16 +368,35 @@ has grown does not give the memory back, so it scales up readily and down
 almost never — turn it on if you have measured your own workload, not
 because it sounds thorough.
 
-!!! note "The workers are not here, and that is deliberate"
-    Their work arrives on a queue, and CPU does not describe a queue. An
-    embedding worker spends its time waiting on a network call, so its CPU
-    is near zero precisely when the backlog is longest: a CPU autoscaler
-    would add pods while they compute and none while they fall behind.
+#### The workers scale on their queues
 
-    Queue depth is the signal that describes them, and reading it needs an
-    adapter this chart does not ship — KEDA against RabbitMQ is the usual
-    answer. Until then `workers.parse.replicas` and `workers.index.replicas`
-    are set by hand.
+Not on CPU. An embedding worker spends its time waiting on a network call,
+so its CPU is near zero precisely when the backlog is longest: a CPU
+autoscaler would add pods while they compute and none while they fall
+behind. Queue length describes them, and [KEDA](https://keda.sh) reads it:
+
+```yaml
+workers:
+  index:
+    queueScaling:
+      enabled: true
+      minReplicas: 1
+      maxReplicas: 8
+```
+
+This needs KEDA installed first. The chart cannot detect it, and a
+`ScaledObject` on a cluster without the CRD fails the install. KEDA reads
+the broker URL from the same Secret the workers use (`rabbitmq.existingSecret`),
+so there is no second credential to rotate.
+
+A pod is added for every `concurrency` documents waiting — that is, when
+the pods already running are full. `messagesPerReplica` overrides it. A
+scaled worker stops stating `replicas`, for the same reason the services
+do, and its disruption budget follows `minReplicas`.
+
+The parse worker's model cache is sized for `maxReplicas`, not the pods
+running now: above one it is `ReadWriteMany`, and the chart refuses a
+`ReadWriteOnce` cache that KEDA could be asked to share.
 
 ## The knowledge graph
 

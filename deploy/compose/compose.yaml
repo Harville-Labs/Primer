@@ -47,6 +47,27 @@ x-service-env: &service-env
   PRIMER_SERVICE_TOKEN: ${PRIMER_INTERNAL_API_TOKEN:?set PRIMER_INTERNAL_API_TOKEN}
   PRIMER_SOURCE_STORE_URL: file:///var/lib/primer/sources
 
+# What both ingestion workers share; each adds the settings for its stages.
+x-worker-env: &worker-env
+  <<: *service-env
+  PRIMER_BROKER_URL: amqp://primer:${RABBITMQ_PASSWORD:?set RABBITMQ_PASSWORD}@rabbitmq:5672//
+  PRIMER_CONTROL_URL: http://control:8000
+  PRIMER_RETRIEVAL_URL: http://retrieval:8000
+
+x-worker: &worker
+  <<: *hardening
+  build:
+    context: ../..
+    dockerfile: deploy/images/Dockerfile.worker
+  depends_on:
+    init-volumes:
+      condition: service_completed_successfully
+    control:
+      condition: service_healthy
+    rabbitmq:
+      condition: service_healthy
+  restart: unless-stopped
+
 services:
   # Stopped when PRIMER_DATABASE_URL names your own server: the profile is
   # empty, so always on, until that variable gives it a name nobody enables.
@@ -278,33 +299,43 @@ services:
       start_period: 20s
     restart: unless-stopped
 
-  # One worker for every queue. Parsing is CPU-heavy and embedding is mostly
-  # waiting on a network call, so a real deployment splits them; locally,
-  # one process is simpler and the queues are the same.
-  worker:
-    build:
-      context: ../..
-      dockerfile: deploy/images/Dockerfile.worker
-    <<: *hardening
-    depends_on:
-      init-volumes:
-        condition: service_completed_successfully
-      control:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
+  # Two workers, as in the chart. Parsing holds the CPU and a whole document
+  # in memory; embedding and indexing wait on a model endpoint. One process
+  # for both made every document in flight wait behind the slowest parse,
+  # and sized its pool for the parse when most of its work is a socket.
+  worker-parse:
+    <<: *worker
     environment:
-      <<: *service-env
-      PRIMER_BROKER_URL: amqp://primer:${RABBITMQ_PASSWORD:?set RABBITMQ_PASSWORD}@rabbitmq:5672//
-      PRIMER_CONTROL_URL: http://control:8000
-      PRIMER_RETRIEVAL_URL: http://retrieval:8000
+      <<: *worker-env
       PRIMER_ENABLE_OCR: ${PRIMER_ENABLE_OCR:-true}
+      # Docling's models run on torch, which otherwise starts a thread per
+      # core on the host and contends with itself.
+      PRIMER_PARSE_DEVICE: ${PRIMER_PARSE_DEVICE:-auto}
+      PRIMER_PARSE_THREADS: ${PRIMER_PARSE_THREADS:-4}
       # Chunks are sized with this model's tokenizer, so they fit what
       # Retrieval embeds them with. PRIMER_CHUNK_TOKENIZER overrides it, for
       # a hosted model that publishes no tokenizer of its own.
       PRIMER_EMBEDDING_MODEL: ${PRIMER_EMBEDDING_MODEL:?set PRIMER_EMBEDDING_MODEL}
       PRIMER_CHUNK_TOKENIZER: ${PRIMER_CHUNK_TOKENIZER:-}
       PRIMER_MAX_CHUNK_TOKENS: ${PRIMER_MAX_CHUNK_TOKENS:-512}
+    volumes:
+      - source-objects:/var/lib/primer/sources
+      # Docling downloads layout models on first use. A named volume keeps
+      # them across restarts; without it every container start re-downloads
+      # half a gigabyte.
+      - model-cache:/var/cache/primer/huggingface
+    # One document at a time, in a process: two parses in one container is
+    # two copies of the document and of Docling's models.
+    command:
+      ["celery", "-A", "primer_ingestion.worker", "worker",
+       "--loglevel", "info",
+       "--concurrency", "1", "--pool", "prefork",
+       "-Q", "ingestion.parse"]
+
+  worker-index:
+    <<: *worker
+    environment:
+      <<: *worker-env
       # Reads entities and relations out of each passage for the graph.
       # Empty leaves extraction off; it needs PRIMER_GRAPH_URL as well.
       PRIMER_GRAPH_EXTRACTION_BASE_URL: ${PRIMER_GRAPH_EXTRACTION_BASE_URL:-}
@@ -312,15 +343,12 @@ services:
       PRIMER_GRAPH_EXTRACTION_API_KEY: ${PRIMER_GRAPH_EXTRACTION_API_KEY:-}
     volumes:
       - source-objects:/var/lib/primer/sources
-      # Docling downloads layout models on first use. A named volume keeps
-      # them across restarts; without it every container start re-downloads
-      # half a gigabyte.
-      - model-cache:/var/cache/primer/huggingface
+    # Threads, because every task here waits on the network.
     command:
       ["celery", "-A", "primer_ingestion.worker", "worker",
        "--loglevel", "info",
-       "-Q", "ingestion.parse,ingestion.embed,ingestion.index,ingestion.delete"]
-    restart: unless-stopped
+       "--concurrency", "8", "--pool", "threads",
+       "-Q", "ingestion.embed,ingestion.index,ingestion.delete"]
 
   web:
     build:

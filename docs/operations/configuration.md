@@ -28,6 +28,8 @@ instead of silently keeping a default.
 | `PRIMER_SERVICE_TOKEN` | unset | Must match the services' tokens |
 | `PRIMER_SOURCE_STORE_URL` | `file:///var/lib/primer/sources` | Same store as Control |
 | `PRIMER_ENABLE_OCR` | `true` | Read text from images |
+| `PRIMER_PARSE_DEVICE` | `auto` | Where Docling runs its models: `auto`, `cpu`, `cuda`, `mps` or `xpu` |
+| `PRIMER_PARSE_THREADS` | `4` | CPU threads for Docling's models; match the CPU the worker is given |
 | `PRIMER_EMBEDDING_MODEL` | unset | The model Retrieval embeds with; the parse worker finds its tokenizer from it |
 | `PRIMER_CHUNK_TOKENIZER` | from the model | Set for a hosted model that publishes no tokenizer |
 | `PRIMER_MAX_CHUNK_TOKENS` | `512` | Ignored without a tokenizer |

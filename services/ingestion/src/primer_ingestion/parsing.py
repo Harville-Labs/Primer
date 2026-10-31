@@ -22,6 +22,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
+from docling.datamodel.accelerator_options import AcceleratorOptions
 from docling.datamodel.base_models import InputFormat
 from docling.datamodel.document import ConversionStatus
 from docling.datamodel.pipeline_options import PdfPipelineOptions
@@ -59,7 +60,9 @@ EXTENSIONS: dict[InputFormat, str] = {
 }
 
 
-def build_converter(*, enable_ocr: bool = True) -> DocumentConverter:
+def build_converter(
+    *, enable_ocr: bool = True, accelerator: AcceleratorOptions | None = None
+) -> DocumentConverter:
     """A converter matching what Primer claims to support.
 
     OCR is on, and reaches exactly one format. `do_ocr` is an option on the
@@ -76,7 +79,11 @@ def build_converter(*, enable_ocr: bool = True) -> DocumentConverter:
     subtly wrong in a way a reader cannot see. Chunks carry no marker for
     this yet, which is the honest limitation of turning it on.
     """
-    pdf_options = PdfPipelineOptions(do_ocr=enable_ocr, do_table_structure=True)
+    pdf_options = PdfPipelineOptions(
+        do_ocr=enable_ocr,
+        do_table_structure=True,
+        accelerator_options=accelerator or AcceleratorOptions(),
+    )
     return DocumentConverter(
         allowed_formats=sorted(set(FORMATS_BY_MEDIA_TYPE.values()), key=lambda f: f.value),
         format_options={InputFormat.PDF: PdfFormatOption(pipeline_options=pdf_options)},
@@ -135,7 +142,13 @@ class DocumentParser:
     @property
     def converter(self) -> DocumentConverter:
         if self._given_converter is None:
-            self._given_converter = build_converter(enable_ocr=self._settings.enable_ocr)
+            self._given_converter = build_converter(
+                enable_ocr=self._settings.enable_ocr,
+                accelerator=AcceleratorOptions(
+                    device=self._settings.parse_device,
+                    num_threads=self._settings.parse_threads,
+                ),
+            )
         return self._given_converter
 
     @property

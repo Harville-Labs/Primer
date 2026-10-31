@@ -1,5 +1,41 @@
 {
   "$schema": "https://json-schema.org/draft-07/schema#",
+  "definitions": {
+    "queueScaling": {
+      "description": "Scale this worker on the length of its queues through KEDA, which must already be installed. replicas is then ignored.",
+      "type": "object",
+      "required": ["enabled"],
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "minReplicas": {
+          "description": "Zero lets an idle worker scale away entirely; the first document then waits for a pod to start.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "maxReplicas": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "messagesPerReplica": {
+          "description": "Waiting documents per pod. Empty uses the worker's concurrency.",
+          "type": ["integer", "null"],
+          "minimum": 1
+        },
+        "cooldownSeconds": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "if": {
+        "properties": { "enabled": { "const": true } }
+      },
+      "then": {
+        "required": ["minReplicas", "maxReplicas", "cooldownSeconds"]
+      }
+    }
+  },
   "title": "Primer Helm values",
   "description": "Validated at install time, so a wrong value fails before anything is created rather than after a pod starts.",
   "type": "object",
@@ -554,11 +590,29 @@
               "type": "integer",
               "minimum": 0
             },
+            "queueScaling": {
+              "$ref": "#/definitions/queueScaling"
+            },
             "concurrency": {
               "description": "Documents a pod works on at once. Absent, Celery sizes its pool from the node's CPU count, which is not what the memory limit was set for.",
               "type": "integer",
               "minimum": 1,
               "maximum": 64
+            },
+            "accelerator": {
+              "description": "Where Docling runs its layout and table models, and with how many CPU threads.",
+              "type": "object",
+              "required": ["device", "threads"],
+              "properties": {
+                "device": {
+                  "type": "string",
+                  "enum": ["auto", "cpu", "cuda", "mps", "xpu"]
+                },
+                "threads": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
             },
             "modelCache": {
               "type": "object",
@@ -600,6 +654,9 @@
             "replicas": {
               "type": "integer",
               "minimum": 0
+            },
+            "queueScaling": {
+              "$ref": "#/definitions/queueScaling"
             },
             "concurrency": {
               "description": "Documents a pod works on at once. Absent, Celery sizes its pool from the node's CPU count, which is not what the memory limit was set for.",

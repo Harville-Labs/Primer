@@ -1,0 +1,64 @@
+{{/*
+Workers scaled on the length of their queues, through KEDA.
+
+Not a HorizontalPodAutoscaler on CPU like the services get. An index worker
+spends its time waiting on a model endpoint, so its CPU is near zero exactly
+when its backlog is longest; a CPU autoscaler would add pods while they
+compute and none while they fall behind. The queue says how far behind they
+are directly.
+
+Off by default, because it needs KEDA installed and the chart cannot tell
+whether it is: a ScaledObject on a cluster without the CRD fails the
+install outright.
+*/}}
+{{- $anyScaled := false }}
+{{- range $name, $worker := .Values.workers }}
+{{- if $worker.queueScaling.enabled }}
+{{- $anyScaled = true }}
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: {{ include "primer.fullname" $ }}-worker-{{ $name }}
+  labels:
+    {{- include "primer.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: worker-{{ $name }}
+spec:
+  scaleTargetRef:
+    name: {{ include "primer.fullname" $ }}-worker-{{ $name }}
+  minReplicaCount: {{ $worker.queueScaling.minReplicas }}
+  maxReplicaCount: {{ $worker.queueScaling.maxReplicas }}
+  # Long enough that a pod finishing a large document is not removed while
+  # the next one is still being published to its queue.
+  cooldownPeriod: {{ $worker.queueScaling.cooldownSeconds }}
+  triggers:
+    {{- range $queue := include "primer.workerQueues" $name | splitList "," }}
+    - type: rabbitmq
+      metadata:
+        protocol: amqp
+        queueName: {{ $queue }}
+        mode: QueueLength
+        # One pod per this many waiting documents. Matching the worker's own
+        # concurrency means a pod is added when the ones running are full.
+        value: {{ $worker.queueScaling.messagesPerReplica | default $worker.concurrency | quote }}
+      authenticationRef:
+        name: {{ include "primer.fullname" $ }}-broker
+    {{- end }}
+{{- end }}
+{{- end }}
+{{- if $anyScaled }}
+---
+apiVersion: keda.sh/v1alpha1
+kind: TriggerAuthentication
+metadata:
+  name: {{ include "primer.fullname" . }}-broker
+  labels:
+    {{- include "primer.labels" . | nindent 4 }}
+spec:
+  # The same URL the workers connect with, read from the same Secret, so
+  # there is no second credential to rotate.
+  secretTargetRef:
+    - parameter: host
+      name: {{ required "rabbitmq.existingSecret is required" .Values.rabbitmq.existingSecret }}
+      key: {{ .Values.rabbitmq.urlKey }}
+{{- end }}
