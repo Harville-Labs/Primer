@@ -7,7 +7,8 @@ service credential that identifies this process to Control.
 
 from __future__ import annotations
 
-from pydantic import Field, SecretStr
+from primer_contracts.embedding_models import find_embedding_model, tokenizer_for
+from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -78,9 +79,15 @@ class Settings(BaseSettings):
         description="How many embedded images to run OCR over before giving up on the rest",
     )
 
-    #: Normally the embedding model's own Hugging Face id. Without it chunks
-    #: are split on document structure alone, which is a markedly worse
-    #: result rather than an equivalent one - see `build_chunker`.
+    #: The model Retrieval embeds with. Only the parse worker reads it, to
+    #: find the tokenizer chunks are sized against - see `_derive_tokenizer`.
+    embedding_model: str | None = Field(
+        default=None,
+        description="The embedding model's name, as Retrieval is configured with it",
+    )
+    #: Normally derived from `embedding_model`. Without one chunks are split
+    #: on document structure alone, which is a markedly worse result rather
+    #: than an equivalent one - see `build_chunker`.
     chunk_tokenizer: str | None = Field(
         default=None,
         description="Hugging Face id of the embedding model's tokenizer, so chunks fit it",
@@ -143,6 +150,29 @@ class Settings(BaseSettings):
     #: expires and the job is re-claimed rather than lost.
     task_time_limit_seconds: int = Field(default=1800, gt=0)
     task_soft_time_limit_seconds: int = Field(default=1500, gt=0)
+
+    @model_validator(mode="after")
+    def _derive_tokenizer(self) -> Settings:
+        """Size chunks with the embedding model's tokenizer, and to fit it.
+
+        Derived rather than configured, because the right value is not a
+        preference: the tokenizer that decides where a chunk ends has to be
+        the one the model reads it with. Naming it separately was a second
+        setting to keep in step with the model, and the two disagreeing
+        produces chunks the embedder silently truncates.
+        """
+        if self.embedding_model is None:
+            return self
+        if self.chunk_tokenizer is None:
+            self.chunk_tokenizer = tokenizer_for(self.embedding_model)
+        known = find_embedding_model(self.embedding_model)
+        if known is not None and self.max_chunk_tokens > known.max_tokens:
+            raise ValueError(
+                f"PRIMER_MAX_CHUNK_TOKENS is {self.max_chunk_tokens}, but {known.model_id} "
+                f"reads at most {known.max_tokens} tokens and would silently cut every "
+                f"longer chunk short. Set it to {known.max_tokens} or less."
+            )
+        return self
 
     @property
     def graph_extraction_enabled(self) -> bool:

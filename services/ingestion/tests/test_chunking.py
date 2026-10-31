@@ -217,3 +217,43 @@ class TestJoiningFragments:
         passages = [self.passage("52,000.00"), self.passage("6,240.00")]
 
         assert self.join(passages, min_chars=0) == passages
+
+
+def test_the_tokenizer_is_derived_from_the_embedding_model() -> None:
+    """Ollama names a model `nomic-embed-text`, which is not a repository.
+
+    The worker is told the model Retrieval embeds with and finds its
+    tokenizer itself, so the two cannot be configured out of step.
+    """
+    derived = Settings(broker_url="memory://", embedding_model="nomic-embed-text")
+
+    assert derived.chunk_tokenizer == "nomic-ai/nomic-embed-text-v1.5"
+
+
+def test_a_named_tokenizer_wins_over_the_derived_one() -> None:
+    """The way out for a hosted model, which publishes none to derive."""
+    named = Settings(
+        broker_url="memory://",
+        embedding_model="text-embedding-3-small",
+        chunk_tokenizer="BAAI/bge-m3",
+    )
+
+    assert named.chunk_tokenizer == "BAAI/bge-m3"
+
+
+def test_a_hosted_model_leaves_chunking_on_structure() -> None:
+    """Guessing a repository would stop the worker starting at all."""
+    hosted = Settings(broker_url="memory://", embedding_model="text-embedding-3-small")
+
+    assert hosted.chunk_tokenizer is None
+
+
+def test_chunks_longer_than_the_model_reads_are_refused() -> None:
+    """The server truncates silently, so the end of every long chunk would
+    be stored, quoted, and never searchable."""
+    with pytest.raises(ValueError, match="PRIMER_MAX_CHUNK_TOKENS"):
+        Settings(
+            broker_url="memory://",
+            embedding_model="BAAI/bge-small-en-v1.5",
+            max_chunk_tokens=1024,
+        )

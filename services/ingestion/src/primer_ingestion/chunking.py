@@ -90,7 +90,8 @@ def build_chunker(settings: Settings) -> BaseChunker:
             "No chunk tokenizer configured; splitting on document structure alone. "
             "Adjacent short passages will not be merged, so forms, statements and "
             "scanned documents are stored a line at a time and citations quote "
-            "fragments. Set PRIMER_CHUNK_TOKENIZER to the embedding model's tokenizer."
+            "fragments. Set PRIMER_EMBEDDING_MODEL to the model Retrieval embeds with, "
+            "or PRIMER_CHUNK_TOKENIZER for a model that publishes no tokenizer."
         )
         return HierarchicalChunker()
     try:
