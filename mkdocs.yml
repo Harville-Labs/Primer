@@ -86,6 +86,7 @@ nav:
           - Knowledge graph in Neo4j: adr/0002-knowledge-graph-in-neo4j.md
           - Bundled PostgreSQL: adr/0003-bundle-postgresql.md
           - Qdrant only: adr/0004-qdrant-only.md
+          - Lab local research model: adr/0005-lab-local-research-model.md
   - Operations:
       - Configuration: operations/configuration.md
       - Connecting model providers: operations/providers.md
