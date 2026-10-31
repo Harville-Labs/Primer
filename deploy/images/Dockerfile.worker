@@ -35,6 +35,7 @@ COPY pyproject.toml uv.lock ./
 COPY services/control-api/pyproject.toml services/control-api/
 COPY services/retrieval/pyproject.toml services/retrieval/
 COPY services/chat/pyproject.toml services/chat/
+COPY services/lab/pyproject.toml services/lab/
 COPY packages/ packages/
 COPY services/ingestion/ services/ingestion/
 RUN --mount=type=cache,target=/root/.cache/uv \
