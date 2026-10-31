@@ -54,8 +54,7 @@ PRIMER_CHAT_BASE_URL=http://host.docker.internal:11434/v1
 # Optional - which model a new chat starts on.
 PRIMER_CHAT_MODEL=llama3.1
 PRIMER_EMBEDDING_BASE_URL=http://host.docker.internal:11434/v1
-PRIMER_EMBEDDING_MODEL=nomic-embed-text
-PRIMER_EMBEDDING_DIMENSIONS=768
+PRIMER_EMBEDDING_MODEL=qwen3-embedding:0.6b
 ENV
 
 docker compose -f deploy/compose/compose.yaml up --wait

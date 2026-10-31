@@ -21,16 +21,14 @@
 #   rabbitmq.existingSecret          holding a broker URL
 #   sourceStore.existingSecret       credentials for the document bucket
 #   inference.embeddings.baseUrl     an OpenAI-compatible /v1/embeddings
-#   inference.embeddings.model       and `dimensions` MUST match it
+#   inference.embeddings.model       the name that endpoint serves
 #
 # Two of those are worth saying twice, because both deploy cleanly and fail
 # later as something else:
 #
-#   `inference.embeddings.dimensions` must match the model exactly - 384 for
-#   bge-small-en-v1.5, 1024 for Qwen3-Embedding-0.6B. It is not checked at
-#   startup; the first document indexed is what fails. And it cannot be
-#   changed later by editing it: the vector column keeps the width it was
-#   created with, so a change means dropping the table and reindexing.
+#   `inference.embeddings.model` cannot be changed later by editing it: the
+#   vector store keeps the width it was created with, so a change means
+#   reindexing every library.
 #
 #   `auth.adminGroup` gates the settings page, and the settings page is the
 #   only way to add an inference provider through the UI. Unset means nobody,
@@ -224,9 +222,20 @@ inference:
     summaryTokens: 512
   embeddings:
     baseUrl: ""
+    # The name your server answers to: a Hugging Face id for Text Embeddings
+    # Inference or vLLM, Ollama's own name (`qwen3-embedding:0.6b`), or a
+    # hosted model. Primer knows the width and the query and passage prompts
+    # of the models people commonly run, and applies them itself - see
+    # docs/operations/models.md for the list. Do not also configure the
+    # server to add prompts, or they are applied twice.
     model: ""
-    # Must match the model. Changing it invalidates every stored vector.
-    dimensions: 1536
+    # Empty takes each of these from Primer's table. Set them only for a
+    # model the table does not know - Retrieval refuses to start on one with
+    # no width - or to override it, such as serving a truncated Matryoshka
+    # width. Changing the width invalidates every stored vector.
+    dimensions: ""
+    queryPrefix: ""
+    documentPrefix: ""
     existingSecret: ""
     apiKeyKey: embedding-api-key
 
@@ -363,20 +372,14 @@ web:
 # and quoted back. These decide what a citation looks like: chunks that are
 # too small quote a word, chunks that are too large quote a page.
 ingestion:
-  # The tokenizer chunking is measured against. Left empty, it is taken from
-  # `inference.embeddings.model` whenever that names a Hugging Face
-  # repository - `Qwen/Qwen3-Embedding-0.6B`, `BAAI/bge-m3` - which is the
-  # correct value and the one you would otherwise retype here.
+  # The tokenizer chunks are sized against. Left empty, the parse worker
+  # takes it from `inference.embeddings.model`, which is right for every
+  # self-hosted model.
   #
-  # Set it only when the embedding model is not a Hugging Face id: a hosted
-  # model like `text-embedding-3-small` publishes no tokenizer to fetch, so
-  # name the nearest open model instead. Being approximately right about
-  # where a chunk ends is much better than the alternative, which is what
-  # happens when this ends up empty - splitting on document structure alone.
-  # That emits one chunk per text item and merges none of them, so a form or
-  # a statement, whose layout is a long list of short items, is stored one
-  # line at a time and citations quote a couple of words. The parse worker
-  # warns on startup when it is in that state.
+  # Set it only for a hosted model like `text-embedding-3-small`, which
+  # publishes no tokenizer: name the nearest open model instead. Without
+  # one, chunks are split on document structure alone, which stores a form
+  # or a statement one line at a time, and the worker warns on startup.
   chunkTokenizer: ""
   # Ceiling per chunk, in that tokenizer's tokens. 512 is a passage: long
   # enough that a quoted citation reads as a paragraph, short enough that

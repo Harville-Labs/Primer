@@ -67,25 +67,22 @@ That refusal is doing you a favour. Qwen3-Embedding pools the **last
 token** (`"pooling_mode_lasttoken": true` upstream), and mean-pooling it
 returns plausible vectors that retrieve badly. Pass `--pooling last-token`.
 
-### Dimensions must match, and cannot be changed later
+### The width comes from the model, and cannot be changed later
 
-`inference.embeddings.dimensions` is not checked at startup. The first
-document indexed is what fails, and the message is a pgvector error about
-column widths.
+Primer knows the width of the models in its table, so naming the model is
+enough. For a model it does not know, Retrieval refuses to start until
+`inference.embeddings.dimensions` is set.
 
-Worse, it cannot be fixed by editing the value: a vector column keeps the
-width it was created with, and the Haystack integration is built with
-`recreate_table=False`. Changing embedding models means dropping
-`vectors.chunks` and reindexing everything.
-
-Decide this once, before anyone uploads anything.
+A width cannot be changed after documents are indexed: the vector store
+keeps the width it was created with. Changing embedding models means
+reindexing everything. Decide this once, before anyone uploads anything.
 
 ## Chunking
 
 `PRIMER_CHUNK_TOKENIZER` decides whether chunks are bounded by tokens and
-merged, or split on document structure alone. The chart derives it from
-`inference.embeddings.model` when that names a Hugging Face repository, so
-usually you set nothing.
+merged, or split on document structure alone. The parse worker derives it
+from the embedding model, including from Ollama's names, so usually you
+set nothing.
 
 Set `ingestion.chunkTokenizer` explicitly when your embedding model is
 hosted - `text-embedding-3-small` names no repository and publishes no

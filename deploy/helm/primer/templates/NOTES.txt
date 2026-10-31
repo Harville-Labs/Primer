@@ -21,7 +21,7 @@ What is configured
 ------------------
   Identity      {{ if eq .Values.auth.mode "oidc" }}OIDC via {{ .Values.auth.oidc.issuerUrl }}{{ else }}{{ .Values.auth.mode }}{{ end }}
   Chat          {{ .Values.inference.chat.baseUrl | default "not set - add a provider from the settings page" }}
-  Embeddings    {{ .Values.inference.embeddings.model }} ({{ .Values.inference.embeddings.dimensions }} dimensions)
+  Embeddings    {{ .Values.inference.embeddings.model }}{{ with .Values.inference.embeddings.dimensions }} ({{ . }} dimensions){{ end }}
   Reranking     {{ if .Values.inference.rerank.baseUrl }}{{ .Values.inference.rerank.model }}, {{ .Values.inference.rerank.candidates }} candidates{{ else }}off - vector ordering is used as-is{{ end }}
   Database      {{ if .Values.postgresql.bundled.enabled }}PostgreSQL run by this release - back up its volume{{ else }}from {{ .Values.postgresql.existingSecret }}{{ end }}
   Vector store  {{ .Values.vectorStore.kind }}
@@ -46,9 +46,6 @@ What is configured
 {{- $notes = append $notes "The graph is on but graph.extraction.baseUrl is not set, so nothing writes to the graph and search consults an empty one. Name an extraction model, then reindex the libraries you want it for." }}
 {{- end }}
 
-{{- if eq (.Values.inference.embeddings.dimensions | int) 1536 }}
-{{- $notes = append $notes "inference.embeddings.dimensions is at the chart default of 1536. It must match your embedding model exactly - 384 for bge-small-en-v1.5, 1024 for Qwen3-Embedding-0.6B. A mismatch is not reported at startup; it fails on the first document indexed." }}
-{{- end }}
 
 {{- if .Values.autoscaling.enabled }}
 {{- if not .Values.podDisruptionBudgets.enabled }}

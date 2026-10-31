@@ -167,8 +167,23 @@ drop good passages on one deployment and admit everything on the next.
   value: {{ required "inference.embeddings.baseUrl is required" .Values.inference.embeddings.baseUrl | quote }}
 - name: PRIMER_EMBEDDING_MODEL
   value: {{ required "inference.embeddings.model is required" .Values.inference.embeddings.model | quote }}
+{{- /*
+Width and prompts come from the model's row in Primer's table; these are
+emitted only to override it, or to describe a model the table does not
+know. Retrieval refuses to start on an unknown model with no width.
+*/}}
+{{- with .Values.inference.embeddings.dimensions }}
 - name: PRIMER_EMBEDDING_DIMENSIONS
-  value: {{ .Values.inference.embeddings.dimensions | quote }}
+  value: {{ . | quote }}
+{{- end }}
+{{- with .Values.inference.embeddings.queryPrefix }}
+- name: PRIMER_EMBEDDING_QUERY_PREFIX
+  value: {{ . | quote }}
+{{- end }}
+{{- with .Values.inference.embeddings.documentPrefix }}
+- name: PRIMER_EMBEDDING_DOCUMENT_PREFIX
+  value: {{ . | quote }}
+{{- end }}
 {{- if .Values.inference.embeddings.existingSecret }}
 - name: PRIMER_EMBEDDING_API_KEY
   valueFrom:
@@ -376,36 +391,6 @@ seconds after every release.
 {{- end -}}
 
 {{/*
-Which tokenizer chunking is bounded by, and how large a chunk may get.
-
-Derived from the embedding model rather than defaulted to a name of its own,
-because the correct value is not a preference: chunks are sized to fit the
-model that embeds them, so the tokenizer that decides where a chunk ends has
-to be that model's. A separate default here would be a second place to keep
-in step with `inference.embeddings.model`, and the two silently disagreeing
-produces chunks that are too long for the embedder to read whole.
-
-The `/` test is what tells a self-hosted model from a hosted one. Anything
-served from Hugging Face is named `owner/model` and publishes a tokenizer;
-`text-embedding-3-small` and `embed-english-v3.0` name no repository and
-have none to fetch, so nothing is emitted and the worker says at startup
-that it is chunking on structure alone. Set `ingestion.chunkTokenizer` to
-name a tokenizer for one of those - the nearest open model with the same
-vocabulary is usually right, and being approximately right about where a
-chunk ends is far better than not bounding it at all.
-
-Only the parse worker gets these. It is the only process that chunks, and a
-tokenizer is a download.
-*/}}
-{{- define "primer.chunkTokenizer" -}}
-{{- if .Values.ingestion.chunkTokenizer -}}
-{{- .Values.ingestion.chunkTokenizer -}}
-{{- else if contains "/" .Values.inference.embeddings.model -}}
-{{- .Values.inference.embeddings.model -}}
-{{- end -}}
-{{- end -}}
-
-{{/*
 How many embedded images the parse worker will run OCR over.
 
 Only the PDF pipeline does OCR of its own; every other format Primer
@@ -418,21 +403,33 @@ is why there is a ceiling rather than no number.
   value: {{ .Values.ingestion.maxPicturesPerDocument | quote }}
 {{- end -}}
 
+{{/*
+What the parse worker needs to size chunks for the embedding model.
+
+The worker is told the model, not a tokenizer, and finds the tokenizer
+itself from the table in `primer_contracts.embedding_models`. Deriving it
+here as well would be a second copy of that table, and the copy in a
+template is the one nobody updates: Ollama's `nomic-embed-text` names no
+repository, so a template can only guess, while the table knows.
+
+`ingestion.chunkTokenizer` is passed only when it is set, for a hosted
+model that publishes no tokenizer of its own. Only the parse worker gets
+any of this. It is the only process that chunks, and a tokenizer is a
+download.
+*/}}
 {{- define "primer.chunkingEnv" -}}
-{{- $tokenizer := include "primer.chunkTokenizer" . -}}
-{{- if $tokenizer }}
+- name: PRIMER_EMBEDDING_MODEL
+  value: {{ required "inference.embeddings.model is required" .Values.inference.embeddings.model | quote }}
+{{- with .Values.ingestion.chunkTokenizer }}
 - name: PRIMER_CHUNK_TOKENIZER
-  value: {{ $tokenizer | quote }}
-{{- /* Emitted only alongside a tokenizer, which is the only thing that reads it. */}}
+  value: {{ . | quote }}
+{{- end }}
 - name: PRIMER_MAX_CHUNK_TOKENS
   value: {{ .Values.ingestion.maxChunkTokens | quote }}
-{{- end }}
 {{- /*
-Emitted whether or not a tokenizer is configured, unlike the ceiling above.
-The joining runs on whatever the chunker produced, and the structural
-fallback - the state you are in without a tokenizer - is the one that
-produces the most fragments, so this is least skippable exactly when the
-tokenizer is missing.
+Joining runs on whatever the chunker produced, and the structural fallback
+- what a hosted model without a named tokenizer gets - is the one that
+produces the most fragments, so this is never left out.
 */}}
 - name: PRIMER_MIN_CHUNK_CHARS
   value: {{ .Values.ingestion.minChunkChars | quote }}

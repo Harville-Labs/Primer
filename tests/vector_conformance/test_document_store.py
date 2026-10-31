@@ -202,7 +202,7 @@ def test_a_wrong_sized_vector_is_rejected(store: DocumentStore, settings: Settin
     mismatched = Document(
         id=str(uuid.uuid4()),
         content="wrong width",
-        embedding=embed_text("wrong width", settings.embedding_dimensions + 8),
+        embedding=embed_text("wrong width", settings.vector_dimensions + 8),
         meta={"library_id": str(FIRST_LIBRARY), "generation_id": str(GENERATION)},
     )
 

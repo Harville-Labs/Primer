@@ -76,10 +76,11 @@ A chunk is both what gets embedded and what gets quoted back in a citation,
 so its size is a retrieval decision and a legibility one at the same time.
 Docling's `HybridChunker` bounds chunks by tokens and merges the small
 pieces that a document's structure leaves behind, and to do either it needs
-the tokenizer of the model that will embed them. `PRIMER_CHUNK_TOKENIZER`
-names it - normally the embedding model's own Hugging Face id, which the
-Helm chart derives from `inference.embeddings.model` when that names a
-repository.
+the tokenizer of the model that will embed them. The parse worker is told
+that model as `PRIMER_EMBEDDING_MODEL` and looks up its tokenizer in
+`primer_contracts.embedding_models`, the same table Retrieval reads its
+width and prompts from. `PRIMER_CHUNK_TOKENIZER` overrides it for a hosted
+model that publishes no tokenizer.
 
 Without a tokenizer, chunking falls back to document structure alone. That
 is not a milder version of the same thing. Structure alone emits one chunk

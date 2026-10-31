@@ -28,7 +28,7 @@ def build_document_store(settings: Settings) -> DocumentStore:
         return QdrantDocumentStore(
             url=settings.qdrant_url,
             index=settings.qdrant_index,
-            embedding_dim=settings.embedding_dimensions,
+            embedding_dim=settings.vector_dimensions,
             return_embedding=False,
             # Primer writes deterministic chunk ids, so re-running a stage
             # must overwrite rather than accumulate duplicates.
@@ -40,7 +40,7 @@ def build_document_store(settings: Settings) -> DocumentStore:
         connection_string=Secret.from_token(settings.database_url),
         schema_name=settings.vector_schema,
         table_name=settings.vector_table,
-        embedding_dimension=settings.embedding_dimensions,
+        embedding_dimension=settings.vector_dimensions,
         vector_function="cosine_similarity",
         search_strategy="hnsw",
         # The migration creates the extension, with the privileges that

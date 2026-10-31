@@ -256,14 +256,30 @@
               "type": "string"
             },
             "dimensions": {
-              "description": "Must match the model. Changing it invalidates every stored vector.",
-              "type": "integer",
-              "minimum": 1
+              "description": "Empty takes the width from Primer's table of known models. Changing it invalidates every stored vector.",
+              "oneOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                {
+                  "type": "string",
+                  "maxLength": 0
+                }
+              ]
             },
             "existingSecret": {
               "type": "string"
             },
             "apiKeyKey": {
+              "type": "string"
+            },
+            "queryPrefix": {
+              "description": "Prompt put before every query. Empty takes it from Primer's table of known models.",
+              "type": "string"
+            },
+            "documentPrefix": {
+              "description": "Prompt put before every passage. Empty takes it from Primer's table of known models.",
               "type": "string"
             }
           }
@@ -446,7 +462,7 @@
       "type": "object",
       "properties": {
         "chunkTokenizer": {
-          "description": "Hugging Face id of the tokenizer chunks are sized against. Empty takes it from inference.embeddings.model when that names a repository.",
+          "description": "Hugging Face id of the tokenizer chunks are sized against. Empty lets the parse worker derive it from inference.embeddings.model.",
           "type": "string"
         },
         "maxChunkTokens": {
