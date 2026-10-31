@@ -42,6 +42,8 @@ spec:
             {{- include "primer.embeddingEnv" . | nindent 12 }}
             - name: PRIMER_QDRANT_URL
               value: {{ include "primer.qdrantUrl" . | quote }}
+            - name: PRIMER_QDRANT_LAYOUT
+              value: {{ .Values.vectorStore.layout | quote }}
             {{- with .Values.vectorStore.existingSecret }}
             - name: PRIMER_QDRANT_API_KEY
               valueFrom:

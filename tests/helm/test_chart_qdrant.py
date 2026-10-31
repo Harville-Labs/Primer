@@ -123,3 +123,11 @@ def test_retrieval_is_not_given_the_database() -> None:
         ]
         for policy in policies:
             assert "retrieval" not in admitted(policy)
+
+
+def test_retrieval_is_told_how_to_lay_out_the_collection() -> None:
+    """Exact vectors in memory unless a library too large for that asks."""
+    assert env_of(named(render(), "Deployment", "-retrieval"))["PRIMER_QDRANT_LAYOUT"] == "memory"
+
+    disk = env_of(named(render("vectorStore.layout=disk"), "Deployment", "-retrieval"))
+    assert disk["PRIMER_QDRANT_LAYOUT"] == "disk"

@@ -95,3 +95,30 @@ export function libraryNameFor(filename: string): string {
 	const name = words.charAt(0).toUpperCase() + words.slice(1);
 	return name.length > MAX_LIBRARY_NAME ? name.slice(0, MAX_LIBRARY_NAME).trimEnd() : name;
 }
+
+/**
+ * Carries a file's name alongside its upload, for naming a library after it.
+ *
+ * The upload body is streamed to Control without being read, so the name in
+ * its multipart header is out of reach of the server that has to create the
+ * library first. A header rather than a query parameter, because a URL ends
+ * up in access logs and a filename can say a good deal about its contents.
+ */
+export const UPLOAD_FILENAME_HEADER = 'x-upload-filename';
+
+/** Header values are Latin-1; a filename is anything. */
+export function encodeFilename(name: string): string {
+	return encodeURIComponent(name);
+}
+
+/** The name `encodeFilename` sent, or null if there is none worth reading. */
+export function decodeFilename(header: string | null): string | null {
+	if (!header) return null;
+	try {
+		return decodeURIComponent(header) || null;
+	} catch {
+		// Malformed percent-encoding came from something other than this app's
+		// own client; there is no name in it to recover.
+		return null;
+	}
+}

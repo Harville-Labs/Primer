@@ -8,6 +8,7 @@
  */
 
 import type { DocumentSummary } from '#lib/api/types.ts';
+import { encodeFilename, UPLOAD_FILENAME_HEADER } from '#lib/upload.ts';
 
 export interface UploadResult {
 	libraryId: string;
@@ -36,9 +37,14 @@ async function failureFrom(response: Response, fallback: string): Promise<Error>
 export async function uploadDocument(file: File, libraryId?: string): Promise<UploadResult> {
 	const body = new FormData();
 	body.append('file', file);
-	if (libraryId) body.append('libraryId', libraryId);
-
-	const response = await fetch('/documents', { method: 'POST', body });
+	// The body goes on to Control unread, so anything this server needs to
+	// know travels outside it.
+	const query = libraryId ? `?${new URLSearchParams({ libraryId })}` : '';
+	const response = await fetch(`/documents${query}`, {
+		method: 'POST',
+		body,
+		headers: { [UPLOAD_FILENAME_HEADER]: encodeFilename(file.name) },
+	});
 	if (!response.ok) {
 		throw await failureFrom(response, `${file.name} could not be uploaded.`);
 	}

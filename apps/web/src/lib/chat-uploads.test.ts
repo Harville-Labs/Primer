@@ -70,6 +70,46 @@ describe('ChatUploads', () => {
 		expect(controller.offered).toEqual({ id: 'lib-1', name: 'Notes', documents: 2 });
 	});
 
+	it('uploads files into an existing library several at once', async () => {
+		// One at a time, a folder of small files spends most of its wait with
+		// the connection idle between them.
+		let inFlight = 0;
+		let peak = 0;
+		const controller = new ChatUploads({
+			upload: async () => {
+				inFlight += 1;
+				peak = Math.max(peak, inFlight);
+				await Promise.resolve();
+				inFlight -= 1;
+				return landed('lib-1');
+			},
+			discard: async () => {},
+			announce: () => {},
+		});
+		const files = ['a', 'b', 'c', 'd', 'e', 'f'].map((name) => file(`${name}.md`));
+
+		await controller.accept(files, { ...destination, libraryId: 'lib-1' });
+
+		expect(peak).toBeGreaterThan(1);
+		expect(peak).toBeLessThanOrEqual(4);
+	});
+
+	it('lets the next file create the library when the first one fails', async () => {
+		// Otherwise the rest are sent with no library while one is being
+		// created for them, and each starts its own.
+		const { calls, upload } = recordingUpload([
+			new Error('Control is not reachable.'),
+			landed('lib-1', true),
+			landed('lib-1'),
+		]);
+		const { controller } = uploads(upload);
+
+		const linked = await controller.accept([file('a.md'), file('b.md'), file('c.md')], destination);
+
+		expect(calls.map((call) => call.libraryId)).toEqual([undefined, undefined, 'lib-1']);
+		expect(linked).toBe('lib-1');
+	});
+
 	it('uploads the rest when one file is refused', async () => {
 		const { calls, upload } = recordingUpload([landed('lib-1')]);
 		const { controller } = uploads(upload);

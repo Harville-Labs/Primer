@@ -260,6 +260,19 @@ and Retrieval sends it, both read from the same Secret.
   library, which is why it is on by default when PostgreSQL is not.
 - **Size the volume for the library.** Each passage takes about 4 KiB per
   1024 dimensions, plus its text and index overhead.
+- **Size memory for the passage count, not the volume.** By default
+  (`vectorStore.layout: memory`) every vector is held in RAM at full
+  precision, which is exact: allow about 4.5 KiB per passage at 1024
+  dimensions, so the default 2 GiB limit holds some four hundred thousand
+  passages. Passage text stays on disk either way.
+- **Switch to `layout: disk` when the vectors will not fit.** Full vectors
+  are then memory-mapped from disk and search runs against an int8 copy in
+  RAM, about 1.5 KiB per passage: fifty million passages need around 80 GiB
+  rather than 220. Qdrant rescores the shortlist against the full vectors,
+  so ranking stays close, though not identical. Memory beyond that goes to
+  the page cache, which makes rescoring faster.
+- **Collections keep the layout they were created with.** Changing
+  `layout` means deleting the collection and reindexing.
 - **The embedding model is fixed once a collection exists.** The collection
   keeps the width it was created with. Changing
   `inference.embeddings.model` means deleting the collection and reindexing;

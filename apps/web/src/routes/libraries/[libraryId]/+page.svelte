@@ -7,6 +7,7 @@
 	import DocumentStatus from '#lib/components/DocumentStatus.svelte';
 	import SharePanel from '#lib/components/SharePanel.svelte';
 	import UploadDropzone from '#lib/components/UploadDropzone.svelte';
+	import { eachLimited, UPLOAD_CONCURRENCY } from '#lib/concurrency.ts';
 	import { isTerminal, pollDelayMs } from '#lib/status.ts';
 	import { formatBytes } from '#lib/upload.ts';
 	import { uploadDocument } from '#lib/upload-client.ts';
@@ -31,7 +32,7 @@
 
 	async function upload(files: File[]) {
 		uploadError = '';
-		for (const file of files) {
+		await eachLimited(files, UPLOAD_CONCURRENCY, async (file) => {
 			uploading = [...uploading, file.name];
 			announcement = `Uploading ${file.name}.`;
 			try {
@@ -43,7 +44,7 @@
 			} finally {
 				uploading = uploading.filter((name) => name !== file.name);
 			}
-		}
+		});
 		await invalidateAll();
 	}
 

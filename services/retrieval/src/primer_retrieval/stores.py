@@ -8,11 +8,22 @@ live. What Primer owns is the filter every query carries, not the store.
 
 from __future__ import annotations
 
+from typing import Any
+
 from haystack.document_stores.types import DocumentStore
 from haystack.utils import Secret
 from haystack_integrations.document_stores.qdrant import QdrantDocumentStore
 
 from primer_retrieval.config import Settings
+
+#: What each `qdrant_layout` asks Qdrant for. Settings says when to pick which.
+LAYOUTS: dict[str, dict[str, Any]] = {
+    "memory": {"on_disk": False},
+    "disk": {
+        "on_disk": True,
+        "quantization_config": {"scalar": {"type": "int8", "quantile": 0.99, "always_ram": True}},
+    },
+}
 
 
 def build_document_store(settings: Settings) -> DocumentStore:
@@ -36,6 +47,11 @@ def build_document_store(settings: Settings) -> DocumentStore:
         # must overwrite rather than accumulate duplicates.
         recreate_index=False,
         similarity="cosine",
+        # Passage text is payload, and search reads it only for the results
+        # it returns, so it stays on disk in either layout. Indexed fields
+        # stay in RAM. Both apply only when the collection is created.
+        on_disk_payload=True,
+        **LAYOUTS[settings.qdrant_layout],
         # Filtered on every read and every delete. Without a payload index
         # Qdrant scans every point's payload to apply the filter, which is
         # unnoticeable on one library and the whole cost of a search on a

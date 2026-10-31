@@ -310,6 +310,11 @@
           "type": "string",
           "minLength": 1
         },
+        "layout": {
+          "description": "memory keeps full-precision vectors in RAM; disk keeps them on disk and searches an int8 copy, for libraries too large for memory.",
+          "type": "string",
+          "enum": ["memory", "disk"]
+        },
         "qdrant": {
           "type": "object",
           "description": "A Qdrant run by this release. Exclusive with url.",

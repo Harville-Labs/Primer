@@ -55,6 +55,7 @@ and says which setting to change, rather than indexing a graph nobody keeps.
 | `PRIMER_QDRANT_URL` | `http://localhost:6333` | Compose and the chart point it at the Qdrant they run |
 | `PRIMER_QDRANT_API_KEY` | unset | For a Qdrant that requires one |
 | `PRIMER_QDRANT_INDEX` | `primer_chunks` | The collection every library's passages share |
+| `PRIMER_QDRANT_LAYOUT` | `memory` | `memory` for exact vectors in RAM; `disk` for a quantized copy, when they will not fit. Read when the collection is created |
 | `PRIMER_EMBEDDING_MODEL` | `text-embedding-3-small` | The name your server answers to |
 | `PRIMER_EMBEDDING_DIMENSIONS` | from the model | **Required** for a model Primer does not know |
 | `PRIMER_EMBEDDING_QUERY_PREFIX` | from the model | Prompt put before every query |
