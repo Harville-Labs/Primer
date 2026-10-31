@@ -72,7 +72,7 @@ def control(database: Database) -> TestClient:
 def retrieval(store: Any) -> TestClient:
     return TestClient(
         retrieval_app(
-            RetrievalSettings(database_url=SECRET_URL, internal_api_token=TEST_TOKEN),
+            RetrievalSettings(qdrant_url=SECRET_URL, internal_api_token=TEST_TOKEN),
             store=store,
             document_embedder=Unused(),  # ty: ignore[invalid-argument-type]
             text_embedder=Unused(),  # ty: ignore[invalid-argument-type]

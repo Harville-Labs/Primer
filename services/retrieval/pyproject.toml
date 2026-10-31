@@ -1,27 +1,23 @@
 [project]
 name = "primer-retrieval"
 version = "0.1.14"
-description = "Primer retrieval: the exclusive owner of Primer's vector stores"
+description = "Primer retrieval: the exclusive owner of Primer's vector store and knowledge graph"
 requires-python = ">=3.13"
 dependencies = [
-    "alembic",
     "fastapi",
     "haystack-ai",
     "neo4j>=6.4.0",
-    "pgvector-haystack",
     "primer-contracts",
     "primer-observability",
     "primer-service",
-    "psycopg[binary]",
     "pydantic-settings",
     "qdrant-haystack",
-    "sqlalchemy",
 ]
 
 [dependency-groups]
 dev = [
     "httpx2",
-    "testcontainers[neo4j,postgres,qdrant]",
+    "testcontainers[neo4j,qdrant]",
 ]
 server = [
     "uvicorn[standard]",

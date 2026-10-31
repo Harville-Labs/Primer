@@ -22,10 +22,7 @@ from primer_storage import SourceStore
 from sqlalchemy.ext.asyncio import AsyncEngine
 from testcontainers.community.postgres import PostgresContainer
 
-#: pgvector rather than plain postgres: the Control schema does not need it,
-#: but the default Compose profile ships it and the later retrieval
-#: conformance suite reuses this fixture.
-POSTGRES_IMAGE = "pgvector/pgvector:pg17"
+POSTGRES_IMAGE = "postgres:17"
 
 
 @pytest.fixture(scope="session")

@@ -3,10 +3,10 @@ revision = 5
 requires-python = ">=3.13"
 resolution-markers = [
     "python_full_version >= '3.14' and sys_platform == 'linux'",
-    "python_full_version < '3.14' and sys_platform == 'linux'",
     "python_full_version >= '3.14' and sys_platform == 'win32'",
     "python_full_version >= '3.14' and sys_platform == 'emscripten'",
     "python_full_version >= '3.14' and sys_platform != 'emscripten' and sys_platform != 'linux' and sys_platform != 'win32'",
+    "python_full_version < '3.14' and sys_platform == 'linux'",
     "python_full_version < '3.14' and sys_platform == 'win32'",
     "python_full_version < '3.14' and sys_platform == 'emscripten'",
     "python_full_version < '3.14' and sys_platform != 'emscripten' and sys_platform != 'linux' and sys_platform != 'win32'",
@@ -2666,29 +2666,6 @@ wheels = [
 ]
 
 [[package]]
-name = "pgvector"
-version = "0.5.1"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/f8/23/96aa38899fbf8e103766db608d6e42acac269a96e08f3003fe9da3396fed/pgvector-0.5.1.tar.gz", hash = "sha256:94998a54b801b1075d623b8fa677fcb8210a7977b88f8e2203ab115c155af2e4", size = 35714, upload-time = "2026-10-09T01:50:22.779Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/a2/8d/a9c2a531da0ebb54b4a7174450e8534a39db112a141ae3a437de28420111/pgvector-0.5.1-py3-none-any.whl", hash = "sha256:ec5bcd5ffaefe6ecb2dcc9564ca921d284564b969183bc837a144604773af8ea", size = 31056, upload-time = "2026-10-09T01:50:21.614Z" },
-]
-
-[[package]]
-name = "pgvector-haystack"
-version = "8.1.2"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "haystack-ai" },
-    { name = "pgvector" },
-    { name = "psycopg", extra = ["binary"] },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/cf/a2/9cfea86a3fef3cd07be9d84a6f9444867388fb0639c298f9a65dc07b40c5/pgvector_haystack-8.1.2.tar.gz", hash = "sha256:34275092f9cbb7c31dd6e78f66468230272f33cbc5eb1aa0f8f82be327e17cb3", size = 49236, upload-time = "2026-10-21T13:53:44.058Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/ec/1f/b2f985dbd587947a3b9c13768f57f6ce76c41bec7029763e976c5a03d0ea/pgvector_haystack-8.1.2-py3-none-any.whl", hash = "sha256:0b42917bf7950f633f879a23b7aa3228dc772c2167102fd603ec3347984a814d", size = 31130, upload-time = "2026-10-21T13:53:42.786Z" },
-]
-
-[[package]]
 name = "pillow"
 version = "13.0.0"
 source = { registry = "https://pypi.org/simple" }
@@ -3026,18 +3003,14 @@ name = "primer-retrieval"
 version = "0.1.14"
 source = { editable = "services/retrieval" }
 dependencies = [
-    { name = "alembic" },
     { name = "fastapi" },
     { name = "haystack-ai" },
     { name = "neo4j" },
-    { name = "pgvector-haystack" },
     { name = "primer-contracts" },
     { name = "primer-observability" },
     { name = "primer-service" },
-    { name = "psycopg", extra = ["binary"] },
     { name = "pydantic-settings" },
     { name = "qdrant-haystack" },
-    { name = "sqlalchemy" },
 ]
 
 [package.dev-dependencies]
@@ -3051,24 +3024,20 @@ server = [
 
 [package.metadata]
 requires-dist = [
-    { name = "alembic" },
     { name = "fastapi" },
     { name = "haystack-ai" },
     { name = "neo4j", specifier = ">=6.4.0" },
-    { name = "pgvector-haystack" },
     { name = "primer-contracts", editable = "packages/contracts" },
     { name = "primer-observability", editable = "packages/observability" },
     { name = "primer-service", editable = "packages/service" },
-    { name = "psycopg", extras = ["binary"] },
     { name = "pydantic-settings" },
     { name = "qdrant-haystack" },
-    { name = "sqlalchemy" },
 ]
 
 [package.metadata.requires-dev]
 dev = [
     { name = "httpx2" },
-    { name = "testcontainers", extras = ["neo4j", "postgres", "qdrant"] },
+    { name = "testcontainers", extras = ["neo4j", "qdrant"] },
 ]
 server = [{ name = "uvicorn", extras = ["standard"] }]
 

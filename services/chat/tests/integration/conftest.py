@@ -21,7 +21,7 @@ from primer_service.db import Database
 from sqlalchemy.ext.asyncio import AsyncEngine
 from testcontainers.community.postgres import PostgresContainer
 
-POSTGRES_IMAGE = "pgvector/pgvector:pg17"
+POSTGRES_IMAGE = "postgres:17"
 
 
 @pytest.fixture(scope="session")

@@ -1,8 +1,8 @@
-"""Which driver the migration connects with.
+"""Which driver a migration connects with.
 
-The service hands its connection string straight to the vector integration,
-which speaks psycopg 3. SQLAlchemy reads a bare `postgresql://` as psycopg 2,
-so a migration run against an unmodified URL fails on a driver that is not
+Alembic runs synchronously, and the services that serve requests are given
+an async URL. SQLAlchemy reads a bare `postgresql://` as psycopg 2, so a
+migration run against an unmodified URL fails on a driver that is not
 installed and should not be.
 """
 

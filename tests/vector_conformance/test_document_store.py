@@ -35,7 +35,7 @@ def write(store: DocumentStore, *chunks) -> int:
 
 
 def search(store: DocumentStore, settings: Settings, library, generations, query, limit=10):
-    retriever = build_retriever(store, settings)
+    retriever = build_retriever(store)
     hits = retriever.run(
         query_embedding=HashingTextEmbedder().run(query)["embedding"],
         filters=scope_filter(library, generations),
@@ -241,7 +241,7 @@ def test_naming_a_chunk_never_widens_the_scope(store: DocumentStore, settings: S
     write(store, mine, other, theirs, pending)
     named = [str(chunk.chunk_id) for chunk in (mine, theirs, pending)]
 
-    hits = build_retriever(store, settings).run(
+    hits = build_retriever(store).run(
         query_embedding=HashingTextEmbedder().run("named term")["embedding"],
         filters=chunks_filter(FIRST_LIBRARY, (GENERATION,), named),
         top_k=10,

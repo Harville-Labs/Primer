@@ -189,17 +189,31 @@ def test_a_store_that_refuses_a_write_is_named() -> None:
     assert "vector store" in response.json()["detail"]
 
 
-def test_a_width_mismatch_says_what_to_do_about_it() -> None:
+#: What Qdrant and its integration say, verbatim, when the collection holds
+#: 1024-dimensional vectors and this deployment is configured for 384. The
+#: first is the integration refusing to open the collection, which is what a
+#: deployment that swapped models meets; the second is Qdrant refusing a
+#: point, which is what an endpoint that ignores `dimensions` produces.
+WIDTH_MISMATCHES = [
+    "Collection 'primer_chunks' already exists in Qdrant, but it is configured with a "
+    "vector size '1024'. If you want to use that collection, but with a different vector "
+    "size, please set `recreate_collection=True` argument.",
+    "Unexpected Response: 400 (Bad Request)\nRaw response content:\n"
+    'b\'{"status":{"error":"Wrong input: Vector dimension error: expected dim: 1024, '
+    'got 384"},"time":0.000028417}\'',
+]
+
+
+@pytest.mark.parametrize("message", WIDTH_MISMATCHES)
+def test_a_width_mismatch_says_what_to_do_about_it(message: str) -> None:
     """The one failure the chart warns about and cannot check for itself.
 
-    A vector column keeps the width it was created with, so a deployment
-    that swaps embedding models looks healthy until the first document is
-    indexed - and then fails with a message about dimensions that means
+    A collection keeps the width it was created with, so a deployment that
+    swaps embedding models looks healthy until the first document is
+    indexed - and then fails with a message about vector sizes that means
     nothing unless you already know this.
     """
-    refusing = RefusingStore("expected 384 dimensions, not 1024")
-
-    response = index(client_storing(refusing))
+    response = index(client_storing(RefusingStore(message)))
     detail = response.json()["detail"]
 
     assert response.status_code == 409
@@ -208,12 +222,13 @@ def test_a_width_mismatch_says_what_to_do_about_it() -> None:
     assert "reindex" in detail
 
 
-def test_a_width_mismatch_is_not_retried() -> None:
+@pytest.mark.parametrize("message", WIDTH_MISMATCHES)
+def test_a_width_mismatch_is_not_retried(message: str) -> None:
     """Every retry is refused identically, and spends the budget for nothing.
 
     A 4xx is what tells the worker to stop: nothing is down here, and
     nothing is coming back without an operator changing something.
     """
-    response = index(client_storing(RefusingStore("expected 384 dimensions, not 1024")))
+    response = index(client_storing(RefusingStore(message)))
 
     assert 400 <= response.status_code < 500
