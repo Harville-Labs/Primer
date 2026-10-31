@@ -88,6 +88,7 @@ nav:
           - Qdrant only: adr/0004-qdrant-only.md
   - Operations:
       - Configuration: operations/configuration.md
+      - Connecting model providers: operations/providers.md
       - Choosing models: operations/models.md
       - Deploying: operations/deploying.md
       - Kubernetes: operations/kubernetes.md

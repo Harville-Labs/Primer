@@ -170,7 +170,8 @@ extraEnv: []
 
 # --- Inference ----------------------------------------------------------
 #
-# Primer ships no model. These point at whatever you already run.
+# The release runs its own embedder and reranker; chat is whatever you run.
+# docs/operations/providers.md covers pointing any of them elsewhere.
 inference:
   # Passages scoring below this are dropped, even when that means a search
   # returns nothing - which is the point. A vector search always returns
