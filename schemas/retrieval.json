@@ -34,7 +34,7 @@
     },
     "/health/ready": {
       "get": {
-        "description": "Whether this instance can serve a search.\n\nCounting documents in an empty filter is the cheapest call that proves\nthe store is reachable and the schema exists.",
+        "description": "Whether this instance can serve a search.\n\nCounts a library that cannot exist, which proves the store is reachable\nand the collection is there while touching nothing in it: the count is\nanswered from the `library_id` payload index. Counting the collection\ninstead is exact by default, and on a deployment holding tens of\nmillions of passages every probe on every replica would be a full scan.",
         "operationId": "ready_health_ready_get",
         "responses": {
           "200": {
