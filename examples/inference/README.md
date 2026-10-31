@@ -1,9 +1,8 @@
 # Inference servers
 
-Primer ships no model and runs no inference. These are the two servers the
-reference configuration
-(`deploy/helm/primer/values-selfhosted.yaml`) expects, as manifests you can
-apply and edit.
+The chart and Compose run these two servers themselves by default. These
+manifests are the same servers standing alone, for running them outside a
+Primer release: shared between several, or in a namespace of their own.
 
 Both are CPU-only. That is a constraint worth stating rather than a
 recommendation: they are shaped for a deployment whose GPUs are committed to
@@ -26,6 +25,16 @@ Primer runs in:
 kubectl -n primer apply -f embeddings.yaml -f reranker.yaml
 ```
 
-The service names match the URLs in `values-selfhosted.yaml`. If you rename
-them, update `inference.embeddings.baseUrl` and `inference.rerank.baseUrl`
-to match.
+Then turn the chart's own servers off and point it at these:
+
+```yaml
+inference:
+  embeddings:
+    bundled: { enabled: false }
+    baseUrl: http://primer-embeddings:8080/v1
+  rerank:
+    bundled: { enabled: false }
+    baseUrl: http://primer-reranker:8080
+```
+
+If you rename the services, change the URLs to match.

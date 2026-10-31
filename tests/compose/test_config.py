@@ -36,11 +36,12 @@ RESOLVE_ENV = {
     "POSTGRES_PASSWORD": "resolve-only",
     "RABBITMQ_PASSWORD": "resolve-only",
     "PRIMER_INTERNAL_API_TOKEN": "resolve-only",
-    "PRIMER_CHAT_BASE_URL": "http://model/v1",
-    "PRIMER_CHAT_MODEL": "test-model",
-    "PRIMER_EMBEDDING_BASE_URL": "http://model/v1",
-    "PRIMER_EMBEDDING_MODEL": "test-embed",
 }
+
+#: The bundled model servers. Not hardened by `APPLICATION_SERVICES`'s test
+#: alone, because they are a third-party image run under Primer's rules.
+MODEL_SERVERS = ("embeddings", "reranker")
+DEFAULT_EMBEDDING_MODEL = "onnx-community/Qwen3-Embedding-0.6B-ONNX"
 
 
 def resolve(*files: Path, env: dict[str, str] | None = None) -> dict[str, Any]:
@@ -200,29 +201,82 @@ def test_only_the_parse_worker_holds_the_model_cache(compose_config: dict[str, A
     assert "model-cache" not in volumes("worker-index")
 
 
-def test_no_model_server_is_bundled(compose_config: dict[str, Any]) -> None:
-    """Primer ships no model; the endpoint is the operator's to provide."""
-    images = [service.get("image", "") for service in compose_config["services"].values()]
-    for marker in ("ollama", "vllm", "llama"):
-        assert not any(marker in image.lower() for image in images)
+def test_by_default_the_stack_runs_its_own_model_servers(
+    compose_config: dict[str, Any],
+) -> None:
+    """So a stack started with only credentials can index and search."""
+    services = compose_config["services"]
+    retrieval = services["retrieval"]
+
+    assert retrieval["environment"]["PRIMER_EMBEDDING_BASE_URL"] == "http://embeddings:8080/v1"
+    assert retrieval["environment"]["PRIMER_RERANK_BASE_URL"] == "http://reranker:8080"
+    for server in MODEL_SERVERS:
+        assert retrieval["depends_on"][server]["condition"] == "service_healthy"
+        assert "ports" not in services[server], f"{server} has no authentication"
 
 
-def test_inference_settings_are_required(compose_config: dict[str, Any]) -> None:
-    """The endpoints and the embedding model have no safe default.
+@pytest.mark.parametrize("name", MODEL_SERVERS)
+def test_the_bundled_model_servers_run_hardened(compose_config: dict[str, Any], name: str) -> None:
+    """A read-only root works only because the cache is the one place TEI writes."""
+    service = compose_config["services"][name]
 
-    The embedding model decides the width of every stored vector and the
-    tokenizer chunks are cut with, so a stack started on a guess has to be
-    reindexed later. The chat endpoint is required for a different reason -
-    a single-user stack started with nowhere to send a question is a
-    mistake rather than a choice.
-    """
-    text = BASE.read_text()
-    for variable in (
-        "PRIMER_CHAT_BASE_URL",
-        "PRIMER_EMBEDDING_BASE_URL",
-        "PRIMER_EMBEDDING_MODEL",
-    ):
-        assert f"${{{variable}:?" in text
+    assert service["read_only"] is True
+    assert service["cap_drop"] == ["ALL"]
+    assert service["user"] == "10001:10001"
+    assert service["environment"]["HF_HOME"] == "/data"
+    assert [volume["target"] for volume in service["volumes"]] == ["/data"]
+
+
+def test_the_bundled_servers_accept_what_primer_sends_in_one_call(
+    compose_config: dict[str, Any],
+) -> None:
+    """Below 32 inputs per call, every ingestion batch and shortlist is refused."""
+    for name in MODEL_SERVERS:
+        command = compose_config["services"][name]["command"]
+        assert int(worker_option(command, "--max-client-batch-size")) >= 32, name
+        assert int(worker_option(command, "--max-concurrent-requests")) >= 32, name
+
+
+def test_the_chat_endpoint_is_not_required(compose_config: dict[str, Any]) -> None:
+    """A provider can be added on the settings page instead."""
+    assert "${PRIMER_CHAT_BASE_URL:?" not in BASE.read_text()
+    assert compose_config["services"]["chat"]["environment"]["PRIMER_CHAT_BASE_URL"] == ""
+
+
+def test_your_own_embedder_replaces_the_bundled_one() -> None:
+    if shutil.which("docker") is None:
+        pytest.skip("docker is not installed")
+    theirs = "http://host.docker.internal:11434/v1"
+    config = resolve(
+        BASE,
+        env={"PRIMER_EMBEDDING_BASE_URL": theirs, "PRIMER_EMBEDDING_MODEL": "qwen3-embedding:0.6b"},
+    )
+
+    assert "embeddings" not in config["services"]
+    retrieval = config["services"]["retrieval"]
+    assert retrieval["environment"]["PRIMER_EMBEDDING_BASE_URL"] == theirs
+    assert retrieval["depends_on"]["embeddings"]["required"] is False
+
+
+def test_an_empty_rerank_url_searches_without_a_reranker() -> None:
+    """Set but empty stops the server and leaves Retrieval nothing to call."""
+    if shutil.which("docker") is None:
+        pytest.skip("docker is not installed")
+    config = resolve(BASE, env={"PRIMER_RERANK_BASE_URL": ""})
+
+    assert "reranker" not in config["services"]
+    assert "embeddings" in config["services"]
+    assert config["services"]["retrieval"]["environment"]["PRIMER_RERANK_BASE_URL"] == ""
+
+
+def test_your_own_reranker_replaces_the_bundled_one() -> None:
+    if shutil.which("docker") is None:
+        pytest.skip("docker is not installed")
+    config = resolve(BASE, env={"PRIMER_RERANK_BASE_URL": "http://tei.example:8080"})
+
+    assert "reranker" not in config["services"]
+    environment = config["services"]["retrieval"]["environment"]
+    assert environment["PRIMER_RERANK_BASE_URL"] == "http://tei.example:8080"
 
 
 def test_the_embedding_width_follows_from_the_model(compose_config: dict[str, Any]) -> None:
@@ -243,8 +297,16 @@ def test_both_sides_of_the_index_are_told_the_embedding_model(
     sized for something other than what reads them.
     """
     services = compose_config["services"]
-    assert services["worker-parse"]["environment"]["PRIMER_EMBEDDING_MODEL"] == "test-embed"
-    assert services["retrieval"]["environment"]["PRIMER_EMBEDDING_MODEL"] == "test-embed"
+    assert services["worker-parse"]["environment"]["PRIMER_EMBEDDING_MODEL"] == (
+        DEFAULT_EMBEDDING_MODEL
+    )
+    assert services["retrieval"]["environment"]["PRIMER_EMBEDDING_MODEL"] == (
+        DEFAULT_EMBEDDING_MODEL
+    )
+    assert worker_option(services["embeddings"]["command"], "--model-id") == (
+        DEFAULT_EMBEDDING_MODEL
+    )
+    assert worker_option(services["embeddings"]["command"], "--pooling") == "last-token"
 
 
 def test_the_chat_model_is_not_required(compose_config: dict[str, Any]) -> None:

@@ -1,8 +1,11 @@
 # Choosing models
 
-Primer ships no model. It points at endpoints you already run, which means
-the interesting decisions are yours to make and mostly invisible until
-something is quietly worse than it should be.
+Primer runs the embedding model and reranker in the table below unless you
+name your own, and brings no chat model. [Connecting model
+providers](providers.md) says how to point it at your servers. This page is
+about which models to choose, and why the defaults are what they are: these
+decisions are mostly invisible until something is quietly worse than it
+should be.
 
 Everything here is measured on a CPU-only deployment: two consumer GPUs
 committed to chat models, embedding and reranking on a 72-core host. Where a
@@ -10,7 +13,8 @@ number appears, it came from that machine rather than from a model card.
 
 ## The short version
 
-If you want a working configuration to copy rather than a discussion, use
+These are the defaults Compose and the chart ship with. If you want a
+working configuration to copy rather than a discussion, use
 [`values-selfhosted.yaml`](#a-reference-configuration) and read the rest
 when something surprises you.
 
@@ -284,6 +288,8 @@ helm install primer oci://ghcr.io/isaiah-harville/charts/primer \
   --set sourceStore.existingSecret=primer-s3
 ```
 
-It assumes you run the two inference servers yourself. Manifests for both,
-matching the flags discussed above, are in
-[`examples/inference/`](https://github.com/isaiah-harville/Primer/tree/main/examples/inference).
+The chart runs both inference servers itself, with the flags discussed
+above. To run them outside the release instead, the same servers are in
+[`examples/inference/`](https://github.com/isaiah-harville/Primer/tree/main/examples/inference);
+[Connecting model providers](providers.md#using-your-own-embedding-server)
+says what to set.

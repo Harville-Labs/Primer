@@ -170,7 +170,8 @@ extraEnv: []
 
 # --- Inference ----------------------------------------------------------
 #
-# Primer ships no model. These point at whatever you already run.
+# The release runs its own embedder and reranker; chat is whatever you run.
+# docs/operations/providers.md covers pointing any of them elsewhere.
 inference:
   # Passages scoring below this are dropped, even when that means a search
   # returns nothing - which is the point. A vector search always returns
@@ -220,7 +221,19 @@ inference:
     # something is actually dropped, which is the reason to turn it off.
     compactHistory: true
     summaryTokens: 512
+  # Text Embeddings Inference, the server `inference.*.bundled` runs. One
+  # pinned version for both: TEI returned wrong vectors for Qwen3 until
+  # huggingface/text-embeddings-inference#648, plausible enough that nothing
+  # failed and retrieval was simply worse, so the version a model was
+  # verified against is part of the model. It is published for amd64 only.
+  modelServer:
+    image:
+      repository: ghcr.io/huggingface/text-embeddings-inference
+      tag: "cpu-1.9.3"
+      pullPolicy: IfNotPresent
   embeddings:
+    # An OpenAI-compatible /v1 endpoint you run, or a hosted one. Set this
+    # or `bundled.enabled` - not both, and not neither.
     baseUrl: ""
     # The name your server answers to: a Hugging Face id for Text Embeddings
     # Inference or vLLM, Ollama's own name (`qwen3-embedding:0.6b`), or a
@@ -228,7 +241,11 @@ inference:
     # of the models people commonly run, and applies them itself - see
     # docs/operations/models.md for the list. Do not also configure the
     # server to add prompts, or they are applied twice.
-    model: ""
+    #
+    # The default is what `bundled` serves, and changing it with `bundled`
+    # on changes what it downloads. With your own endpoint, set it to what
+    # that endpoint calls its model.
+    model: onnx-community/Qwen3-Embedding-0.6B-ONNX
     # Empty takes each of these from Primer's table. Set them only for a
     # model the table does not know - Retrieval refuses to start on one with
     # no width - or to override it, such as serving a truncated Matryoshka
@@ -238,23 +255,74 @@ inference:
     documentPrefix: ""
     existingSecret: ""
     apiKeyKey: embedding-api-key
+    # A model server run by this release, so an install embeds with nothing
+    # configured. CPU only, reachable only from Retrieval, and it downloads
+    # `model` from Hugging Face on first start into the volume below - the
+    # one thing here that needs to reach the internet. A GPU, or one server
+    # shared by several deployments, is a model server you run yourself:
+    # see docs/operations/models.md.
+    bundled:
+      enabled: true
+      # How the model's token states become one vector. Qwen3-Embedding
+      # pools the last token, and the ONNX export does not say so, so TEI
+      # refuses to start without it - better than mean-pooling, which
+      # returns plausible vectors that retrieve badly. Empty lets TEI read
+      # it from a model that ships its pooling config.
+      pooling: last-token
+      persistence:
+        # The ONNX weights alone are 2.1 GB, and TEI keeps what it
+        # downloads beside them.
+        size: 10Gi
+        storageClass: ""   # the cluster default
+      resources:
+        requests:
+          cpu: "2"
+          memory: 6Gi
+        limits:
+          memory: 16Gi
 
   # Optional. A reranker reads a question and a passage together and scores
   # the pair, which a vector search cannot do - its two embeddings were made
   # without knowing about each other, so the passage that answers a question
   # is often inside the first twenty results and outside the first six.
   #
-  # Leave baseUrl empty and nothing changes: retrieval returns the vector
-  # ordering exactly as before. A reranker that is configured and then goes
-  # down also falls back to that ordering rather than failing the search.
+  # With `bundled` off and baseUrl empty there is no reranker, and
+  # retrieval returns the vector ordering. A reranker that is configured and
+  # then goes down also falls back to that ordering rather than failing the
+  # search.
   rerank:
+    # A TEI-compatible `/rerank` endpoint you run. Exclusive with
+    # `bundled.enabled`.
     baseUrl: ""
-    model: ""
+    # What `bundled` serves, or what your endpoint calls its model.
+    # BAAI/bge-reranker-base rather than a larger one: on CPU the reranker
+    # reads twenty passages per question, and this one does that in well
+    # under a second. docs/operations/models.md has the comparison.
+    model: BAAI/bge-reranker-base
     existingSecret: ""
     apiKeyKey: rerank-api-key
     # How many the vector search fetches before reranking. Wider than the
     # answer needs on purpose; the shortlist is what the reranker reads.
+    # The bundled server accepts up to 32 in one call.
     candidates: 20
+    # The same kind of server as `embeddings.bundled`, reachable only from
+    # Retrieval. Turn it off to search without reranking, on a node that
+    # cannot spare the memory.
+    bundled:
+      enabled: true
+      persistence:
+        size: 6Gi
+        storageClass: ""
+      resources:
+        requests:
+          # Bursty - once per search, not once per passage - so less CPU
+          # than the embedder, which carries whole ingestion runs.
+          cpu: "1"
+          memory: 3Gi
+        limits:
+          # Set by the warmup batch, not the model's size: 6Gi was
+          # OOM-killed on load.
+          memory: 10Gi
 
 # --- Vector store -------------------------------------------------------
 #
