@@ -19,9 +19,17 @@ from uuid import UUID
 
 import fsspec
 
+CONVERSIONS = "conversions"
+
 
 class ArtifactStore:
-    """Reads and writes per-generation stage output."""
+    """Reads and writes per-generation stage output.
+
+    It also keeps conversions, which are the exception to keying by
+    generation: a conversion depends only on the source bytes and how they
+    were read, so it is keyed by the source's hash and shared by every
+    version one owner holds of the same content.
+    """
 
     def __init__(self, url: str, *, prefix: str = "artifacts") -> None:
         self._fs, self._root = fsspec.core.url_to_fs(url)
@@ -53,5 +61,32 @@ class ArtifactStore:
         )
         try:
             self._fs.rm(directory, recursive=True)
+        except FileNotFoundError:
+            return
+
+    def _conversions(self, sha256: str, owner: UUID | None = None) -> PurePosixPath:
+        directory = PurePosixPath(self._root, CONVERSIONS, sha256)
+        return directory if owner is None else directory / str(owner)
+
+    def read_conversion(self, sha256: str, owner: UUID, made_with: str) -> bytes | None:
+        """A stored conversion of these bytes, or None if there is none yet."""
+        try:
+            with self._fs.open(
+                str(self._conversions(sha256, owner) / f"{made_with}.json"), "rb"
+            ) as f:
+                return f.read()
+        except FileNotFoundError:
+            return None
+
+    def write_conversion(self, sha256: str, owner: UUID, made_with: str, payload: bytes) -> None:
+        directory = self._conversions(sha256, owner)
+        self._fs.makedirs(str(directory), exist_ok=True)
+        with self._fs.open(str(directory / f"{made_with}.json"), "wb") as handle:
+            handle.write(payload)
+
+    def discard_conversions(self, sha256: str, owner: UUID | None = None) -> None:
+        """Remove one owner's conversions of a source, or everyone's."""
+        try:
+            self._fs.rm(str(self._conversions(sha256, owner)), recursive=True)
         except FileNotFoundError:
             return

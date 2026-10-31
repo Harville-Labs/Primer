@@ -383,22 +383,6 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
-        /** Body_replace_document_api_v1_libraries__library_id__documents__document_id__versions_post */
-        Body_replace_document_api_v1_libraries__library_id__documents__document_id__versions_post: {
-            /**
-             * File
-             * @description The source file to ingest
-             */
-            file: string;
-        };
-        /** Body_upload_document_api_v1_libraries__library_id__documents_post */
-        Body_upload_document_api_v1_libraries__library_id__documents_post: {
-            /**
-             * File
-             * @description The source file to ingest
-             */
-            file: string;
-        };
         /**
          * DependencyStatus
          * @description One thing this deployment talks to.
@@ -898,7 +882,10 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "multipart/form-data": components["schemas"]["Body_upload_document_api_v1_libraries__library_id__documents_post"];
+                "multipart/form-data": {
+                    /** @description The source file to ingest */
+                    file: string;
+                };
             };
         };
         responses: {
@@ -1091,7 +1078,10 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "multipart/form-data": components["schemas"]["Body_replace_document_api_v1_libraries__library_id__documents__document_id__versions_post"];
+                "multipart/form-data": {
+                    /** @description The source file to ingest */
+                    file: string;
+                };
             };
         };
         responses: {

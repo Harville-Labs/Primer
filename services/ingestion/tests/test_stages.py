@@ -376,3 +376,44 @@ def test_a_failed_retirement_does_not_fail_a_finished_job(
             raise RuntimeError("retrieval unreachable")
 
     _after_activation(Broken(settings, artifacts=artifacts, index=RecordingIndex()), claim)
+
+
+def test_cleanup_removes_every_stored_conversion_of_freed_bytes(
+    settings: Settings, artifacts: ArtifactStore, claim: JobClaim
+) -> None:
+    """A conversion is a copy of the document's text and must not outlive its source."""
+    stranger = uuid.uuid4()
+    artifacts.write_conversion("a" * 64, stranger, "md", b"{}")
+    artifacts.write_conversion("d" * 64, stranger, "md", b"{}")
+
+    DeleteStage(
+        settings,
+        control=RecordingControl(freed=["a" * 64]),
+        index=RecordingIndex(),
+        sources=RecordingSources(),
+        artifacts=artifacts,
+    )(delete_claim(claim))
+
+    assert artifacts.read_conversion("a" * 64, stranger, "md") is None
+    # Bytes another document still holds keep their conversion.
+    assert artifacts.read_conversion("d" * 64, stranger, "md") == b"{}"
+
+
+def test_cleanup_removes_the_owners_conversion_of_bytes_still_held(
+    settings: Settings, artifacts: ArtifactStore, claim: JobClaim
+) -> None:
+    """Someone else keeping the same file is no reason to keep this owner's copy."""
+    stranger = uuid.uuid4()
+    artifacts.write_conversion(claim.source_sha256, claim.owner_user_id, "md", b"{}")
+    artifacts.write_conversion(claim.source_sha256, stranger, "md", b"{}")
+
+    DeleteStage(
+        settings,
+        control=RecordingControl(freed=[]),
+        index=RecordingIndex(),
+        sources=RecordingSources(),
+        artifacts=artifacts,
+    )(delete_claim(claim))
+
+    assert artifacts.read_conversion(claim.source_sha256, claim.owner_user_id, "md") is None
+    assert artifacts.read_conversion(claim.source_sha256, stranger, "md") == b"{}"
