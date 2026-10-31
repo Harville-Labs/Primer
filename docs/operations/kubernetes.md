@@ -15,8 +15,7 @@ helm install primer deploy/helm/primer \
   --set inference.chat.baseUrl=http://vllm.ai.svc:8000/v1 \
   --set inference.chat.model=llama-3.1-8b-instruct \
   --set inference.embeddings.baseUrl=http://vllm.ai.svc:8000/v1 \
-  --set inference.embeddings.model=bge-large-en-v1.5 \
-  --set inference.embeddings.dimensions=1024
+  --set inference.embeddings.model=Qwen/Qwen3-Embedding-0.6B
 ```
 
 ## Installing from the registry

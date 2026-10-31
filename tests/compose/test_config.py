@@ -34,7 +34,6 @@ RESOLVE_ENV = {
     "PRIMER_CHAT_MODEL": "test-model",
     "PRIMER_EMBEDDING_BASE_URL": "http://model/v1",
     "PRIMER_EMBEDDING_MODEL": "test-embed",
-    "PRIMER_EMBEDDING_DIMENSIONS": "768",
 }
 
 
@@ -168,23 +167,43 @@ def test_no_model_server_is_bundled(compose_config: dict[str, Any]) -> None:
 
 
 def test_inference_settings_are_required(compose_config: dict[str, Any]) -> None:
-    """A wrong embedding dimension is not detectable later; make it explicit.
+    """The endpoints and the embedding model have no safe default.
 
-    The embedding settings have no safe default and no way to be checked
-    after the fact: a wrong dimension is accepted by everything and shows up
-    as answers that cite nothing, long after the vectors were written. The
-    chat endpoint is required for a different reason - a single-user stack
-    started with nowhere to send a question is a mistake rather than a
-    choice.
+    The embedding model decides the width of every stored vector and the
+    tokenizer chunks are cut with, so a stack started on a guess has to be
+    reindexed later. The chat endpoint is required for a different reason -
+    a single-user stack started with nowhere to send a question is a
+    mistake rather than a choice.
     """
     text = BASE.read_text()
     for variable in (
         "PRIMER_CHAT_BASE_URL",
         "PRIMER_EMBEDDING_BASE_URL",
         "PRIMER_EMBEDDING_MODEL",
-        "PRIMER_EMBEDDING_DIMENSIONS",
     ):
         assert f"${{{variable}:?" in text
+
+
+def test_the_embedding_width_follows_from_the_model(compose_config: dict[str, Any]) -> None:
+    """Required, it was a second place to state what the model name says.
+
+    Retrieval takes the width from its table of known models and refuses to
+    start on an unknown one with none, so Compose need not insist.
+    """
+    assert "${PRIMER_EMBEDDING_DIMENSIONS:?" not in BASE.read_text()
+
+
+def test_both_sides_of_the_index_are_told_the_embedding_model(
+    compose_config: dict[str, Any],
+) -> None:
+    """The worker cuts chunks with the tokenizer of the model Retrieval embeds with.
+
+    Told different models, or only one of them, the chunks it produces are
+    sized for something other than what reads them.
+    """
+    services = compose_config["services"]
+    assert services["worker"]["environment"]["PRIMER_EMBEDDING_MODEL"] == "test-embed"
+    assert services["retrieval"]["environment"]["PRIMER_EMBEDDING_MODEL"] == "test-embed"
 
 
 def test_the_chat_model_is_not_required(compose_config: dict[str, Any]) -> None:

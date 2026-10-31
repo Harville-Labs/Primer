@@ -32,11 +32,10 @@ inference:
     # without it rather than guessing, which is the behaviour you want:
     # mean-pooling this model returns plausible vectors that retrieve badly.
     baseUrl: http://primer-embeddings:8080/v1
+    # Primer knows this export as Qwen3-Embedding-0.6B, so its 1024
+    # dimensions, its query instruction and its tokenizer follow from the
+    # name with nothing else to set.
     model: onnx-community/Qwen3-Embedding-0.6B-ONNX
-    # Must match the model exactly. Not checked at startup - the first
-    # document indexed is what fails - and not changeable afterwards: a
-    # vector column keeps the width it was created with.
-    dimensions: 1024
 
   # A cross-encoder reads the question and a passage together, which a
   # vector search cannot: its two embeddings were made without knowing
@@ -88,9 +87,9 @@ inference:
     model: ""
 
 ingestion:
-  # Empty on purpose. The chart derives the chunk tokenizer from
-  # `inference.embeddings.model` above, which is a Hugging Face id, and a
-  # value here would be a second thing to keep in step with it.
+  # Empty on purpose. The parse worker derives the tokenizer from
+  # `inference.embeddings.model` above, and a value here would be a second
+  # thing to keep in step with it.
   chunkTokenizer: ""
   # A paragraph-sized passage: long enough that a citation reads as prose,
   # short enough that one embedding is about one thing.

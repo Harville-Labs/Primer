@@ -28,7 +28,8 @@ instead of silently keeping a default.
 | `PRIMER_SERVICE_TOKEN` | unset | Must match the services' tokens |
 | `PRIMER_SOURCE_STORE_URL` | `file:///var/lib/primer/sources` | Same store as Control |
 | `PRIMER_ENABLE_OCR` | `true` | Read text from images |
-| `PRIMER_CHUNK_TOKENIZER` | unset | Tokenizer of the embedding model |
+| `PRIMER_EMBEDDING_MODEL` | unset | The model Retrieval embeds with; the parse worker finds its tokenizer from it |
+| `PRIMER_CHUNK_TOKENIZER` | from the model | Set for a hosted model that publishes no tokenizer |
 | `PRIMER_MAX_CHUNK_TOKENS` | `512` | Ignored without a tokenizer |
 | `PRIMER_MAX_CHUNKS_PER_DOCUMENT` | `5000` | Refuse rather than half-index |
 | `PRIMER_PARSE_DEADLINE_SECONDS` | `900` | Checked between phases |
@@ -55,8 +56,10 @@ and says which setting to change, rather than indexing a graph nobody keeps.
 | `PRIMER_DATABASE_URL` | local PostgreSQL | For pgvector |
 | `PRIMER_VECTOR_SCHEMA` | `vectors` | Kept apart from Control's schema |
 | `PRIMER_QDRANT_URL` | unset | **Required** when using Qdrant |
-| `PRIMER_EMBEDDING_MODEL` | `text-embedding-3-small` | |
-| `PRIMER_EMBEDDING_DIMENSIONS` | `1536` | Must match the model |
+| `PRIMER_EMBEDDING_MODEL` | `text-embedding-3-small` | The name your server answers to |
+| `PRIMER_EMBEDDING_DIMENSIONS` | from the model | **Required** for a model Primer does not know |
+| `PRIMER_EMBEDDING_QUERY_PREFIX` | from the model | Prompt put before every query |
+| `PRIMER_EMBEDDING_DOCUMENT_PREFIX` | from the model | Prompt put before every passage |
 | `PRIMER_EMBEDDING_BASE_URL` | unset | Any OpenAI-compatible endpoint |
 | `PRIMER_EMBEDDING_API_KEY` | unset | |
 | `PRIMER_GRAPH_URL` | unset | Neo4j `bolt://` or `neo4j://` URL. Unset turns the knowledge graph off |

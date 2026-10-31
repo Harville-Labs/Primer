@@ -209,7 +209,11 @@ services:
       PRIMER_VECTOR_STORE: ${PRIMER_VECTOR_STORE:-pgvector}
       PRIMER_EMBEDDING_BASE_URL: ${PRIMER_EMBEDDING_BASE_URL:?set PRIMER_EMBEDDING_BASE_URL}
       PRIMER_EMBEDDING_MODEL: ${PRIMER_EMBEDDING_MODEL:?set PRIMER_EMBEDDING_MODEL}
-      PRIMER_EMBEDDING_DIMENSIONS: ${PRIMER_EMBEDDING_DIMENSIONS:?set PRIMER_EMBEDDING_DIMENSIONS}
+      # Empty takes the width and prompts from Primer's table of known
+      # models. Set them for a model it does not know.
+      PRIMER_EMBEDDING_DIMENSIONS: ${PRIMER_EMBEDDING_DIMENSIONS:-}
+      PRIMER_EMBEDDING_QUERY_PREFIX: ${PRIMER_EMBEDDING_QUERY_PREFIX:-}
+      PRIMER_EMBEDDING_DOCUMENT_PREFIX: ${PRIMER_EMBEDDING_DOCUMENT_PREFIX:-}
       PRIMER_EMBEDDING_API_KEY: ${PRIMER_EMBEDDING_API_KEY:-}
       # Empty turns the graph off; search answers from vectors alone.
       PRIMER_GRAPH_URL: ${PRIMER_GRAPH_URL:-}
@@ -282,8 +286,10 @@ services:
       PRIMER_CONTROL_URL: http://control:8000
       PRIMER_RETRIEVAL_URL: http://retrieval:8000
       PRIMER_ENABLE_OCR: ${PRIMER_ENABLE_OCR:-true}
-      # Sizes chunks to the embedding model. Unset, chunking falls back to
-      # document structure alone and a table becomes one chunk per cell.
+      # Chunks are sized with this model's tokenizer, so they fit what
+      # Retrieval embeds them with. PRIMER_CHUNK_TOKENIZER overrides it, for
+      # a hosted model that publishes no tokenizer of its own.
+      PRIMER_EMBEDDING_MODEL: ${PRIMER_EMBEDDING_MODEL:?set PRIMER_EMBEDDING_MODEL}
       PRIMER_CHUNK_TOKENIZER: ${PRIMER_CHUNK_TOKENIZER:-}
       PRIMER_MAX_CHUNK_TOKENS: ${PRIMER_MAX_CHUNK_TOKENS:-512}
       # Reads entities and relations out of each passage for the graph.

@@ -736,40 +736,35 @@ def test_a_measured_floor_reaches_retrieval() -> None:
 # statement is a long list of short ones.
 
 
-def test_the_parse_worker_is_told_the_embedding_models_tokenizer() -> None:
+def test_the_parse_worker_is_told_the_embedding_model() -> None:
     """The whole bug, as one assertion.
 
-    A tokenizer is what lets chunks be bounded by tokens and small pieces
-    merged; without one the worker falls back to structure alone. Nothing
-    downstream reports the difference, so this is the only place it can be
-    caught.
+    The worker finds the model's tokenizer from the name, which is what lets
+    chunks be bounded by tokens and small pieces merged; without it the
+    worker falls back to structure alone. Nothing downstream reports the
+    difference, so this is the only place it can be caught.
     """
-    rendered = render("inference.embeddings.model=Qwen/Qwen3-Embedding-0.6B")
+    rendered = render("inference.embeddings.model=qwen3-embedding:0.6b")
     env = env_of(named(rendered, "Deployment", "-worker-parse"))
 
-    assert env["PRIMER_CHUNK_TOKENIZER"] == "Qwen/Qwen3-Embedding-0.6B"
+    assert env["PRIMER_EMBEDDING_MODEL"] == "qwen3-embedding:0.6b"
     assert env["PRIMER_MAX_CHUNK_TOKENS"] == "512"
 
 
-def test_a_hosted_embedding_model_is_not_guessed_at() -> None:
-    """`text-embedding-3-small` names no repository and has no tokenizer.
+def test_the_chart_does_not_derive_a_tokenizer_itself() -> None:
+    """The worker's table does that, and knows Ollama's names; a template cannot.
 
-    Deriving one anyway would hand the worker a name it cannot fetch, and
-    the worker refuses to start on a tokenizer it cannot load - so guessing
-    here would turn a deployment that ingests badly into one that does not
-    ingest at all.
+    A second derivation here is the copy that drifts: it would hand
+    `nomic-embed-text` to the worker as a repository it cannot fetch.
     """
-    rendered = render("inference.embeddings.model=text-embedding-3-small")
+    rendered = render("inference.embeddings.model=nomic-embed-text")
     env = env_of(named(rendered, "Deployment", "-worker-parse"))
 
     assert "PRIMER_CHUNK_TOKENIZER" not in env
-    # Meaningless without a tokenizer, and emitting it would suggest chunks
-    # are bounded when they are not.
-    assert "PRIMER_MAX_CHUNK_TOKENS" not in env
 
 
 def test_a_tokenizer_can_be_named_when_the_model_does_not_name_one() -> None:
-    """Which is the way out of the case above."""
+    """The way out for a hosted model, which publishes none."""
     rendered = render(
         "inference.embeddings.model=text-embedding-3-small",
         "ingestion.chunkTokenizer=BAAI/bge-m3",
@@ -779,6 +774,35 @@ def test_a_tokenizer_can_be_named_when_the_model_does_not_name_one() -> None:
 
     assert env["PRIMER_CHUNK_TOKENIZER"] == "BAAI/bge-m3"
     assert env["PRIMER_MAX_CHUNK_TOKENS"] == "1024"
+
+
+def test_retrieval_takes_the_width_and_prompts_from_the_model() -> None:
+    """Emitting a chart default would override the model's own values.
+
+    The chart once defaulted the width to 1536, which was right for one
+    hosted model and wrong for every self-hosted one.
+    """
+    rendered = render("inference.embeddings.model=Qwen/Qwen3-Embedding-0.6B")
+    env = env_of(named(rendered, "Deployment", "-retrieval"))
+
+    assert env["PRIMER_EMBEDDING_MODEL"] == "Qwen/Qwen3-Embedding-0.6B"
+    assert "PRIMER_EMBEDDING_DIMENSIONS" not in env
+    assert "PRIMER_EMBEDDING_QUERY_PREFIX" not in env
+    assert "PRIMER_EMBEDDING_DOCUMENT_PREFIX" not in env
+
+
+def test_an_unknown_model_can_be_described() -> None:
+    rendered = render(
+        "inference.embeddings.model=someone/their-own-finetune",
+        "inference.embeddings.dimensions=1024",
+        "inference.embeddings.queryPrefix=query: ",
+        "inference.embeddings.documentPrefix=passage: ",
+    )
+    env = env_of(named(rendered, "Deployment", "-retrieval"))
+
+    assert env["PRIMER_EMBEDDING_DIMENSIONS"] == "1024"
+    assert env["PRIMER_EMBEDDING_QUERY_PREFIX"] == "query: "
+    assert env["PRIMER_EMBEDDING_DOCUMENT_PREFIX"] == "passage: "
 
 
 def test_the_parse_worker_is_told_when_to_join_fragments() -> None:
@@ -797,14 +821,13 @@ def test_the_parse_worker_is_told_when_to_join_fragments() -> None:
 def test_fragments_are_joined_even_without_a_tokenizer() -> None:
     """The case that needs it most, so it is the one that must not skip it.
 
-    The chunk ceiling is meaningless without a tokenizer and is left out
-    with it. This is not: the structural fallback merges nothing at all, so
-    it produces the most fragments of any configuration.
+    A hosted model with no tokenizer named falls back to structural
+    chunking, which merges nothing at all and so produces the most
+    fragments of any configuration.
     """
     rendered = render("inference.embeddings.model=text-embedding-3-small")
     env = env_of(named(rendered, "Deployment", "-worker-parse"))
 
-    assert "PRIMER_CHUNK_TOKENIZER" not in env
     assert env["PRIMER_MIN_CHUNK_CHARS"] == "40"
 
 
@@ -821,10 +844,14 @@ def test_joining_fragments_can_be_switched_off() -> None:
 
 def test_only_the_worker_that_chunks_downloads_a_tokenizer() -> None:
     """The index worker embeds what parse already split. It needs none."""
-    rendered = render("inference.embeddings.model=Qwen/Qwen3-Embedding-0.6B")
+    rendered = render(
+        "inference.embeddings.model=text-embedding-3-small",
+        "ingestion.chunkTokenizer=BAAI/bge-m3",
+    )
     env = env_of(named(rendered, "Deployment", "-worker-index"))
 
     assert "PRIMER_CHUNK_TOKENIZER" not in env
+    assert "PRIMER_EMBEDDING_MODEL" not in env
 
 
 def test_the_parse_worker_is_told_how_many_pictures_to_read() -> None:
