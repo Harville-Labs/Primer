@@ -63,6 +63,16 @@ class Settings(BaseSettings):
         gt=0,
         description="Chunks per index call; bounds embedding cost lost to one timeout",
     )
+    #: Batches of one document sent to Retrieval at once. Embedding is a
+    #: network round trip, so one call at a time leaves the model server
+    #: idle while each response travels back and the next request is built.
+    #: Multiplied by the worker's concurrency, this is what the embedding
+    #: endpoint sees in flight.
+    index_concurrency: int = Field(
+        default=4,
+        gt=0,
+        description="Index calls one document has in flight at once",
+    )
 
     enable_ocr: bool = Field(
         default=True,

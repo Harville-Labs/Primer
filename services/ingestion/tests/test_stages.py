@@ -162,7 +162,7 @@ def test_chunks_are_sent_in_bounded_batches(
 
     EmbedStage(settings, artifacts=artifacts, index=index)(claim)
 
-    assert [len(request.chunks) for request in index.requests] == [2, 2, 1]
+    assert sorted(len(request.chunks) for request in index.requests) == [1, 2, 2]
 
 
 def test_embedding_without_parsed_chunks_fails_permanently(
@@ -219,8 +219,8 @@ def test_each_batch_is_extracted_into_the_same_pending_generation(
 
     EmbedStage(settings, artifacts=artifacts, index=index, extractor=extractor)(claim)
 
-    assert [len(batch) for batch in extractor.batches] == [2, 1]
-    assert [len(request.graphs) for request in index.graph_requests] == [2, 1]
+    assert sorted(len(batch) for batch in extractor.batches) == [1, 2]
+    assert sorted(len(request.graphs) for request in index.graph_requests) == [1, 2]
     assert {request.generation_id for request in index.graph_requests} == {GENERATION}
     assert {request.library_id for request in index.graph_requests} == {LIBRARY}
 
