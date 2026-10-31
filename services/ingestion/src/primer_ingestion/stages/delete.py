@@ -67,8 +67,14 @@ class DeleteStage:
 
         freed = self._control.purge(claim.job_id)
 
+        # The owner's conversion goes even when the bytes stay: it is a copy
+        # of their text, and another holder of the same bytes cannot read it.
+        # If the owner still has another copy, its next parse converts again.
+        self._artifacts.discard_conversions(claim.source_sha256, claim.owner_user_id)
+
         # Last, and only for hashes the database says nothing references.
         for sha256 in freed:
+            self._artifacts.discard_conversions(sha256)
             self._sources.remove(sha256)
         self._artifacts.discard_generation(claim.document_version_id, claim.generation_id)
 

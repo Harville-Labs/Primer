@@ -19,6 +19,7 @@ import stat
 import time
 from collections.abc import Generator
 from contextlib import contextmanager
+from importlib.metadata import version
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -28,6 +29,7 @@ from docling.datamodel.document import ConversionStatus
 from docling.datamodel.pipeline_options import PdfPipelineOptions
 from docling.document_converter import DocumentConverter, PdfFormatOption
 from docling_core.transforms.chunker import BaseChunker
+from docling_core.types.doc import DoclingDocument
 from primer_contracts.chunks import DocumentChunk
 from primer_storage import DOCX_MEDIA_TYPE, PDF_MEDIA_TYPE, PPTX_MEDIA_TYPE
 
@@ -58,6 +60,8 @@ EXTENSIONS: dict[InputFormat, str] = {
     InputFormat.PPTX: ".pptx",
     InputFormat.MD: ".md",
 }
+
+DOCLING_VERSION = version("docling")
 
 
 def build_converter(
@@ -186,10 +190,28 @@ class DocumentParser:
             )
         return input_format
 
+    def conversion_key(self, media_type: str) -> str:
+        """What a stored conversion must have been made with to be reused.
+
+        The format, Docling's version, and whether OCR ran: each changes
+        what comes out of the same bytes. Device and thread count do not,
+        and leaving them out lets a GPU worker reuse what a CPU one made.
+        """
+        ocr = "ocr" if self._settings.enable_ocr else "no-ocr"
+        return f"{self.format_for(media_type).value}-docling-{DOCLING_VERSION}-{ocr}"
+
     def parse_and_chunk(
         self, source: Path, context: DocumentContext, *, media_type: str
     ) -> list[DocumentChunk]:
-        """Convert a stored source into scoped chunks.
+        """Convert a stored source into scoped chunks."""
+        started = time.monotonic()
+        document = self.convert(source, context, media_type=media_type, started=started)
+        return self.chunk(document, context, started=started)
+
+    def convert(
+        self, source: Path, context: DocumentContext, *, media_type: str, started: float
+    ) -> DoclingDocument:
+        """Convert a stored source into Docling's document, pictures read.
 
         The deadline is checked between phases rather than enforced by
         interrupting the converter. Docling's work happens inside native
@@ -198,7 +220,6 @@ class DocumentParser:
         the process and lets the job's lease expire.
         """
         input_format = self.format_for(media_type)
-        started = time.monotonic()
 
         with working_copy(source, EXTENSIONS[input_format]) as copy:
             try:
@@ -227,17 +248,22 @@ class DocumentParser:
                         "read text from %d picture(s) in %s", read, context.document_version_id
                     )
                 self._check_deadline(started, "read pictures")
+            return result.document
 
-            chunks = to_chunks(
-                result.document,
-                self.chunker,
-                context,
-                max_chunks=self._settings.max_chunks_per_document,
-                ocr_attempted=self._settings.enable_ocr,
-                min_chars=self._settings.min_chunk_chars,
-            )
-            self._check_deadline(started, "chunking")
-            return chunks
+    def chunk(
+        self, document: DoclingDocument, context: DocumentContext, *, started: float
+    ) -> list[DocumentChunk]:
+        """Split a converted document into chunks scoped to one version."""
+        chunks = to_chunks(
+            document,
+            self.chunker,
+            context,
+            max_chunks=self._settings.max_chunks_per_document,
+            ocr_attempted=self._settings.enable_ocr,
+            min_chars=self._settings.min_chunk_chars,
+        )
+        self._check_deadline(started, "chunking")
+        return chunks
 
     def _check_deadline(self, started: float, phase: str) -> None:
         elapsed = time.monotonic() - started
