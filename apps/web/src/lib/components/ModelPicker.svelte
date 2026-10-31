@@ -2,8 +2,8 @@
 	import { ChevronDown, Cpu, TriangleAlert } from '@lucide/svelte';
 	import { untrack } from 'svelte';
 	import { DropdownMenu } from '@sivir-ui/svelte';
-	import type { ChatModel } from '$lib/api/types';
-	import { qualify } from '$lib/models';
+	import type { ChatModel } from '#lib/api/types.ts';
+	import { qualify } from '#lib/models.ts';
 
 	interface Props {
 		models: ChatModel[];

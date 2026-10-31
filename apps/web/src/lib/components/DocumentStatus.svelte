@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { Badge } from '@sivir-ui/svelte';
-	import type { IngestionStatus } from '$lib/api/types';
-	import { describeStatus } from '$lib/status';
+	import type { IngestionStatus } from '#lib/api/types.ts';
+	import { describeStatus } from '#lib/status.ts';
 
 	interface Props {
 		status: IngestionStatus;

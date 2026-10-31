@@ -1,6 +1,6 @@
-import type { ConversationSummary } from '$lib/api/types';
-import { apiFor } from '$lib/server/api';
-import { chatFor } from '$lib/server/chat';
+import type { ConversationSummary } from '#lib/api/types.ts';
+import { apiFor } from '#lib/server/api.ts';
+import { chatFor } from '#lib/server/chat.ts';
 import type { LayoutServerLoad } from './$types';
 
 export const load: LayoutServerLoad = async ({ request, fetch }) => {

@@ -8,10 +8,10 @@
 		DeploymentCapabilities,
 		LibrarySummary,
 		Principal,
-	} from '$lib/api/types';
-	import AuthModeWarning from '$lib/components/AuthModeWarning.svelte';
-	import ConversationList from '$lib/components/ConversationList.svelte';
-	import ThemeToggle from '$lib/components/ThemeToggle.svelte';
+	} from '#lib/api/types.ts';
+	import AuthModeWarning from '#lib/components/AuthModeWarning.svelte';
+	import ConversationList from '#lib/components/ConversationList.svelte';
+	import ThemeToggle from '#lib/components/ThemeToggle.svelte';
 
 	interface Props {
 		libraries: LibrarySummary[];

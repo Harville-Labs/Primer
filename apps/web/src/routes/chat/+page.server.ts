@@ -1,6 +1,6 @@
-import { ApiError } from '$lib/api/client';
-import type { ChatModelList, ConversationSummary, MessageSummary } from '$lib/api/types';
-import { chatFor } from '$lib/server/chat';
+import { ApiError } from '#lib/api/client.ts';
+import type { ChatModelList, ConversationSummary, MessageSummary } from '#lib/api/types.ts';
+import { chatFor } from '#lib/server/chat.ts';
 import type { PageServerLoad } from './$types';
 
 /**

@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { Alert, Button } from '@sivir-ui/svelte';
-	import type { DeploymentCapabilities } from '$lib/api/types';
-	import { describeAccepted, rejectionFor } from '$lib/upload';
+	import type { DeploymentCapabilities } from '#lib/api/types.ts';
+	import { describeAccepted, rejectionFor } from '#lib/upload.ts';
 
 	interface Props {
 		capabilities: DeploymentCapabilities;

@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { Library, Link2Off } from '@lucide/svelte';
 	import { DropdownMenu } from '@sivir-ui/svelte';
-	import type { LibrarySummary } from '$lib/api/types';
+	import type { LibrarySummary } from '#lib/api/types.ts';
 
 	interface Props {
 		libraries: LibrarySummary[];

@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
-import type { DeploymentCapabilities } from '$lib/api/types';
+import type { DeploymentCapabilities } from '#lib/api/types.ts';
 import UploadDropzone from './UploadDropzone.svelte';
 
 const capabilities: DeploymentCapabilities = {

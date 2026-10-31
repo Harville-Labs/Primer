@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { Button } from '@sivir-ui/svelte';
-	import type { MessageSummary } from '$lib/api/types';
-	import CopyAction from '$lib/components/CopyAction.svelte';
-	import { copyResponseText, exportResponseMarkdown } from '$lib/export/markdown';
+	import type { MessageSummary } from '#lib/api/types.ts';
+	import CopyAction from '#lib/components/CopyAction.svelte';
+	import { copyResponseText, exportResponseMarkdown } from '#lib/export/markdown.ts';
 
 	interface Props {
 		message: MessageSummary;

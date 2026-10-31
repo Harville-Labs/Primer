@@ -1,6 +1,6 @@
 import { error, fail } from '@sveltejs/kit';
-import { ApiError } from '$lib/api/client';
-import { apiFor } from '$lib/server/api';
+import { ApiError } from '#lib/api/client.ts';
+import { apiFor } from '#lib/server/api.ts';
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ params, parent, request, fetch }) => {

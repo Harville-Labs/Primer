@@ -14,19 +14,19 @@
 	import { afterNavigate, goto, invalidateAll, replaceState } from '$app/navigation';
 	import { page } from '$app/state';
 	import { untrack } from 'svelte';
-	import CitationPanel from '$lib/components/CitationPanel.svelte';
-	import LibraryLink from '$lib/components/LibraryLink.svelte';
-	import ModelPicker from '$lib/components/ModelPicker.svelte';
-	import ResponseActions from '$lib/components/ResponseActions.svelte';
-	import { parseEvents, type StreamState } from '$lib/api/sse';
-	import type { ConversationSummary, MessageSummary } from '$lib/api/types';
-	import { formatBytes, rejectionFor } from '$lib/upload';
-	import { draft } from '$lib/draft.svelte';
-	import { modelOf, unqualify } from '$lib/models';
-	import { citationFrom, linkCitations } from '$lib/citations';
-	import { modelChanges } from '$lib/transcript';
-	import { Transcript } from '$lib/transcript.svelte';
-	import { discardLibrary, uploadDocument } from '$lib/upload-client';
+	import CitationPanel from '#lib/components/CitationPanel.svelte';
+	import LibraryLink from '#lib/components/LibraryLink.svelte';
+	import ModelPicker from '#lib/components/ModelPicker.svelte';
+	import ResponseActions from '#lib/components/ResponseActions.svelte';
+	import { parseEvents, type StreamState } from '#lib/api/sse.ts';
+	import type { ConversationSummary, MessageSummary } from '#lib/api/types.ts';
+	import { formatBytes, rejectionFor } from '#lib/upload.ts';
+	import { draft } from '#lib/draft.svelte.ts';
+	import { modelOf, unqualify } from '#lib/models.ts';
+	import { citationFrom, linkCitations } from '#lib/citations.ts';
+	import { modelChanges } from '#lib/transcript.ts';
+	import { Transcript } from '#lib/transcript.svelte.ts';
+	import { discardLibrary, uploadDocument } from '#lib/upload-client.ts';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -595,23 +595,12 @@
 							class="mb-2"
 						>
 							<!--
-							  The folded header carries a line of the thinking
-							  itself. Without a title the kit prints the word
-							  "Draft", which tells a reader nothing about
-							  whether this one is worth opening.
-
-							  That preview is the trigger's last child and
-							  carries no colour of its own, so it inherits the
-							  button's and arrives as loud as the answer. It is
-							  selected directly here because a plain colour on
-							  the trigger loses: the kit merges its own classes
-							  after the caller's, so the caller's is dropped.
+							  Once the answer settles, the folded header carries a
+							  line of the thinking itself. The kit's own settled
+							  label is the elapsed time, which tells a reader
+							  nothing about whether this one is worth opening.
 							-->
-							<Reasoning.Trigger
-								title={thinkingPreview(turn.stream.reasoning)}
-								class="[&>span:last-child]:text-xs [&>span:last-child]:font-normal
-									[&>span:last-child]:text-muted-foreground"
-							/>
+							<Reasoning.Trigger summary={thinkingPreview(turn.stream.reasoning)} />
 							<!--
 							  `overflow-wrap:anywhere` because thinking is where a
 							  model writes out a hash, a path or a URL unbroken,

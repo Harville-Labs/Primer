@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { MessageSummary } from '$lib/api/types';
+import type { MessageSummary } from '#lib/api/types.ts';
 import { copyResponseText, exportResponseMarkdown } from './markdown';
 
 function message(overrides: Partial<MessageSummary> = {}): MessageSummary {

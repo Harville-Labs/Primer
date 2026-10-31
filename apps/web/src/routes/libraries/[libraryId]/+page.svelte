@@ -3,13 +3,13 @@
 	import { invalidateAll } from '$app/navigation';
 	import { RefreshCw, Trash2, Users } from '@lucide/svelte';
 	import { Alert, AlertDialog, Breadcrumb, Button, Spinner } from '@sivir-ui/svelte';
-	import type { DocumentSummary } from '$lib/api/types';
-	import DocumentStatus from '$lib/components/DocumentStatus.svelte';
-	import SharePanel from '$lib/components/SharePanel.svelte';
-	import UploadDropzone from '$lib/components/UploadDropzone.svelte';
-	import { isTerminal, pollDelayMs } from '$lib/status';
-	import { formatBytes } from '$lib/upload';
-	import { uploadDocument } from '$lib/upload-client';
+	import type { DocumentSummary } from '#lib/api/types.ts';
+	import DocumentStatus from '#lib/components/DocumentStatus.svelte';
+	import SharePanel from '#lib/components/SharePanel.svelte';
+	import UploadDropzone from '#lib/components/UploadDropzone.svelte';
+	import { isTerminal, pollDelayMs } from '#lib/status.ts';
+	import { formatBytes } from '#lib/upload.ts';
+	import { uploadDocument } from '#lib/upload-client.ts';
 	import type { ActionData, PageData } from './$types';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();

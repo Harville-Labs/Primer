@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { ChatModel } from '$lib/api/types';
+import type { ChatModel } from '#lib/api/types.ts';
 import { modelOf, qualify, unqualify } from './models';
 
 /**
