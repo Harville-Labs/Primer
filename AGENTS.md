@@ -263,6 +263,8 @@ difference is the whole content of the message someone reads.
   application startup** — the chart runs them as a pre-install hook.
 - Kubernetes for shared deployments; Docker Compose for local single-user
   ones. Image files are `deploy/images/Dockerfile.python`,
-  `Dockerfile.worker`, and `Dockerfile.gui`.
+  `Dockerfile.worker`, and `Dockerfile.gui`, plus `Dockerfile.lab` for the
+  optional Lab service, the one component that loads a generation model
+  itself. See [ADR 0005](docs/adr/0005-lab-local-research-model.md).
 - **Compose provides no authentication.** Auth is reserved for Kubernetes
   deployments.
