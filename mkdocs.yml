@@ -87,6 +87,7 @@ nav:
           - Bundled PostgreSQL: adr/0003-bundle-postgresql.md
           - Qdrant only: adr/0004-qdrant-only.md
           - Lab local research model: adr/0005-lab-local-research-model.md
+          - Library-wide questions: adr/0006-library-wide-questions-from-passages.md
   - Operations:
       - Configuration: operations/configuration.md
       - Connecting model providers: operations/providers.md
