@@ -189,6 +189,27 @@ def no_graph_store(consequence: str) -> ProblemError:
     )
 
 
+def too_many_mentions(limit: int) -> ProblemError:
+    """A library too large to cluster for a library-wide question.
+
+    A 4xx with its own code, because asking again gets the same answer and
+    the caller has to tell it apart from a malformed request. Not answered
+    from a focused search instead: the user asked about the whole library,
+    and an answer about one corner of it would look like what they asked
+    for.
+    """
+    return ProblemError(
+        code=ErrorCode.QUOTA_EXCEEDED,
+        title="Library too large to ask across",
+        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+        detail=(
+            f"This library's passages mention entities more than {limit:,} times, which is "
+            "more than this deployment will group into topics. Ask a focused question "
+            "instead, or ask an operator to raise PRIMER_GRAPH_COMMUNITY_MAX_MENTIONS."
+        ),
+    )
+
+
 @contextmanager
 def graph_store(consequence: str) -> Generator[None]:
     """Mark a block that cannot run without the knowledge graph.

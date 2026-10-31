@@ -72,6 +72,8 @@ and says which setting to change, rather than indexing a graph nobody keeps.
 | `PRIMER_GRAPH_DATABASE` | `neo4j` | Community edition has only this one |
 | `PRIMER_GRAPH_TIMEOUT_SECONDS` | `30` | Per transaction, and for connecting |
 | `PRIMER_GRAPH_HOPS` | `2` | How far search follows relations from the entities a question names. `0` to `2` |
+| `PRIMER_GRAPH_COMMUNITIES` | `16` | Topics a library-wide question draws passages from. `1` to `100` |
+| `PRIMER_GRAPH_COMMUNITY_MAX_MENTIONS` | `200000` | Largest library a library-wide question is answered for, counted in entity mentions. About 1 KB of Retrieval memory each |
 | `PRIMER_GRAPH_CANDIDATES` | `20` | Passages the graph adds to a search before fusion |
 | `PRIMER_INTERNAL_API_TOKEN` | unset | **Unset denies the internal API** |
 
