@@ -3,10 +3,10 @@
 	import { page } from '$app/state';
 	import { Library, Link2Off, Trash2, TriangleAlert } from '@lucide/svelte';
 	import { Button, Spinner } from '@sivir-ui/svelte';
-	import type { ConversationSummary, LibrarySummary } from '$lib/api/types';
-	import { draft } from '$lib/draft.svelte';
-	import { notify } from '$lib/notifications.svelte';
-	import { exactly, timeAgo } from '$lib/when';
+	import type { ConversationSummary, LibrarySummary } from '#lib/api/types.ts';
+	import { draft } from '#lib/draft.svelte.ts';
+	import { notify } from '#lib/notifications.svelte.ts';
+	import { exactly, timeAgo } from '#lib/when.ts';
 
 	interface Props {
 		conversations: ConversationSummary[];

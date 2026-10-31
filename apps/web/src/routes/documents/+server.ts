@@ -1,8 +1,8 @@
 import { json } from '@sveltejs/kit';
-import { ApiError } from '$lib/api/client';
-import type { LibrarySummary } from '$lib/api/types';
-import { apiFor } from '$lib/server/api';
-import { libraryNameFor } from '$lib/upload';
+import { ApiError } from '#lib/api/client.ts';
+import type { LibrarySummary } from '#lib/api/types.ts';
+import { apiFor } from '#lib/server/api.ts';
+import { libraryNameFor } from '#lib/upload.ts';
 import type { RequestHandler } from './$types';
 
 /**

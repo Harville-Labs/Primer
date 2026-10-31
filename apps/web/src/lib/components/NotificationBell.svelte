@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { Bell } from '@lucide/svelte';
 	import { Popover } from '@sivir-ui/svelte';
-	import { markAllRead, notifications, unreadCount } from '$lib/notifications.svelte';
+	import { markAllRead, notifications, unreadCount } from '#lib/notifications.svelte.ts';
 
 	let open = $state(false);
 

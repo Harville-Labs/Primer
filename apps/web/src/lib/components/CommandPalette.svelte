@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { Command } from '@sivir-ui/svelte';
-	import type { DeploymentCapabilities, LibrarySummary } from '$lib/api/types';
+	import type { DeploymentCapabilities, LibrarySummary } from '#lib/api/types.ts';
 
 	interface Props {
 		libraries: LibrarySummary[];

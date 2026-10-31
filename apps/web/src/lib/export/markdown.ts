@@ -1,4 +1,4 @@
-import type { Citation, MessageSummary } from '$lib/api/types';
+import type { Citation, MessageSummary } from '#lib/api/types.ts';
 
 /**
  * Turning an answer into something a person can paste elsewhere.

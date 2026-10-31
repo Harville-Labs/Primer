@@ -1,7 +1,7 @@
 import { error } from '@sveltejs/kit';
-import { ApiError } from '$lib/api/client';
-import { downloadHeaders } from '$lib/download';
-import { apiFor } from '$lib/server/api';
+import { ApiError } from '#lib/api/client.ts';
+import { downloadHeaders } from '#lib/download.ts';
+import { apiFor } from '#lib/server/api.ts';
 import type { RequestHandler } from './$types';
 
 /**

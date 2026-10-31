@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { Monitor, Moon, Sun } from '@lucide/svelte';
 	import { DropdownMenu } from '@sivir-ui/svelte';
-	import { applyMode, isMode, type Mode, readStoredMode, storeMode } from '$lib/theme/mode';
+	import { applyMode, isMode, type Mode, readStoredMode, storeMode } from '#lib/theme/mode.ts';
 
 	// Starts at the server's assumption and corrects on mount: the stored
 	// choice lives in the browser, so the server cannot render it.

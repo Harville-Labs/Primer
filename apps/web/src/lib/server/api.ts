@@ -1,5 +1,5 @@
-import { env } from '$env/dynamic/private';
-import { PrimerApi } from '$lib/api/client';
+import { PrimerApi } from '#lib/api/client.ts';
+import { PRIMER_CONTROL_URL } from '$app/env/private';
 
 /**
  * The server's connection to Control.
@@ -22,7 +22,7 @@ export function apiFor(request: Request, fetch: typeof globalThis.fetch): Primer
 	}
 
 	return new PrimerApi({
-		baseUrl: env.PRIMER_CONTROL_URL ?? 'http://localhost:8000',
+		baseUrl: PRIMER_CONTROL_URL,
 		fetch: (input, init = {}) => {
 			const headers = new Headers(init.headers);
 			for (const [name, value] of forwarded) headers.set(name, value);

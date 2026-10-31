@@ -1,6 +1,6 @@
 import { fail } from '@sveltejs/kit';
-import { ApiError } from '$lib/api/client';
-import { apiFor } from '$lib/server/api';
+import { ApiError } from '#lib/api/client.ts';
+import { apiFor } from '#lib/server/api.ts';
 import type { Actions } from './$types';
 
 export const actions: Actions = {

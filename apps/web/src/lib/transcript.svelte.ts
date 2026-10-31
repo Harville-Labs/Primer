@@ -1,6 +1,6 @@
-import { emptyStream, type RawEvent, reduce, type StreamState } from '$lib/api/sse';
-import type { MessageSummary } from '$lib/api/types';
-import { type Turn, turnsFrom } from '$lib/transcript';
+import { emptyStream, type RawEvent, reduce, type StreamState } from '#lib/api/sse.ts';
+import type { MessageSummary } from '#lib/api/types.ts';
+import { type Turn, turnsFrom } from '#lib/transcript.ts';
 
 /**
  * The turns on screen, and the one still being written.

@@ -1,6 +1,6 @@
 import { error, json } from '@sveltejs/kit';
-import { ApiError } from '$lib/api/client';
-import { chatFor } from '$lib/server/chat';
+import { ApiError } from '#lib/api/client.ts';
+import { chatFor } from '#lib/server/chat.ts';
 import type { RequestHandler } from './$types';
 
 /**

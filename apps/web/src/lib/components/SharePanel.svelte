@@ -2,7 +2,7 @@
 	import { enhance } from '$app/forms';
 	import { Trash2, UserPlus } from '@lucide/svelte';
 	import { Alert, Button } from '@sivir-ui/svelte';
-	import type { LibraryShare } from '$lib/api/types';
+	import type { LibraryShare } from '#lib/api/types.ts';
 
 	interface Props {
 		shares: LibraryShare[];

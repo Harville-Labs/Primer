@@ -1,8 +1,8 @@
 import { error, fail } from '@sveltejs/kit';
-import { ApiError } from '$lib/api/client';
-import type { DeploymentStatus, ProviderSummary } from '$lib/api/types';
-import { apiFor } from '$lib/server/api';
-import { chatFor } from '$lib/server/chat';
+import { ApiError } from '#lib/api/client.ts';
+import type { DeploymentStatus, ProviderSummary } from '#lib/api/types.ts';
+import { apiFor } from '#lib/server/api.ts';
+import { chatFor } from '#lib/server/chat.ts';
 import type { Actions, PageServerLoad } from './$types';
 
 /**

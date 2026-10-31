@@ -1,4 +1,4 @@
-import { env } from '$env/dynamic/private';
+import { PRIMER_CHAT_URL } from '$app/env/private';
 import type { RequestHandler } from './$types';
 
 /**
@@ -31,7 +31,7 @@ export const POST: RequestHandler = async ({ request, fetch }) => {
 		});
 	}
 
-	const base = env.PRIMER_CHAT_URL ?? 'http://localhost:8100';
+	const base = PRIMER_CHAT_URL;
 	// A first question opens a conversation; every one after it continues
 	// that conversation, which is what lets the model see the turns before
 	// it. The library is fixed when the conversation opens and is not sent

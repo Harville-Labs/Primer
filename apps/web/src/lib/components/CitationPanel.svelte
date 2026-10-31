@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { Badge, Card, Sheet } from '@sivir-ui/svelte';
-	import type { Citation } from '$lib/api/types';
-	import { describeCitation } from '$lib/export/markdown';
+	import type { Citation } from '#lib/api/types.ts';
+	import { describeCitation } from '#lib/export/markdown.ts';
 
 	interface Props {
 		citations: Citation[];

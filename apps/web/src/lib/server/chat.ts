@@ -1,5 +1,5 @@
-import { env } from '$env/dynamic/private';
-import { ChatApi } from '$lib/api/chat-client';
+import { ChatApi } from '#lib/api/chat-client.ts';
+import { PRIMER_CHAT_URL } from '$app/env/private';
 
 /**
  * The server's connection to Chat.
@@ -21,7 +21,7 @@ export function chatFor(request: Request, fetch: typeof globalThis.fetch): ChatA
 	}
 
 	return new ChatApi({
-		baseUrl: env.PRIMER_CHAT_URL ?? 'http://localhost:8100',
+		baseUrl: PRIMER_CHAT_URL,
 		fetch: (input, init = {}) => {
 			const headers = new Headers(init.headers);
 			for (const [name, value] of forwarded) headers.set(name, value);

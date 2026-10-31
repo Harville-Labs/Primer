@@ -1,5 +1,5 @@
-import { emptyStream, type StreamState } from '$lib/api/sse';
-import type { MessageSummary } from '$lib/api/types';
+import { emptyStream, type StreamState } from '#lib/api/sse.ts';
+import type { MessageSummary } from '#lib/api/types.ts';
 
 /**
  * Reading a stored conversation back onto the screen.

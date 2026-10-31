@@ -7,7 +7,7 @@
  * anyone.
  */
 
-import type { DocumentSummary } from '$lib/api/types';
+import type { DocumentSummary } from '#lib/api/types.ts';
 
 export interface UploadResult {
 	libraryId: string;
