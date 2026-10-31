@@ -1,16 +1,27 @@
-"""Lab's status, and choosing its model."""
+"""Lab's status, choosing its model, and inspecting a prompt."""
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 from fastapi import APIRouter, Request, status
 from primer_contracts.errors import ErrorCode
-from primer_contracts.lab import LabStatus, LoadModelRequest
+from primer_contracts.lab import (
+    ActivationRequest,
+    ActivationVector,
+    InspectRequest,
+    InspectResponse,
+    LabStatus,
+    LoadModelRequest,
+    PromptInput,
+)
 from primer_service.errors import ProblemError
 
 from primer_lab.config import Settings
-from primer_lab.host import ModelHost, SwitchInProgress
+from primer_lab.host import ModelHost, Resident, SwitchInProgress
 from primer_lab.identity import CurrentPrincipal, can_choose_model
-from primer_lab.queue import RunQueue
+from primer_lab.inspection import Prompt, inspect_prompt, read_activation, tokenize
+from primer_lab.queue import QueueFull, RunQueue, RunTimedOut
 from primer_lab.sources import ModelUnavailable
 
 router = APIRouter(prefix="/api/v1/lab", tags=["lab"])
@@ -78,3 +89,147 @@ async def choose_model(
             detail=str(error),
         ) from None
     return _status(request, True)
+
+
+class ModelChanged(RuntimeError):
+    """The resident model was replaced while a run waited for its turn."""
+
+
+def _resident(request: Request) -> Resident:
+    host: ModelHost = request.app.state.host
+    if host.resident is None:
+        raise ProblemError(
+            code=ErrorCode.CONFLICT,
+            title="No model is loaded",
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Lab is loading a model, or the last load failed. Try again once its "
+            "status says it is ready, or choose another model.",
+        )
+    return host.resident
+
+
+def _prompt(request: Request, resident: Resident, body: PromptInput) -> Prompt:
+    """Tokenize before queueing, so a prompt that is too long never waits to be refused."""
+    settings: Settings = request.app.state.settings
+    prompt = tokenize(resident.loaded.model.tokenizer, body.prompt, chat=body.chat)
+    if len(prompt.ids) > settings.lab_max_prompt_tokens:
+        raise ProblemError(
+            code=ErrorCode.VALIDATION_FAILED,
+            title="The prompt is too long",
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=f"It is {len(prompt.ids)} tokens"
+            + (" with the chat template" if prompt.chat_template else "")
+            + f", and this Lab reads at most {settings.lab_max_prompt_tokens} "
+            "(PRIMER_LAB_MAX_PROMPT_TOKENS).",
+        )
+    return prompt
+
+
+async def _run[T](request: Request, resident: Resident, work: Callable[[], T]) -> T:
+    """Run `work` on the queue against `resident`, with every failure named."""
+    settings: Settings = request.app.state.settings
+    host: ModelHost = request.app.state.host
+    queue: RunQueue = request.app.state.queue
+
+    def guarded() -> T:
+        # A switch loads through this same queue, so by the time this run
+        # starts the model it was tokenized for may have gone. Running it
+        # anyway would read token ids through a different vocabulary.
+        if host.resident is not resident:
+            raise ModelChanged
+        return work()
+
+    try:
+        return await queue.run(guarded, limit_seconds=settings.lab_run_timeout_seconds)
+    except ModelChanged:
+        raise ProblemError(
+            code=ErrorCode.CONFLICT,
+            title="The model changed",
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Someone switched Lab to another model while this run waited. Run it again "
+            "to read it on the new one.",
+        ) from None
+    except QueueFull as error:
+        raise ProblemError(
+            code=ErrorCode.QUOTA_EXCEEDED,
+            title="Lab is busy",
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"{error.waiting} runs are already waiting. Try again shortly.",
+        ) from None
+    except RunTimedOut as error:
+        raise ProblemError(
+            code=ErrorCode.QUOTA_EXCEEDED,
+            title="The run took too long",
+            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+            detail=f"It ran past {error.seconds:.0f}s (PRIMER_LAB_RUN_TIMEOUT_SECONDS) and was "
+            "abandoned. A shorter prompt runs faster; trying again will not.",
+        ) from None
+
+
+@router.post(
+    "/inspect",
+    summary="Read the logit lens and top MLP neurons for a prompt",
+    description=(
+        "Runs the prompt through the resident model once and returns, for every layer and "
+        "position, the residual stream's norm, the logit lens's likeliest tokens, and the "
+        "MLP neurons with the largest activations. Summaries, not raw activations: read "
+        "one whole vector with the activation route."
+    ),
+)
+async def inspect(
+    request: Request, body: InspectRequest, principal: CurrentPrincipal
+) -> InspectResponse:
+    resident = _resident(request)
+    prompt = _prompt(request, resident, body)
+    model = resident.loaded.model
+    reading = await _run(
+        request, resident, lambda: inspect_prompt(model, prompt, neurons=body.neurons)
+    )
+    return InspectResponse(
+        model=resident.status(),
+        chat_template=prompt.chat_template,
+        tokens=reading.tokens,
+        vocabulary=reading.vocabulary,
+        hidden_size=model.config.hidden_size,
+        mlp_width=model.config.intermediate_size,
+        layers=reading.layers,
+    )
+
+
+@router.post(
+    "/activation",
+    summary="Read one whole activation vector",
+    description=(
+        "The full vector at one site, layer and position of a prompt. A POST rather than a "
+        "GET so the prompt travels in the body, not in a URL that proxies and logs keep."
+    ),
+)
+async def activation(
+    request: Request, body: ActivationRequest, principal: CurrentPrincipal
+) -> ActivationVector:
+    resident = _resident(request)
+    prompt = _prompt(request, resident, body)
+    for name, value, bound in (
+        ("layer", body.layer, resident.loaded.num_layers),
+        ("token", body.token, len(prompt.ids)),
+    ):
+        if value >= bound:
+            raise ProblemError(
+                code=ErrorCode.VALIDATION_FAILED,
+                title=f"No such {name}",
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail=f"The {name} must be below {bound} for this model and prompt.",
+            )
+    model = resident.loaded.model
+    values = await _run(
+        request,
+        resident,
+        lambda: read_activation(model, prompt, layer=body.layer, token=body.token, site=body.site),
+    )
+    return ActivationVector(
+        model=resident.status(),
+        layer=body.layer,
+        token=body.token,
+        site=body.site,
+        values=values,
+    )

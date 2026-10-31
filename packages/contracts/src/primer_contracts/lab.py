@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Annotated, Literal
 
-from pydantic import Field
+from pydantic import ConfigDict, Field
 
 from primer_contracts.base import WireModel
 
@@ -88,3 +88,100 @@ class LabStatus(WireModel):
     queue_depth: int = Field(ge=0)
     max_prompt_tokens: int = Field(ge=1)
     max_new_tokens: int = Field(ge=1)
+
+
+#: How many tokens the logit lens reports at each layer and position.
+LENS_TOP = 5
+#: The most MLP neurons a reading may ask for at each layer and position.
+MAX_NEURONS = 32
+
+#: Whitespace is part of what is being inspected - " world" and "world" are
+#: different tokens - so these models keep strings as they were sent,
+#: rather than stripping them as every other wire model does.
+VERBATIM = ConfigDict(str_strip_whitespace=False)
+
+
+class PromptInput(WireModel):
+    model_config = VERBATIM
+
+    prompt: str = Field(min_length=1, max_length=100_000)
+    #: Wrap the prompt in the model's chat template, as a chat turn from the
+    #: user, when its tokenizer has one. A base model has none, and reads
+    #: the prompt as it is either way.
+    chat: bool = True
+
+
+class InspectRequest(PromptInput):
+    neurons: int = Field(default=8, ge=1, le=MAX_NEURONS)
+
+
+class InspectedToken(WireModel):
+    model_config = VERBATIM
+
+    id: int = Field(ge=0)
+    text: str
+    #: Added by the tokenizer or the chat template rather than written by
+    #: the user, so a reader can tell the prompt from its wrapping.
+    special: bool
+
+
+class LayerReadings(WireModel):
+    """One layer's summary at every position, as parallel arrays.
+
+    Indexed by token position first. Columns rather than an object per
+    position, because a full-length prompt on a 36-layer model is about
+    eighteen thousand of them, and naming every field in every one roughly
+    doubles a response that is already the largest Lab sends.
+    """
+
+    #: The L2 norm of the residual stream after this layer.
+    residual_norm: list[float]
+    #: The logit lens: the LENS_TOP likeliest next tokens if the model
+    #: stopped here, read through its final norm and unembedding.
+    lens_tokens: list[list[int]]
+    lens_probabilities: list[list[float]]
+    #: The MLP neurons with the largest activation by magnitude, read where
+    #: they enter the down projection. Activations keep their sign.
+    neuron_indices: list[list[int]]
+    neuron_activations: list[list[float]]
+
+
+class InspectResponse(WireModel):
+    """What a prompt does inside the resident model.
+
+    Bounded by its shape: num_layers x tokens x (LENS_TOP + neurons) values,
+    with tokens at most the deployment's max_prompt_tokens and neurons at
+    most MAX_NEURONS.
+    """
+
+    model_config = VERBATIM
+
+    model: LabModelStatus
+    chat_template: bool = Field(description="Whether the chat template was applied")
+    tokens: list[InspectedToken]
+    #: The text of every token the lens names, once each.
+    vocabulary: dict[int, str]
+    hidden_size: int = Field(ge=1)
+    mlp_width: int = Field(ge=1)
+    #: Indexed by layer, first layer first.
+    layers: list[LayerReadings]
+
+
+#: Where in a layer an activation vector is read. resid_post is the
+#: residual stream after the layer; mlp_neuron the MLP's neurons, its
+#: intermediate width; mlp_out and attn_out what each block adds.
+ActivationSite = Literal["resid_post", "mlp_neuron", "mlp_out", "attn_out"]
+
+
+class ActivationRequest(PromptInput):
+    layer: int = Field(ge=0)
+    token: int = Field(ge=0, description="Position in the inspected tokens")
+    site: ActivationSite
+
+
+class ActivationVector(WireModel):
+    model: LabModelStatus
+    layer: int
+    token: int
+    site: ActivationSite
+    values: list[float]

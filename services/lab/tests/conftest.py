@@ -9,44 +9,18 @@ a fake model would not prove anything about.
 from __future__ import annotations
 
 import shutil
+from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
 import httpx
 import pytest
-import torch
+from fastapi.testclient import TestClient
 from huggingface_hub.errors import RepositoryNotFoundError
 from huggingface_hub.utils import filter_repo_objects
+from lab_support import TINY, build_tiny_model, lab, settle
 from nnterp import StandardizedTransformer
 from primer_lab.sources import Listing
-from tokenizers import Tokenizer, models, pre_tokenizers
-from transformers import PreTrainedTokenizerFast, Qwen3Config, Qwen3ForCausalLM
-
-TINY = "tiny"
-
-
-def build_tiny_model(directory: Path, *, seed: int = 0) -> Path:
-    vocab = {f"w{i}": i for i in range(60)} | {"<unk>": 60, "<eos>": 61, "hello": 62, "world": 63}
-    tokenizer = Tokenizer(models.WordLevel(vocab=vocab, unk_token="<unk>"))
-    tokenizer.pre_tokenizer = pre_tokenizers.Whitespace()
-    config = Qwen3Config(
-        vocab_size=64,
-        hidden_size=16,
-        intermediate_size=32,
-        num_hidden_layers=2,
-        num_attention_heads=2,
-        num_key_value_heads=1,
-        head_dim=8,
-        max_position_embeddings=64,
-        eos_token_id=61,
-        pad_token_id=61,
-    )
-    torch.manual_seed(seed)
-    Qwen3ForCausalLM(config).save_pretrained(directory, safe_serialization=True)
-    PreTrainedTokenizerFast(
-        tokenizer_object=tokenizer, unk_token="<unk>", eos_token="<eos>", pad_token="<eos>"
-    ).save_pretrained(directory)
-    return directory
 
 
 @pytest.fixture(scope="session")
@@ -140,3 +114,10 @@ def make_model(tmp_path: Path):
         return build_tiny_model(tmp_path / name, seed=seed)
 
     return make
+
+
+@pytest.fixture
+def client(weights_dir, hub, factory) -> Iterator[TestClient]:
+    with lab(weights_dir, hub, factory) as client:
+        settle(client)
+        yield client

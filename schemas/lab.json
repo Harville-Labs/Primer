@@ -1,6 +1,93 @@
 {
   "components": {
     "schemas": {
+      "ActivationRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "chat": {
+            "default": true,
+            "title": "Chat",
+            "type": "boolean"
+          },
+          "layer": {
+            "minimum": 0.0,
+            "title": "Layer",
+            "type": "integer"
+          },
+          "prompt": {
+            "maxLength": 100000,
+            "minLength": 1,
+            "title": "Prompt",
+            "type": "string"
+          },
+          "site": {
+            "enum": [
+              "resid_post",
+              "mlp_neuron",
+              "mlp_out",
+              "attn_out"
+            ],
+            "title": "Site",
+            "type": "string"
+          },
+          "token": {
+            "description": "Position in the inspected tokens",
+            "minimum": 0.0,
+            "title": "Token",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "prompt",
+          "layer",
+          "token",
+          "site"
+        ],
+        "title": "ActivationRequest",
+        "type": "object"
+      },
+      "ActivationVector": {
+        "additionalProperties": false,
+        "properties": {
+          "layer": {
+            "title": "Layer",
+            "type": "integer"
+          },
+          "model": {
+            "$ref": "#/components/schemas/LabModelStatus"
+          },
+          "site": {
+            "enum": [
+              "resid_post",
+              "mlp_neuron",
+              "mlp_out",
+              "attn_out"
+            ],
+            "title": "Site",
+            "type": "string"
+          },
+          "token": {
+            "title": "Token",
+            "type": "integer"
+          },
+          "values": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Values",
+            "type": "array"
+          }
+        },
+        "required": [
+          "model",
+          "layer",
+          "token",
+          "site",
+          "values"
+        ],
+        "title": "ActivationVector",
+        "type": "object"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -50,6 +137,115 @@
           "repository"
         ],
         "title": "HubModel",
+        "type": "object"
+      },
+      "InspectRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "chat": {
+            "default": true,
+            "title": "Chat",
+            "type": "boolean"
+          },
+          "neurons": {
+            "default": 8,
+            "maximum": 32.0,
+            "minimum": 1.0,
+            "title": "Neurons",
+            "type": "integer"
+          },
+          "prompt": {
+            "maxLength": 100000,
+            "minLength": 1,
+            "title": "Prompt",
+            "type": "string"
+          }
+        },
+        "required": [
+          "prompt"
+        ],
+        "title": "InspectRequest",
+        "type": "object"
+      },
+      "InspectResponse": {
+        "additionalProperties": false,
+        "description": "What a prompt does inside the resident model.\n\nBounded by its shape: num_layers x tokens x (LENS_TOP + neurons) values,\nwith tokens at most the deployment's max_prompt_tokens and neurons at\nmost MAX_NEURONS.",
+        "properties": {
+          "chat_template": {
+            "description": "Whether the chat template was applied",
+            "title": "Chat Template",
+            "type": "boolean"
+          },
+          "hidden_size": {
+            "minimum": 1.0,
+            "title": "Hidden Size",
+            "type": "integer"
+          },
+          "layers": {
+            "items": {
+              "$ref": "#/components/schemas/LayerReadings"
+            },
+            "title": "Layers",
+            "type": "array"
+          },
+          "mlp_width": {
+            "minimum": 1.0,
+            "title": "Mlp Width",
+            "type": "integer"
+          },
+          "model": {
+            "$ref": "#/components/schemas/LabModelStatus"
+          },
+          "tokens": {
+            "items": {
+              "$ref": "#/components/schemas/InspectedToken"
+            },
+            "title": "Tokens",
+            "type": "array"
+          },
+          "vocabulary": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Vocabulary",
+            "type": "object"
+          }
+        },
+        "required": [
+          "model",
+          "chat_template",
+          "tokens",
+          "vocabulary",
+          "hidden_size",
+          "mlp_width",
+          "layers"
+        ],
+        "title": "InspectResponse",
+        "type": "object"
+      },
+      "InspectedToken": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "minimum": 0.0,
+            "title": "Id",
+            "type": "integer"
+          },
+          "special": {
+            "title": "Special",
+            "type": "boolean"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "text",
+          "special"
+        ],
+        "title": "InspectedToken",
         "type": "object"
       },
       "LabModelStatus": {
@@ -180,6 +376,68 @@
           "max_new_tokens"
         ],
         "title": "LabStatus",
+        "type": "object"
+      },
+      "LayerReadings": {
+        "additionalProperties": false,
+        "description": "One layer's summary at every position, as parallel arrays.\n\nIndexed by token position first. Columns rather than an object per\nposition, because a full-length prompt on a 36-layer model is about\neighteen thousand of them, and naming every field in every one roughly\ndoubles a response that is already the largest Lab sends.",
+        "properties": {
+          "lens_probabilities": {
+            "items": {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            "title": "Lens Probabilities",
+            "type": "array"
+          },
+          "lens_tokens": {
+            "items": {
+              "items": {
+                "type": "integer"
+              },
+              "type": "array"
+            },
+            "title": "Lens Tokens",
+            "type": "array"
+          },
+          "neuron_activations": {
+            "items": {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            "title": "Neuron Activations",
+            "type": "array"
+          },
+          "neuron_indices": {
+            "items": {
+              "items": {
+                "type": "integer"
+              },
+              "type": "array"
+            },
+            "title": "Neuron Indices",
+            "type": "array"
+          },
+          "residual_norm": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Residual Norm",
+            "type": "array"
+          }
+        },
+        "required": [
+          "residual_norm",
+          "lens_tokens",
+          "lens_probabilities",
+          "neuron_indices",
+          "neuron_activations"
+        ],
+        "title": "LayerReadings",
         "type": "object"
       },
       "LoadModelRequest": {
@@ -337,6 +595,90 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/v1/lab/activation": {
+      "post": {
+        "description": "The full vector at one site, layer and position of a prompt. A POST rather than a GET so the prompt travels in the body, not in a URL that proxies and logs keep.",
+        "operationId": "activation_api_v1_lab_activation_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ActivationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActivationVector"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Read one whole activation vector",
+        "tags": [
+          "lab"
+        ]
+      }
+    },
+    "/api/v1/lab/inspect": {
+      "post": {
+        "description": "Runs the prompt through the resident model once and returns, for every layer and position, the residual stream's norm, the logit lens's likeliest tokens, and the MLP neurons with the largest activations. Summaries, not raw activations: read one whole vector with the activation route.",
+        "operationId": "inspect_api_v1_lab_inspect_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InspectRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InspectResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Read the logit lens and top MLP neurons for a prompt",
+        "tags": [
+          "lab"
+        ]
+      }
+    },
     "/api/v1/lab/model": {
       "put": {
         "description": "Starts fetching and loading the named model, and answers once that has started. The switch replaces the model for every user of this Lab; poll the status to see it finish. Naming the model already resident, or already being switched to, changes nothing.",
