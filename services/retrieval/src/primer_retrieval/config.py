@@ -7,7 +7,7 @@ pgvector was dropped rather than kept beside it.
 
 from __future__ import annotations
 
-from typing import cast
+from typing import Literal, cast
 
 from primer_contracts.embedding_models import find_embedding_model
 from pydantic import Field, SecretStr, model_validator
@@ -34,6 +34,15 @@ class Settings(BaseSettings):
     qdrant_api_key: SecretStr | None = Field(default=None)
     #: The collection. Created on first use at the embedding model's width.
     qdrant_index: str = Field(default="primer_chunks")
+    #: How a new collection holds its vectors. `memory` keeps them in RAM at
+    #: full precision, which is exact and fast and costs about 4 KiB per
+    #: passage at 1024 dimensions: a million passages fit in a few GiB.
+    #: `disk` memory-maps the originals and searches an int8 copy in RAM, a
+    #: quarter the memory, rescoring the shortlist against the originals -
+    #: close to the same ranking, not identical, and for libraries whose
+    #: vectors would not fit in memory at all. Read only when the collection
+    #: is created.
+    qdrant_layout: Literal["memory", "disk"] = Field(default="memory")
 
     #: Any OpenAI-compatible endpoint: a hosted model, or a local server.
     #: For a model in `primer_contracts.embedding_models` the three settings

@@ -8,7 +8,7 @@ from Qdrant itself rather than trusted from the constructor call.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from haystack import Document
 from primer_retrieval.config import Settings
@@ -18,8 +18,15 @@ from qdrant_client import QdrantClient
 DIMENSIONS = 8
 
 
-def created_collection(qdrant_url: str, name: str) -> Any:
-    settings = Settings(qdrant_url=qdrant_url, qdrant_index=name, embedding_dimensions=DIMENSIONS)
+def created_collection(
+    qdrant_url: str, name: str, layout: Literal["memory", "disk"] = "memory"
+) -> Any:
+    settings = Settings(
+        qdrant_url=qdrant_url,
+        qdrant_index=name,
+        qdrant_layout=layout,
+        embedding_dimensions=DIMENSIONS,
+    )
     store = build_document_store(settings)
     # The integration creates its collection on first use, not on construction.
     store.write_documents(
@@ -28,21 +35,33 @@ def created_collection(qdrant_url: str, name: str) -> Any:
     return QdrantClient(url=qdrant_url).get_collection(name)
 
 
-def test_full_vectors_live_on_disk_and_a_quantized_copy_in_memory(qdrant_url: str) -> None:
-    """A large library must not need its whole index in RAM.
+def test_vectors_are_searched_at_full_precision_by_default(qdrant_url: str) -> None:
+    """Most libraries fit in memory, and those should get exact vectors.
+
+    A quantized copy saves memory a library of a few thousand documents
+    does not need saved, and costs it a little ranking accuracy it would
+    otherwise keep.
+    """
+    info = created_collection(qdrant_url, "layout_memory")
+
+    assert not info.config.params.vectors.on_disk
+    assert info.config.quantization_config is None
+
+
+def test_a_disk_layout_keeps_full_vectors_on_disk_and_a_quantized_copy_in_memory(
+    qdrant_url: str,
+) -> None:
+    """A library in the terabytes must not need its whole index in RAM.
 
     Full-precision vectors at 1024 dimensions cost 4 KB each, so fifty
-    million passages - a few terabytes of source documents - is two hundred
-    gigabytes held in memory. Keeping the originals memory-mapped from disk
-    and searching an int8 copy held in RAM cuts that by four, and Qdrant
-    rescores the shortlist against the originals so results keep their
-    order.
+    million passages is two hundred gigabytes held in memory. Keeping the
+    originals memory-mapped from disk and searching an int8 copy held in
+    RAM cuts that by four, and Qdrant rescores the shortlist against the
+    originals so results keep close to their order.
     """
-    info = created_collection(qdrant_url, "layout_vectors")
+    info = created_collection(qdrant_url, "layout_disk", layout="disk")
 
-    vectors = info.config.params.vectors
-    assert vectors.on_disk is True
-
+    assert info.config.params.vectors.on_disk is True
     scalar = info.config.quantization_config.scalar
     assert scalar.type == "int8"
     assert scalar.always_ram is True

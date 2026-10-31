@@ -268,6 +268,14 @@ vectorStore:
   # sends it, and a bundled Qdrant requires it, from the same Secret.
   existingSecret: ""
   apiKeyKey: qdrant-api-key
+  # How a new collection holds its vectors. `memory` keeps them in RAM at
+  # full precision: exact, and about 4.5 KiB per passage at 1024
+  # dimensions, so the default 2 GiB holds some four hundred thousand
+  # passages. `disk` memory-maps the originals and searches an int8 copy,
+  # about 1.5 KiB per passage, with close to the same ranking - for
+  # libraries in the tens of millions of passages. Read when the collection
+  # is created; changing it later means deleting it and reindexing.
+  layout: memory
   # A Qdrant run by this release, as one replica with a persistent volume.
   # It is reachable only from Retrieval, and reports nothing upstream.
   #
