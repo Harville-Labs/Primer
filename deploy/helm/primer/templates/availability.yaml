@@ -23,7 +23,8 @@ what running one pod already meant.
 {{- $components = append $components (dict "name" "auth" "replicas" (int .Values.auth.proxy.replicas)) }}
 {{- end }}
 {{- range $name, $worker := .Values.workers }}
-{{- $components = append $components (dict "name" (printf "worker-%s" $name) "replicas" (int $worker.replicas)) }}
+{{- $replicas := ternary (int $worker.queueScaling.minReplicas) (int $worker.replicas) $worker.queueScaling.enabled }}
+{{- $components = append $components (dict "name" (printf "worker-%s" $name) "replicas" $replicas) }}
 {{- end }}
 
 {{- if .Values.podDisruptionBudgets.enabled }}
@@ -56,7 +57,8 @@ Autoscaling, for the services whose load is requests.
 Not the workers. Their work arrives on a queue, and an embedding worker
 spends its time waiting on a network call - its CPU is near zero precisely
 when the backlog is longest, so a CPU autoscaler would add pods when they
-are busy computing and none when they are behind.
+are busy computing and none when they are behind. They scale on queue
+length instead, in workers-scaling.yaml.
 */}}
 {{- range $name := list "control" "chat" "retrieval" "web" }}
 {{- $scaling := include "primer.autoscaling" (dict "root" $ "component" $name) | fromYaml }}

@@ -1,5 +1,6 @@
 {{- $cache := .Values.workers.parse.modelCache -}}
-{{- if and $cache.enabled (eq $cache.accessMode "ReadWriteOnce") (gt (int .Values.workers.parse.replicas) 1) -}}
+{{- $most := include "primer.parseReplicasAtMost" . | int -}}
+{{- if and $cache.enabled (eq $cache.accessMode "ReadWriteOnce") (gt $most 1) -}}
 {{- /*
 Only reachable by asking for the contradiction outright, since an unset
 accessMode derives ReadWriteMany at this replica count. Refused rather
@@ -9,7 +10,7 @@ ReadWriteOnce volume can be attached by one node, and the second replica is
 scheduled, fails to attach, and sits Pending indefinitely - which tells
 whoever finds it nothing about access modes.
 */ -}}
-{{- fail (printf "workers.parse.replicas is %v, but workers.parse.modelCache.accessMode is set to ReadWriteOnce, which only one node can attach. Leave accessMode unset to get ReadWriteMany at this replica count, or set modelCache.enabled to false (every pod then re-downloads Docling's models on start), or keep replicas at 1." .Values.workers.parse.replicas) -}}
+{{- fail (printf "The parse worker can run %v replicas (workers.parse.replicas, or queueScaling.maxReplicas when queue scaling is on), but workers.parse.modelCache.accessMode is set to ReadWriteOnce, which only one node can attach. Leave accessMode unset to get ReadWriteMany at this replica count, or set modelCache.enabled to false (every pod then re-downloads Docling's models on start), or keep it to 1." $most) -}}
 {{- end -}}
 {{/*
 Two worker deployments, not one.
@@ -29,7 +30,11 @@ metadata:
     {{- include "primer.labels" $ | nindent 4 }}
     app.kubernetes.io/component: worker-{{ $name }}
 spec:
+  {{- if not $worker.queueScaling.enabled }}
+  # Left out under KEDA, which owns the count: stating it here would reset
+  # the worker to this number on every upgrade.
   replicas: {{ $worker.replicas }}
+  {{- end }}
   {{- if and (eq $name "parse") $worker.modelCache.enabled (eq (include "primer.modelCacheAccessMode" $) "ReadWriteOnce") }}
   # A ReadWriteOnce model cache cannot be attached twice, so a RollingUpdate
   # surge pod cannot mount it while the pod it is replacing still holds it -
@@ -94,11 +99,7 @@ spec:
             - --pool
             - {{ required (printf "workers.%s.pool is required" $name) $worker.pool | quote }}
             - -Q
-            {{- if eq $name "parse" }}
-            - ingestion.parse
-            {{- else }}
-            - ingestion.embed,ingestion.index,ingestion.delete
-            {{- end }}
+            - {{ include "primer.workerQueues" $name }}
           {{- include "primer.sourceStoreEnvFrom" $ | nindent 10 }}
           env:
             {{- include "primer.commonEnv" $ | nindent 12 }}
@@ -111,6 +112,10 @@ spec:
             {{- if eq $name "parse" }}
             {{- with include "primer.chunkingEnv" $ }}{{ . | trim | nindent 12 }}{{- end }}
             {{- with include "primer.pictureEnv" $ }}{{ . | trim | nindent 12 }}{{- end }}
+            - name: PRIMER_PARSE_DEVICE
+              value: {{ $worker.accelerator.device | quote }}
+            - name: PRIMER_PARSE_THREADS
+              value: {{ $worker.accelerator.threads | quote }}
             {{- else }}
             {{- with include "primer.graphExtractionEnv" $ }}{{ . | trim | nindent 12 }}{{- end }}
             {{- end }}

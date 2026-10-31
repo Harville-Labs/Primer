@@ -464,6 +464,26 @@ workers:
     # Processes, because parsing holds the CPU and a thread would hold the
     # interpreter lock with it.
     pool: prefork
+    # Scale on the length of the parse queue instead of `replicas`. Needs
+    # KEDA (https://keda.sh) on the cluster, which the chart cannot detect;
+    # without it the install fails on the missing ScaledObject kind.
+    queueScaling:
+      enabled: false
+      minReplicas: 1
+      # Also what the model cache is sized for: above one, the cache needs
+      # ReadWriteMany, exactly as `replicas` above one does.
+      maxReplicas: 8
+      # Waiting documents per pod. Empty uses `concurrency`, so a pod is
+      # added when the running ones each have one waiting.
+      messagesPerReplica:
+      # How long an empty queue stays empty before pods are removed.
+      cooldownSeconds: 300
+    # Docling's layout and table models. `auto` uses a GPU when the pod has
+    # one, CUDA or Apple's; `threads` is torch's intra-op threads, and is
+    # the number to match the CPU `resources` below grant.
+    accelerator:
+      device: auto
+      threads: 4
     resources:
       requests: { cpu: 500m, memory: 2Gi }
       limits: { memory: 6Gi }
@@ -503,6 +523,12 @@ workers:
     # child per document is a whole interpreter, with its own copy of every
     # client, spent waiting on a socket; threads share one.
     pool: threads
+    queueScaling:
+      enabled: false
+      minReplicas: 1
+      maxReplicas: 8
+      messagesPerReplica:
+      cooldownSeconds: 300
     resources:
       requests: { cpu: 100m, memory: 512Mi }
       limits: { memory: 2Gi }
@@ -526,9 +552,8 @@ podDisruptionBudgets:
 # queue depth is the only signal that describes it: an embedding worker
 # spends its time waiting on a network call, so its CPU is near zero
 # precisely when the backlog is longest. Scaling those on CPU would add
-# pods when they are busy computing and none when they are behind. Wire
-# KEDA to the broker if you want them autoscaled, and set `workers.*.
-# replicas` until then.
+# pods when they are busy computing and none when they are behind. They
+# scale on queue length instead: `workers.*.queueScaling`.
 autoscaling:
   enabled: false
   minReplicas: 2
