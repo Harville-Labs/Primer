@@ -13,6 +13,8 @@ from pathlib import Path
 from tempfile import gettempdir
 
 import pytest
+from docling.datamodel.base_models import InputFormat
+from docling.datamodel.pipeline_options import PdfPipelineOptions
 from primer_ingestion.chunking import DocumentContext, chunk_id_for
 from primer_ingestion.config import Settings
 from primer_ingestion.errors import PermanentStageError, UnsupportedDocument
@@ -318,3 +320,18 @@ def test_a_page_with_no_text_at_all_is_refused_even_with_ocr(
             FIXTURES / "scanned-paper.pdf", context, media_type="application/pdf"
         )
     assert raised.value.code == "no_text_found"
+
+
+def test_docling_models_run_where_the_worker_was_told(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Left to itself torch takes every core on the node, not the pod's share.
+
+    On a large node that is dozens of threads contending for the two cores
+    the limit grants, which is slower than using two.
+    """
+    monkeypatch.setattr("primer_ingestion.parsing.build_chunker", lambda _: object())
+    parser = DocumentParser(Settings(broker_url="memory://", parse_device="cpu", parse_threads=3))
+
+    options = parser.converter.format_to_options[InputFormat.PDF].pipeline_options
+    assert isinstance(options, PdfPipelineOptions)
+    assert options.accelerator_options.device == "cpu"
+    assert options.accelerator_options.num_threads == 3
