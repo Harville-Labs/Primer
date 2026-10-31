@@ -246,6 +246,36 @@ spec:
               {{- include "primer.selectorLabels" . | nindent 14 }}
               app.kubernetes.io/component: retrieval
 {{- end }}
+{{- if .Values.lab.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ $full }}-allow-lab
+  labels:
+    {{- include "primer.labels" . | nindent 4 }}
+spec:
+  # The web app alone, for the same reason as Chat: a run carries the
+  # identity headers the proxy set, and Lab decides who may switch the model
+  # from them. It is also the one service whose work is a model loaded and
+  # run on request, which anything else in the cluster could otherwise use
+  # as free compute.
+  podSelector:
+    matchLabels:
+      {{- include "primer.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: lab
+  policyTypes:
+    - Ingress
+  ingress:
+    - ports:
+        - port: 8000
+          protocol: TCP
+      from:
+        - podSelector:
+            matchLabels:
+              {{- include "primer.selectorLabels" . | nindent 14 }}
+              app.kubernetes.io/component: web
+{{- end }}
 {{- range $component, $bundled := dict "embeddings" .Values.inference.embeddings.bundled.enabled "reranker" .Values.inference.rerank.bundled.enabled }}
 {{- if $bundled }}
 ---

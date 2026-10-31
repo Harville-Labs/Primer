@@ -57,6 +57,12 @@ image:
     repository: ghcr.io/isaiah-harville/primer-web
     tag: ""
     pullPolicy: IfNotPresent
+  # Published twice per version: the tag itself is the CPU build, and the
+  # same tag with `-cuda` is the GPU build, chosen when lab.gpu is set.
+  lab:
+    repository: ghcr.io/isaiah-harville/primer-lab
+    tag: ""
+    pullPolicy: IfNotPresent
   pullSecrets: []
 
 # --- Identity -----------------------------------------------------------
@@ -439,6 +445,47 @@ tools:
   # declaration on each execution server is refused at startup.
   enabled: false
   servers: []
+
+# --- Lab ----------------------------------------------------------------
+#
+# A tab for looking inside a small open model and editing how it runs. Lab
+# loads the model itself, so it is the one part of Primer that needs a
+# machine sized for a model; docs/operations/lab.md says how large.
+lab:
+  enabled: false
+  # Loaded at startup: a Hugging Face repository, or `{source: local, path:
+  # my-finetune}` for a directory of your own inside the weights volume.
+  model:
+    source: hub
+    repository: Qwen/Qwen3-1.7B
+  # Who may switch the model every run uses: users, admins (auth.adminGroup),
+  # or operator, which leaves it to this file.
+  modelChoice: users
+  # Shell-style patterns a repository must match. `Qwen/*` allows one
+  # publisher. The default allows any: what makes a load safe is checked on
+  # the files, not taken from the name.
+  repositoryPatterns: ["*/*"]
+  # The largest set of weights Lab downloads, in bytes, checked against the
+  # hub's file list first. Keep it below the volume's size.
+  maxModelBytes: 20000000000
+  # A hub mirror, for a cluster that cannot reach huggingface.co.
+  hubEndpoint: ""
+  device: auto     # auto, cpu, or cuda
+  dtype: auto      # auto, float32, bfloat16, or float16
+  # GPUs to request as nvidia.com/gpu. Above zero, the CUDA image is used.
+  gpu: 0
+  # Where fetched and operator-supplied weights live. Nothing is evicted:
+  # it grows by one model per model anyone chooses.
+  persistence:
+    size: 50Gi
+    storageClass: ""   # the cluster default
+  # Sized for the default model on CPU, where Lab runs it in float32: about
+  # 7GB of weights, plus a run's activations and what it records of them.
+  resources:
+    requests: { cpu: "2", memory: 12Gi }
+    limits: { memory: 12Gi }
+  nodeSelector: {}
+  tolerations: []
 
 # --- Scale --------------------------------------------------------------
 #
