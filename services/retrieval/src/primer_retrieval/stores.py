@@ -36,6 +36,20 @@ def build_document_store(settings: Settings) -> DocumentStore:
         # must overwrite rather than accumulate duplicates.
         recreate_index=False,
         similarity="cosine",
+        # Sized for libraries in the terabytes rather than for a demo. Full
+        # vectors are memory-mapped from disk and search runs against an
+        # int8 copy kept in RAM, a quarter the size; Qdrant then rescores
+        # the shortlist against the originals, so ranking holds. Held in
+        # RAM at full precision, fifty million passages need two hundred
+        # gigabytes of memory before a single one is searched.
+        #
+        # Passage text is payload, and search reads it only for the results
+        # it returns, so it stays on disk too. Indexed fields stay in RAM.
+        #
+        # All three apply only when the collection is created.
+        on_disk=True,
+        on_disk_payload=True,
+        quantization_config={"scalar": {"type": "int8", "quantile": 0.99, "always_ram": True}},
         # Filtered on every read and every delete. Without a payload index
         # Qdrant scans every point's payload to apply the filter, which is
         # unnoticeable on one library and the whole cost of a search on a

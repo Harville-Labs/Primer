@@ -260,6 +260,15 @@ and Retrieval sends it, both read from the same Secret.
   library, which is why it is on by default when PostgreSQL is not.
 - **Size the volume for the library.** Each passage takes about 4 KiB per
   1024 dimensions, plus its text and index overhead.
+- **Size memory for the passage count, not the volume.** Full vectors and
+  passage text stay on disk. Qdrant keeps an int8 copy of each vector in
+  memory, about 1 KiB per 1024 dimensions, plus the HNSW graph and payload
+  indexes. Allow roughly 1.5 KiB per passage. The default 2 GiB limit holds
+  about a million passages, and fifty million need around 80 GiB. Memory
+  beyond that goes to the page cache, which makes rescoring faster.
+- **Collections keep the layout they were created with.** One created
+  before Primer stored vectors on disk holds them all in RAM. Delete it and
+  reindex to move it to the current layout.
 - **The embedding model is fixed once a collection exists.** The collection
   keeps the width it was created with. Changing
   `inference.embeddings.model` means deleting the collection and reindexing;
