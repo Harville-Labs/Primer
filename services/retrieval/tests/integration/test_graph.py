@@ -177,6 +177,28 @@ def test_rewriting_a_chunk_replaces_what_it_said(graph: GraphStore, count: Count
     assert reached(graph, library, [generation], "B") == set()
 
 
+def test_rewriting_a_chunk_removes_an_entity_nothing_mentions_any_more(
+    graph: GraphStore, count: Count
+) -> None:
+    """The rewrite, not some later erase, is what orphaned it.
+
+    Left for an erase to sweep up, the entity kept a name from the document
+    in Neo4j until someone happened to delete something else in the library -
+    and an erase that only looks at what it erased would never find it.
+    """
+    library, version, generation = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
+    chunk_id = uuid.uuid4()
+    before = ChunkGraph(chunk_id=chunk_id, entities=entities("A", "B"))
+    graph.write(library, version, generation, [before])
+    graph.write(
+        library, version, generation, [ChunkGraph(chunk_id=chunk_id, entities=entities("A"))]
+    )
+
+    named = "MATCH (e:Entity {library_id: $library, key: $key}) RETURN count(e) AS n"
+    assert count(named, library=str(library), key="a") == 1
+    assert count(named, library=str(library), key="b") == 0
+
+
 def library_size(count: Count, library: UUID) -> int:
     return count("MATCH (n {library_id: $library}) RETURN count(n) AS n", library=str(library))
 

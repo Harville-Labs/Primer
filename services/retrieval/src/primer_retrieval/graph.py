@@ -23,7 +23,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, LiteralString
 from uuid import UUID
 
 from neo4j import (
@@ -79,10 +79,17 @@ WHERE relation.chunk_id IN $chunk_ids
 DELETE relation
 """
 
+#: Both chunk deletions return the keys of the entities the deleted chunks
+#: mentioned, which are the only entities the deletion can have orphaned.
+#: Relations need not be followed as well: a relation joins two entities
+#: its own chunk names, so its ends are among these keys already.
 _CLEAR_CHUNKS = """
 UNWIND $chunk_ids AS chunk_id
 MATCH (chunk:Chunk {chunk_id: chunk_id, library_id: $library_id})
+OPTIONAL MATCH (chunk)-[:MENTIONS]->(entity:Entity)
+WITH chunk, collect(entity.key) AS keys
 DETACH DELETE chunk
+RETURN keys
 """
 
 #: A chunk node is written even when it mentions nothing, so that counting
@@ -167,17 +174,21 @@ _ERASE_CHUNKS = """
 MATCH (chunk:Chunk {library_id: $library_id, document_version_id: $document_version_id})
 WHERE ($only IS NULL OR chunk.generation_id = $only)
   AND ($keep IS NULL OR chunk.generation_id <> $keep)
+OPTIONAL MATCH (chunk)-[:MENTIONS]->(entity:Entity)
+WITH chunk, collect(entity.key) AS keys
 DETACH DELETE chunk
+RETURN keys
 """
 
-#: Swept across the whole library rather than only the entities the erased
-#: chunks mentioned. It costs a scan of one library's entities, and in
-#: return an entity orphaned by a rewrite, or by an erase that was
-#: interrupted, is collected by the next erase instead of never. An entity
-#: is a name someone's document contained, and deleting the document has to
-#: delete it.
+#: An entity is a name someone's document contained, so one nothing
+#: mentions any more is deleted by whatever stopped mentioning it. Only the
+#: entities a deletion touched are checked, each through the uniqueness
+#: constraint's index. Sweeping the whole library instead used to cost every
+#: delete a scan of every entity in it, and still missed what a rewrite had
+#: orphaned until something else in the library happened to be erased.
 _COLLECT_ORPHANS = """
-MATCH (entity:Entity {library_id: $library_id})
+UNWIND $keys AS key
+MATCH (entity:Entity {library_id: $library_id, key: key})
 WHERE NOT EXISTS { (entity)--() }
 DELETE entity
 """
@@ -258,9 +269,12 @@ class GraphStore:
 
         def work(tx: ManagedTransaction) -> None:
             tx.run(_CLEAR_RELATIONS, {**scope, "chunk_ids": chunk_ids})
-            tx.run(_CLEAR_CHUNKS, {**scope, "chunk_ids": chunk_ids})
+            touched = _delete_chunks(tx, _CLEAR_CHUNKS, {**scope, "chunk_ids": chunk_ids})
             tx.run(_WRITE_MENTIONS, {**scope, "chunks": chunks})
             tx.run(_WRITE_RELATIONS, {**scope, "relations": relations})
+            # After the new mentions, so an entity the chunk still names is
+            # mentioned again by the time it is checked.
+            _collect_orphans(tx, str(library_id), touched)
 
         self._in_write(work)
 
@@ -336,8 +350,8 @@ class GraphStore:
 
         def work(tx: ManagedTransaction) -> None:
             tx.run(_ERASE_RELATIONS, parameters)
-            tx.run(_ERASE_CHUNKS, parameters)
-            tx.run(_COLLECT_ORPHANS, parameters)
+            touched = _delete_chunks(tx, _ERASE_CHUNKS, parameters)
+            _collect_orphans(tx, str(library_id), touched)
 
         self._in_write(work)
 
@@ -347,6 +361,18 @@ class GraphStore:
     def _in_write(self, work: Callable[[ManagedTransaction], Any]) -> None:
         with self._driver.session(database=self._database) as session:
             session.execute_write(unit_of_work(timeout=self._timeout)(work))
+
+
+def _delete_chunks(
+    tx: ManagedTransaction, query: LiteralString, parameters: dict[str, Any]
+) -> set[str]:
+    """Run a chunk deletion and return the keys of the entities it touched."""
+    return {key for record in tx.run(query, parameters) for key in record["keys"]}
+
+
+def _collect_orphans(tx: ManagedTransaction, library_id: str, keys: set[str]) -> None:
+    if keys:
+        tx.run(_COLLECT_ORPHANS, {"library_id": library_id, "keys": sorted(keys)})
 
 
 def build_graph_store(settings: Settings) -> GraphStore | None:
