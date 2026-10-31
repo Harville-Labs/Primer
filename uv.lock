@@ -3173,6 +3173,7 @@ version = "0.1.14"
 source = { editable = "services/lab" }
 dependencies = [
     { name = "fastapi" },
+    { name = "huggingface-hub" },
     { name = "nnsight" },
     { name = "nnterp" },
     { name = "primer-contracts" },
@@ -3193,6 +3194,7 @@ server = [
 [package.metadata]
 requires-dist = [
     { name = "fastapi" },
+    { name = "huggingface-hub" },
     { name = "nnsight", specifier = ">=0.7,<0.8" },
     { name = "nnterp" },
     { name = "primer-contracts", editable = "packages/contracts" },

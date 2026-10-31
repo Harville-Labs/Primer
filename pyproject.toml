@@ -48,6 +48,8 @@ select = ["E", "F", "I", "B", "BLE", "UP", "ASYNC", "S", "C4", "SIM", "RUF"]
 "tests/**" = ["S101"]
 # `token` here is a piece of text a model generated, which S106 reads as a password.
 "packages/anomaly/**" = ["S106"]
+# A tokenizer's `unk_token` and `eos_token` are vocabulary entries, not passwords.
+"services/lab/tests/**" = ["S101", "S106"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests", "packages", "services"]

@@ -1,0 +1,33 @@
+[project]
+name = "primer-lab"
+version = "0.1.14"
+description = "Primer Lab: look inside a small open model and edit how it runs"
+requires-python = ">=3.13"
+dependencies = [
+    "fastapi",
+    "huggingface-hub",
+    # nnterp 1.3 imports nnsight.intervention.tracing, which 0.8 removed.
+    "nnsight>=0.7,<0.8",
+    "nnterp",
+    "primer-contracts",
+    "primer-observability",
+    "primer-service",
+    "pydantic-settings",
+    "safetensors",
+    "torch",
+    "transformers",
+]
+
+[dependency-groups]
+server = [
+    "uvicorn[standard]",
+]
+
+[build-system]
+requires = ["uv_build>=0.12,<0.13"]
+build-backend = "uv_build"
+
+[tool.uv.sources]
+primer-contracts = { workspace = true }
+primer-observability = { workspace = true }
+primer-service = { workspace = true }

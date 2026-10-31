@@ -20,6 +20,8 @@ from primer_chat.app import create_app as create_chat
 from primer_chat.config import Settings as ChatSettings
 from primer_control.app import create_app as create_control
 from primer_control.config import Settings as ControlSettings
+from primer_lab.app import create_app as create_lab
+from primer_lab.config import Settings as LabSettings
 from primer_retrieval.app import create_app as create_retrieval
 from primer_retrieval.config import Settings as RetrievalSettings
 
@@ -33,6 +35,7 @@ def schemas() -> dict[str, dict[str, Any]]:
         "control": create_control(ControlSettings(auth_mode="disabled")).openapi(),
         "chat": create_chat(ChatSettings(auth_mode="disabled")).openapi(),
         "retrieval": create_retrieval(RetrievalSettings()).openapi(),
+        "lab": create_lab(LabSettings()).openapi(),
     }
 
 
