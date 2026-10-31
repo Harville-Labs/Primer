@@ -11,9 +11,11 @@
 # proxy onto Compose would produce something that looks multi-user while one
 # forgotten published port makes authentication decorative.
 #
-# No model server is bundled. Primer runs against an OpenAI-compatible
-# endpoint you already have - vLLM, Ollama, or llama.cpp - named by
-# PRIMER_CHAT_BASE_URL and PRIMER_EMBEDDING_BASE_URL.
+# The embedding model and the reranker are bundled, so the stack can index
+# and search as it comes. The chat model is yours: name an OpenAI-compatible
+# endpoint - vLLM, Ollama, llama.cpp, or a hosted API - with
+# PRIMER_CHAT_BASE_URL, or add one on the settings page. env.example says how
+# to swap either bundled server for one of your own.
 
 name: primer
 
@@ -46,6 +48,39 @@ x-service-env: &service-env
   PRIMER_INTERNAL_API_TOKEN: ${PRIMER_INTERNAL_API_TOKEN:?set PRIMER_INTERNAL_API_TOKEN}
   PRIMER_SERVICE_TOKEN: ${PRIMER_INTERNAL_API_TOKEN:?set PRIMER_INTERNAL_API_TOKEN}
   PRIMER_SOURCE_STORE_URL: file:///var/lib/primer/sources
+
+# The embedding model, said once: the bundled server loads it, Retrieval
+# describes its vectors by it, and the parse worker cuts chunks with its
+# tokenizer. Told different models, they disagree without failing.
+x-embedding-model: &embedding-model ${PRIMER_EMBEDDING_MODEL:-onnx-community/Qwen3-Embedding-0.6B-ONNX}
+x-rerank-model: &rerank-model ${PRIMER_RERANK_MODEL:-BAAI/bge-reranker-base}
+
+# The bundled model servers: Text Embeddings Inference on CPU. The image is
+# published for amd64 only (huggingface/text-embeddings-inference#648), so on
+# Apple Silicon it runs emulated, and slowly; a native server of your own is
+# faster there. The flags are the ones docs/operations/models.md explains:
+# Primer sends 32 inputs per call, and a server accepting fewer refuses every
+# batch.
+x-model-server: &model-server
+  <<: *hardening
+  image: ghcr.io/huggingface/text-embeddings-inference:cpu-1.9.3
+  platform: linux/amd64
+  user: "10001:10001"
+  depends_on:
+    init-volumes:
+      condition: service_completed_successfully
+  environment:
+    # The image's home is not writable; the cache volume holds everything.
+    HF_HOME: /data
+    HUGGINGFACE_HUB_CACHE: /data
+  # The first start downloads the model, which is minutes on a slow link.
+  healthcheck:
+    test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/health"]
+    interval: 10s
+    timeout: 5s
+    retries: 6
+    start_period: 15m
+  restart: unless-stopped
 
 # What both ingestion workers share; each adds the settings for its stages.
 x-worker-env: &worker-env
@@ -186,13 +221,44 @@ services:
     command: ["python", "-m", "primer_retrieval.graph_schema"]
     restart: "no"
 
+  # Stopped when PRIMER_EMBEDDING_BASE_URL names your own server.
+  embeddings:
+    <<: *model-server
+    profiles: ["${PRIMER_EMBEDDING_BASE_URL:+external-embeddings}"]
+    # The default model's ONNX export carries no pooling config, and the
+    # mean pooling TEI would otherwise pick retrieves badly.
+    command:
+      ["--model-id", *embedding-model, "--port", "8080",
+       "--pooling", "${PRIMER_EMBEDDING_POOLING:-last-token}",
+       "--max-batch-tokens", "4096", "--auto-truncate",
+       "--max-client-batch-size", "32", "--max-concurrent-requests", "256"]
+    volumes:
+      - embedding-cache:/data
+
+  # Stopped when PRIMER_RERANK_BASE_URL is set at all: to your own server's
+  # URL, or to nothing to search without reranking. Hence `+`, not `:+`.
+  reranker:
+    <<: *model-server
+    profiles: ["${PRIMER_RERANK_BASE_URL+external-reranker}"]
+    # Tokenization workers are otherwise one per host core, each holding its
+    # own copy of a 250k-entry vocabulary.
+    command:
+      ["--model-id", *rerank-model, "--port", "8080",
+       "--max-batch-tokens", "4096", "--auto-truncate",
+       "--max-client-batch-size", "32", "--max-concurrent-requests", "256",
+       "--tokenization-workers", "4"]
+    volumes:
+      - rerank-cache:/data
+
   init-volumes:
     image: alpine
     restart: "no"
     volumes:
       - source-objects:/var/lib/primer/sources
       - model-cache:/var/cache/primer/huggingface
-    command: ["sh", "-c", "mkdir -p /var/lib/primer/sources/sources /var/lib/primer/sources/tmp && chown -R 10001:10001 /var/lib/primer/sources && chmod -R u+rwX /var/lib/primer/sources && mkdir -p /var/cache/primer/huggingface && chown -R 10001:10001 /var/cache/primer/huggingface"]
+      - embedding-cache:/var/cache/primer/embeddings
+      - rerank-cache:/var/cache/primer/reranker
+    command: ["sh", "-c", "mkdir -p /var/lib/primer/sources/sources /var/lib/primer/sources/tmp && chown -R 10001:10001 /var/lib/primer/sources && chmod -R u+rwX /var/lib/primer/sources && mkdir -p /var/cache/primer/huggingface && chown -R 10001:10001 /var/cache/primer/huggingface /var/cache/primer/embeddings /var/cache/primer/reranker"]
 
   control:
     <<: [*python-image, *hardening]
@@ -232,6 +298,13 @@ services:
       qdrant:
         condition: service_healthy
         required: false
+      # Not waited for when you name your own.
+      embeddings:
+        condition: service_healthy
+        required: false
+      reranker:
+        condition: service_healthy
+        required: false
       # Only waited for when the `graph` profile is on.
       migrate-graph:
         condition: service_completed_successfully
@@ -241,14 +314,20 @@ services:
       PRIMER_QDRANT_URL: ${PRIMER_QDRANT_URL:-http://qdrant:6333}
       PRIMER_QDRANT_API_KEY: ${PRIMER_QDRANT_API_KEY:-}
       PRIMER_QDRANT_LAYOUT: ${PRIMER_QDRANT_LAYOUT:-memory}
-      PRIMER_EMBEDDING_BASE_URL: ${PRIMER_EMBEDDING_BASE_URL:?set PRIMER_EMBEDDING_BASE_URL}
-      PRIMER_EMBEDDING_MODEL: ${PRIMER_EMBEDDING_MODEL:?set PRIMER_EMBEDDING_MODEL}
+      PRIMER_EMBEDDING_BASE_URL: ${PRIMER_EMBEDDING_BASE_URL:-http://embeddings:8080/v1}
+      PRIMER_EMBEDDING_MODEL: *embedding-model
       # Empty takes the width and prompts from Primer's table of known
       # models. Set them for a model it does not know.
       PRIMER_EMBEDDING_DIMENSIONS: ${PRIMER_EMBEDDING_DIMENSIONS:-}
       PRIMER_EMBEDDING_QUERY_PREFIX: ${PRIMER_EMBEDDING_QUERY_PREFIX:-}
       PRIMER_EMBEDDING_DOCUMENT_PREFIX: ${PRIMER_EMBEDDING_DOCUMENT_PREFIX:-}
       PRIMER_EMBEDDING_API_KEY: ${PRIMER_EMBEDDING_API_KEY:-}
+      # Set but empty turns reranking off. A rerank URL has no /v1.
+      PRIMER_RERANK_BASE_URL: ${PRIMER_RERANK_BASE_URL-http://reranker:8080}
+      PRIMER_RERANK_MODEL: *rerank-model
+      PRIMER_RERANK_API_KEY: ${PRIMER_RERANK_API_KEY:-}
+      # The bundled reranker accepts at most 32 in one call.
+      PRIMER_RERANK_CANDIDATES: ${PRIMER_RERANK_CANDIDATES:-20}
       # Empty turns the graph off; search answers from vectors alone.
       PRIMER_GRAPH_URL: ${PRIMER_GRAPH_URL:-}
       PRIMER_GRAPH_PASSWORD: ${PRIMER_GRAPH_PASSWORD:-}
@@ -282,7 +361,8 @@ services:
       # and one that does is refused rather than stored in the clear.
       # Generate with: openssl rand -base64 32
       PRIMER_SETTINGS_ENCRYPTION_KEY: ${PRIMER_SETTINGS_ENCRYPTION_KEY:-}
-      PRIMER_CHAT_BASE_URL: ${PRIMER_CHAT_BASE_URL:?set PRIMER_CHAT_BASE_URL}
+      # Optional: without it, providers are added on the settings page.
+      PRIMER_CHAT_BASE_URL: ${PRIMER_CHAT_BASE_URL:-}
       # Optional. Primer asks each provider what it serves, so this only
       # says which model to offer first; a name nothing serves is ignored.
       PRIMER_CHAT_MODEL: ${PRIMER_CHAT_MODEL:-}
@@ -315,7 +395,7 @@ services:
       # Chunks are sized with this model's tokenizer, so they fit what
       # Retrieval embeds them with. PRIMER_CHUNK_TOKENIZER overrides it, for
       # a hosted model that publishes no tokenizer of its own.
-      PRIMER_EMBEDDING_MODEL: ${PRIMER_EMBEDDING_MODEL:?set PRIMER_EMBEDDING_MODEL}
+      PRIMER_EMBEDDING_MODEL: *embedding-model
       PRIMER_CHUNK_TOKENIZER: ${PRIMER_CHUNK_TOKENIZER:-}
       PRIMER_MAX_CHUNK_TOKENS: ${PRIMER_MAX_CHUNK_TOKENS:-512}
     volumes:
@@ -377,4 +457,6 @@ volumes:
   rabbitmq-data:
   source-objects:
   model-cache:
+  embedding-cache:
+  rerank-cache:
   graph-data:
