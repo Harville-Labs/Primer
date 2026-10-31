@@ -1,0 +1,138 @@
+{{- if .Values.lab.enabled }}
+{{/*
+Lab, which loads a model of its own and lets a user look inside it.
+
+One replica, recreated rather than rolled. The model lives in this process's
+memory and its weights on a volume most clusters can attach to one node at a
+time, so a rolling update would start a second pod that either cannot mount
+the volume or holds a second copy of the model beside the first - on a GPU
+node, usually more memory than there is. A restart costs the queue of runs
+waiting on it, which the web app reports as Lab being unavailable.
+
+Lab is given none of the shared secrets: no database, no internal token, no
+settings key. It reads the identity headers Web forwards and nothing else,
+so a compromise of the one process that runs code shaped by a user's choice
+of model reaches nothing beyond its own volume.
+*/}}
+{{- $full := include "primer.fullname" . }}
+{{- $lab := .Values.lab }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ $full }}-lab-models
+  labels:
+    {{- include "primer.labels" . | nindent 4 }}
+    app.kubernetes.io/component: lab
+spec:
+  accessModes: ["ReadWriteOnce"]
+  {{- with $lab.persistence.storageClass }}
+  storageClassName: {{ . | quote }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ $lab.persistence.size }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $full }}-lab
+  labels:
+    {{- include "primer.labels" . | nindent 4 }}
+    app.kubernetes.io/component: lab
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "primer.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: lab
+  template:
+    metadata:
+      labels:
+        {{- include "primer.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: lab
+    spec:
+      {{- include "primer.podIdentity" (dict "root" . "component" "lab") | nindent 6 }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      {{- with $lab.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $lab.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: lab
+          image: {{ include "primer.image" (dict "root" . "component" "lab") }}{{ if $lab.gpu }}-cuda{{ end }}
+          imagePullPolicy: {{ .Values.image.lab.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          env:
+            - name: PRIMER_AUTH_MODE
+              value: {{ .Values.auth.mode | quote }}
+            {{- if .Values.auth.adminGroup }}
+            - name: PRIMER_ADMIN_GROUP
+              value: {{ .Values.auth.adminGroup | quote }}
+            {{- end }}
+            - name: PRIMER_LAB_MODEL
+              value: {{ toJson $lab.model | quote }}
+            - name: PRIMER_LAB_MODEL_CHOICE
+              value: {{ $lab.modelChoice | quote }}
+            - name: PRIMER_LAB_REPOSITORY_PATTERNS
+              value: {{ toJson $lab.repositoryPatterns | quote }}
+            - name: PRIMER_LAB_MAX_MODEL_BYTES
+              value: {{ $lab.maxModelBytes | int64 | quote }}
+            {{- with $lab.hubEndpoint }}
+            - name: PRIMER_LAB_HUB_ENDPOINT
+              value: {{ . | quote }}
+            {{- end }}
+            - name: PRIMER_LAB_DEVICE
+              value: {{ $lab.device | quote }}
+            - name: PRIMER_LAB_DTYPE
+              value: {{ $lab.dtype | quote }}
+          ports:
+            - name: http
+              containerPort: 8000
+          livenessProbe:
+            httpGet: { path: /health/live, port: http }
+            periodSeconds: 20
+          readinessProbe:
+            httpGet: { path: /health/ready, port: http }
+            periodSeconds: 10
+          resources:
+            {{- $resources := deepCopy $lab.resources }}
+            {{- if $lab.gpu }}
+            {{- $limits := merge (dict "nvidia.com/gpu" $lab.gpu) (default (dict) $resources.limits) }}
+            {{- $_ := set $resources "limits" $limits }}
+            {{- end }}
+            {{- toYaml $resources | nindent 12 }}
+          volumeMounts:
+            - name: models
+              mountPath: /models
+            {{- include "primer.scratchMounts" . | nindent 12 }}
+      volumes:
+        - name: models
+          persistentVolumeClaim:
+            claimName: {{ $full }}-lab-models
+        {{- include "primer.scratchVolumes" . | nindent 8 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $full }}-lab
+  labels:
+    {{- include "primer.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8000
+      targetPort: http
+      name: http
+  selector:
+    {{- include "primer.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: lab
+{{- end }}

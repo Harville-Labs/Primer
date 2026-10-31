@@ -92,6 +92,7 @@ nav:
       - Configuration: operations/configuration.md
       - Connecting model providers: operations/providers.md
       - Choosing models: operations/models.md
+      - Lab: operations/lab.md
       - Deploying: operations/deploying.md
       - Kubernetes: operations/kubernetes.md
       - Migrations: operations/migrations.md

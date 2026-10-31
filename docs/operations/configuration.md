@@ -212,6 +212,27 @@ transcript and no endpoint returns them — the messages they stand for are
 all still there, and are what a reader is shown.
 
 
+## Lab
+
+Lab is optional: the `lab` Compose profile, or `lab.enabled` in the chart.
+[Lab](lab.md) says what hardware it needs. An empty value means unset, as
+Compose passes one.
+
+| Variable | Chart value | Default | Notes |
+| --- | --- | --- | --- |
+| `PRIMER_LAB_MODEL` | `lab.model` | `{"source": "hub", "repository": "Qwen/Qwen3-1.7B"}` | JSON. `{"source": "local", "path": "..."}` loads a directory inside the weights volume |
+| `PRIMER_LAB_MODEL_CHOICE` | `lab.modelChoice` | `users` | Who may switch the model every run uses: `users`, `admins`, or `operator` |
+| `PRIMER_ADMIN_GROUP` | `auth.adminGroup` | unset | Who counts as an admin for `admins` |
+| `PRIMER_LAB_REPOSITORY_PATTERNS` | `lab.repositoryPatterns` | `["*/*"]` | JSON list of shell-style patterns a repository must match |
+| `PRIMER_LAB_MAX_MODEL_BYTES` | `lab.maxModelBytes` | `20000000000` | Checked against the hub's file list before anything downloads |
+| `PRIMER_LAB_HUB_ENDPOINT` | `lab.hubEndpoint` | the public hub | A mirror |
+| `PRIMER_LAB_DEVICE` | `lab.device` | `auto` | `auto` uses CUDA when torch can see a GPU |
+| `PRIMER_LAB_DTYPE` | `lab.dtype` | `auto` | `auto` is `bfloat16` on CUDA and `float32` on CPU |
+| `PRIMER_LAB_WEIGHTS_DIR` | | `/models` | Where the volume is mounted; fetched weights go under `hub/` |
+| | `lab.gpu` | `0` | GPUs to request. Above zero, the `-cuda` image is used |
+| | `lab.persistence.size` | `50Gi` | Nothing is evicted; see [Lab](lab.md) |
+| | `lab.nodeSelector`, `lab.tolerations` | none | To place Lab on a GPU node |
+
 ## Settings that fail at startup
 
 Some combinations are refused rather than accepted and worked around later:

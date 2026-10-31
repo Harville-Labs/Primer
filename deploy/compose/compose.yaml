@@ -221,6 +221,47 @@ services:
     command: ["python", "-m", "primer_retrieval.graph_schema"]
     restart: "no"
 
+  # Lab, off unless the `lab` profile is enabled:
+  #
+  #   COMPOSE_PROFILES=lab
+  #
+  # It loads a small open model itself - Qwen3-1.7B unless PRIMER_LAB_MODEL
+  # names another - and fetches the weights into `lab-models` the first time,
+  # so the first start takes as long as that download. Nothing is fetched
+  # ahead of time and nothing is evicted: the volume grows by one model per
+  # model anyone chooses. On an NVIDIA GPU, add compose.gpu.yaml.
+  #
+  # Every variable falls back to empty for the same reason the graph's do,
+  # and Lab reads an empty one as unset. No port is published: the web app
+  # is what reaches it, as it is for Chat.
+  lab:
+    build:
+      context: ../..
+      dockerfile: deploy/images/Dockerfile.lab
+      target: cpu
+    <<: *hardening
+    profiles: [lab]
+    environment:
+      # Fixed, not configurable: see the note at the top of this file.
+      PRIMER_AUTH_MODE: disabled
+      PRIMER_LAB_MODEL: ${PRIMER_LAB_MODEL:-}
+      PRIMER_LAB_MODEL_CHOICE: ${PRIMER_LAB_MODEL_CHOICE:-}
+      PRIMER_LAB_REPOSITORY_PATTERNS: ${PRIMER_LAB_REPOSITORY_PATTERNS:-}
+      PRIMER_LAB_MAX_MODEL_BYTES: ${PRIMER_LAB_MAX_MODEL_BYTES:-}
+      PRIMER_LAB_HUB_ENDPOINT: ${PRIMER_LAB_HUB_ENDPOINT:-}
+      PRIMER_LAB_DEVICE: ${PRIMER_LAB_DEVICE:-}
+      PRIMER_LAB_DTYPE: ${PRIMER_LAB_DTYPE:-}
+    volumes:
+      - lab-models:/models
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8000/health/ready')"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    restart: unless-stopped
+
   # Stopped when PRIMER_EMBEDDING_BASE_URL names your own server.
   embeddings:
     <<: *model-server
@@ -460,3 +501,4 @@ volumes:
   embedding-cache:
   rerank-cache:
   graph-data:
+  lab-models:

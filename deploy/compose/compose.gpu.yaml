@@ -1,0 +1,19 @@
+# Lab on an NVIDIA GPU. Add this file after the base one:
+#
+#   COMPOSE_PROFILES=lab docker compose \
+#     -f deploy/compose/compose.yaml -f deploy/compose/compose.gpu.yaml up --wait
+#
+# It needs the NVIDIA Container Toolkit on the host and a driver that
+# supports CUDA 13.2. It changes Lab alone: no other Primer service uses a
+# GPU, and the bundled model servers are CPU builds.
+services:
+  lab:
+    build:
+      target: cuda
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
