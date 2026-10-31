@@ -97,6 +97,16 @@ jobs:
             dockerfile: deploy/images/Dockerfile.worker
           - name: primer-web
             dockerfile: deploy/images/Dockerfile.gui
+          # Lab twice, from one Dockerfile: the CPU build under the plain
+          # tags and the CUDA build under the same tags with `-cuda`, which
+          # is what the chart's lab.gpu switches to.
+          - name: primer-lab
+            dockerfile: deploy/images/Dockerfile.lab
+            target: cpu
+          - name: primer-lab
+            dockerfile: deploy/images/Dockerfile.lab
+            target: cuda
+            suffix: -cuda
     steps:
       # The tag, explicitly. A release event's ref is already the tag, but a
       # manual re-run's is not, and building the wrong commit under a release
@@ -119,6 +129,8 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ghcr.io/${{ github.repository_owner }}/${{ matrix.name }}
+          flavor: |
+            suffix=${{ matrix.suffix }},onlatest=true
           # The version, and the minor line it is the newest of. Not
           # `latest`: that belongs to main, and moving it here would make the
           # newest build of Primer and the newest release of Primer the same
@@ -134,11 +146,12 @@ jobs:
         with:
           context: .
           file: ${{ matrix.dockerfile }}
+          target: ${{ matrix.target }}
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           platforms: linux/amd64
-          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-from: type=gha,scope=${{ matrix.name }}${{ matrix.suffix }}
 
   chart:
     name: Chart
