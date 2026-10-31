@@ -17,7 +17,11 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     """Deployment configuration for the Lab service."""
 
-    model_config = SettingsConfigDict(env_prefix="PRIMER_", extra="forbid")
+    #: Compose hands every optional Lab setting over as "" when it is unset,
+    #: because it interpolates the whole file whichever profiles are on. An
+    #: empty value therefore means "not set" here, as it does in Retrieval;
+    #: read literally it would be an invalid model, device, or size.
+    model_config = SettingsConfigDict(env_prefix="PRIMER_", extra="forbid", env_ignore_empty=True)
 
     #: Loaded at startup, before anyone has chosen. Set as JSON, for example
     #: PRIMER_LAB_MODEL='{"source": "local", "path": "my-finetune"}'.
