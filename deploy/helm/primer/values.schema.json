@@ -317,6 +317,116 @@
             "documentPrefix": {
               "description": "Prompt put before every passage. Empty takes it from Primer's table of known models.",
               "type": "string"
+            },
+            "bundled": {
+              "type": "object",
+              "description": "An embedding server run by this release. Exclusive with baseUrl.",
+              "additionalProperties": false,
+              "properties": {
+                "enabled": {
+                  "type": "boolean"
+                },
+                "persistence": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "size": {
+                      "type": "string"
+                    },
+                    "storageClass": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "resources": {
+                  "type": "object"
+                },
+                "pooling": {
+                  "description": "TEI's --pooling. Empty reads it from the model.",
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "modelServer": {
+          "type": "object",
+          "description": "The Text Embeddings Inference image the bundled model servers run.",
+          "additionalProperties": false,
+          "properties": {
+            "image": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "repository",
+                "tag"
+              ],
+              "properties": {
+                "repository": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "tag": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "pullPolicy": {
+                  "type": "string",
+                  "enum": [
+                    "Always",
+                    "IfNotPresent",
+                    "Never"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "rerank": {
+          "type": "object",
+          "properties": {
+            "baseUrl": {
+              "description": "A TEI-compatible /rerank endpoint. Exclusive with bundled.enabled.",
+              "type": "string"
+            },
+            "model": {
+              "type": "string"
+            },
+            "existingSecret": {
+              "type": "string"
+            },
+            "apiKeyKey": {
+              "type": "string"
+            },
+            "candidates": {
+              "description": "Passages fetched before reranking.",
+              "type": "integer",
+              "minimum": 1
+            },
+            "bundled": {
+              "type": "object",
+              "description": "A reranker run by this release. Exclusive with baseUrl.",
+              "additionalProperties": false,
+              "properties": {
+                "enabled": {
+                  "type": "boolean"
+                },
+                "persistence": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "size": {
+                      "type": "string"
+                    },
+                    "storageClass": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "resources": {
+                  "type": "object"
+                }
+              }
             }
           }
         },

@@ -29,8 +29,6 @@ BASE_VALUES = [
     "auth.oidc.existingSecret=primer-oidc",
     "inference.chat.baseUrl=http://model/v1",
     "inference.chat.model=chat-model",
-    "inference.embeddings.baseUrl=http://model/v1",
-    "inference.embeddings.model=embed-model",
     "ingress.host=primer.example.com",
 ]
 

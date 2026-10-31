@@ -167,7 +167,7 @@ drop good passages on one deployment and admit everything on the next.
   value: {{ .Values.inference.minScore | quote }}
 {{- end }}
 - name: PRIMER_EMBEDDING_BASE_URL
-  value: {{ required "inference.embeddings.baseUrl is required" .Values.inference.embeddings.baseUrl | quote }}
+  value: {{ include "primer.embeddingUrl" . | quote }}
 - name: PRIMER_EMBEDDING_MODEL
   value: {{ required "inference.embeddings.model is required" .Values.inference.embeddings.model | quote }}
 {{- /*
@@ -195,24 +195,56 @@ know. Retrieval refuses to start on an unknown model with no width.
       key: {{ .Values.inference.embeddings.apiKeyKey }}
 {{- end }}
 {{- /*
-Reranking is optional and off unless an endpoint is named. Emitting nothing
-is what keeps a deployment without one behaving exactly as it did before.
+Reranking is optional. Emitting nothing when there is no reranker is what
+makes Retrieval return the vector ordering unchanged.
 */}}
-{{- if .Values.inference.rerank.baseUrl }}
+{{- with include "primer.rerankUrl" . }}
 - name: PRIMER_RERANK_BASE_URL
-  value: {{ .Values.inference.rerank.baseUrl | quote }}
+  value: {{ . | quote }}
 - name: PRIMER_RERANK_MODEL
-  value: {{ required "inference.rerank.model is required when a rerank endpoint is set" .Values.inference.rerank.model | quote }}
+  value: {{ required "inference.rerank.model is required when a reranker is set" $.Values.inference.rerank.model | quote }}
 - name: PRIMER_RERANK_CANDIDATES
-  value: {{ .Values.inference.rerank.candidates | quote }}
-{{- if .Values.inference.rerank.existingSecret }}
+  value: {{ $.Values.inference.rerank.candidates | quote }}
+{{- if $.Values.inference.rerank.existingSecret }}
 - name: PRIMER_RERANK_API_KEY
   valueFrom:
     secretKeyRef:
-      name: {{ .Values.inference.rerank.existingSecret }}
-      key: {{ .Values.inference.rerank.apiKeyKey }}
+      name: {{ $.Values.inference.rerank.existingSecret }}
+      key: {{ $.Values.inference.rerank.apiKeyKey }}
 {{- end }}
 {{- end }}
+{{- end -}}
+
+{{/*
+Where the embedding and reranking servers are: the one place each is
+decided, as primer.qdrantUrl is for the vector store. Both a bundled server
+and a URL is refused, because either choice leaves the other running unused.
+
+Embeddings have no "off" - nothing can be indexed or searched without them -
+so neither is refused too. Reranking is optional, and neither means none.
+*/}}
+{{- define "primer.embeddingUrl" -}}
+{{- $embeddings := .Values.inference.embeddings -}}
+{{- if $embeddings.bundled.enabled -}}
+{{- if $embeddings.baseUrl -}}
+{{- fail "inference.embeddings.baseUrl and inference.embeddings.bundled.enabled are both set. Set baseUrl to use an embedding server you run and turn bundled.enabled off, or leave baseUrl empty to have this release run one." -}}
+{{- end -}}
+{{- printf "http://%s-embeddings:8080/v1" (include "primer.fullname" .) -}}
+{{- else -}}
+{{- required "inference.embeddings.baseUrl is required when inference.embeddings.bundled.enabled is off: give the /v1 address of an OpenAI-compatible embedding server, or turn bundled.enabled back on" $embeddings.baseUrl -}}
+{{- end -}}
+{{- end -}}
+
+{{- define "primer.rerankUrl" -}}
+{{- $rerank := .Values.inference.rerank -}}
+{{- if $rerank.bundled.enabled -}}
+{{- if $rerank.baseUrl -}}
+{{- fail "inference.rerank.baseUrl and inference.rerank.bundled.enabled are both set. Set baseUrl to use a reranker you run and turn bundled.enabled off, or leave baseUrl empty to have this release run one." -}}
+{{- end -}}
+{{- printf "http://%s-reranker:8080" (include "primer.fullname" .) -}}
+{{- else -}}
+{{- $rerank.baseUrl -}}
+{{- end -}}
 {{- end -}}
 
 {{/*

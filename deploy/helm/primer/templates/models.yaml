@@ -1,0 +1,165 @@
+{{/*
+The embedding and reranking servers this release runs, when it runs them.
+
+Text Embeddings Inference for both, on CPU, one replica each. They are one
+template because they are one kind of thing: the same image, the same
+hardening, the same model cache, differing in the model and a few flags. A
+second copy of this would be the one whose securityContext nobody updated.
+
+A StatefulSet rather than a Deployment for the cache's sake. The model is a
+download of gigabytes onto a ReadWriteOnce volume, and a Deployment's
+rolling update starts the new pod before stopping the old one - on another
+node that waits forever for a volume the old pod still holds.
+
+Run under the same hardening as every other pod here. TEI writes only the
+model cache, at /data, and /tmp; HF_HOME points the Hugging Face client's
+other state at the cache too, since the image's home is not writable.
+
+The flags are the ones docs/operations/models.md measured. Each cost a
+failure somewhere:
+
+  --max-batch-tokens         what warmup allocates against, so it is what an
+                             OOM at startup is made of.
+  --auto-truncate            an over-long input is trimmed rather than
+                             failing the whole batch it arrived in.
+  --max-client-batch-size    at least what Primer sends in one call: 32
+                             passages from the document embedder, and the
+                             whole rerank shortlist.
+  --max-concurrent-requests  counted in inputs, not requests. Below the
+                             client batch size, every batch gets a 429.
+  --tokenization-workers     reranker only. Sized from the node otherwise,
+                             and each holds its own copy of a 250k-entry
+                             vocabulary; on a large node that was OOM-killed
+                             after reporting ready.
+*/}}
+{{- $full := include "primer.fullname" . }}
+{{- $image := .Values.inference.modelServer.image }}
+{{- $servers := list }}
+{{- with .Values.inference.embeddings }}
+{{- if .bundled.enabled }}
+{{- $args := list }}
+{{- with .bundled.pooling }}
+{{- $args = list "--pooling" . }}
+{{- end }}
+{{- $servers = append $servers (dict "component" "embeddings" "model" .model "bundled" .bundled "args" $args "startupSeconds" 900) }}
+{{- end }}
+{{- end }}
+{{- with .Values.inference.rerank }}
+{{- if .bundled.enabled }}
+{{- if gt (int .candidates) 32 }}
+{{- fail "inference.rerank.candidates is above 32, the most the bundled reranker accepts in one call. Lower it, or run a reranker of your own and set inference.rerank.baseUrl." }}
+{{- end }}
+{{- $servers = append $servers (dict "component" "reranker" "model" .model "bundled" .bundled "args" (list "--tokenization-workers" "4") "startupSeconds" 600) }}
+{{- end }}
+{{- end }}
+{{- range $server := $servers }}
+{{- $component := $server.component }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $full }}-{{ $component }}
+  labels:
+    {{- include "primer.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: {{ $component }}
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+  selector:
+    {{- include "primer.selectorLabels" $ | nindent 4 }}
+    app.kubernetes.io/component: {{ $component }}
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ $full }}-{{ $component }}
+  labels:
+    {{- include "primer.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: {{ $component }}
+spec:
+  replicas: 1
+  serviceName: {{ $full }}-{{ $component }}
+  selector:
+    matchLabels:
+      {{- include "primer.selectorLabels" $ | nindent 6 }}
+      app.kubernetes.io/component: {{ $component }}
+  template:
+    metadata:
+      labels:
+        {{- include "primer.selectorLabels" $ | nindent 8 }}
+        app.kubernetes.io/component: {{ $component }}
+    spec:
+      {{- include "primer.podIdentity" (dict "root" $ "component" $component) | nindent 6 }}
+      securityContext:
+        {{- toYaml $.Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: tei
+          image: {{ printf "%s:%s" $image.repository $image.tag }}
+          imagePullPolicy: {{ $image.pullPolicy }}
+          securityContext:
+            {{- toYaml $.Values.securityContext | nindent 12 }}
+          args:
+            - --model-id
+            - {{ required (printf "a model is required for the bundled %s server" $component) $server.model | quote }}
+            - --port
+            - "8080"
+            - --max-batch-tokens
+            - "4096"
+            - --auto-truncate
+            - --max-client-batch-size
+            - "32"
+            - --max-concurrent-requests
+            - "256"
+            {{- range $server.args }}
+            - {{ . | quote }}
+            {{- end }}
+          env:
+            - name: HF_HOME
+              value: /data
+            - name: HUGGINGFACE_HUB_CACHE
+              value: /data
+          ports:
+            - name: http
+              containerPort: 8080
+          # The first start downloads the model, which is minutes on a slow
+          # link; a startup probe gives it that once without making a hung
+          # server wait as long to be restarted later.
+          startupProbe:
+            httpGet: { path: /health, port: http }
+            periodSeconds: 10
+            failureThreshold: {{ div $server.startupSeconds 10 }}
+          readinessProbe:
+            httpGet: { path: /health, port: http }
+            periodSeconds: 15
+          livenessProbe:
+            httpGet: { path: /health, port: http }
+            periodSeconds: 30
+          resources:
+            {{- toYaml $server.bundled.resources | nindent 12 }}
+          volumeMounts:
+            - name: model-cache
+              mountPath: /data
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 1Gi
+  volumeClaimTemplates:
+    - metadata:
+        name: model-cache
+        labels:
+          {{- include "primer.selectorLabels" $ | nindent 10 }}
+          app.kubernetes.io/component: {{ $component }}
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        {{- with $server.bundled.persistence.storageClass }}
+        storageClassName: {{ . | quote }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ $server.bundled.persistence.size }}
+{{- end }}
