@@ -1,31 +1,21 @@
 <script lang="ts">
-	import {
-		Alert,
-		Button,
-		Composer,
-		Conversation,
-		Markdown,
-		Message,
-		Progress,
-		Reasoning,
-		Spinner
-	} from '@sivir-ui/svelte';
-	import { Check, FileText, Plus } from '@lucide/svelte';
+	import { Alert, Attachment, Button, Composer, Conversation, Progress } from '@sivir-ui/svelte';
+	import { Plus } from '@lucide/svelte';
 	import { afterNavigate, goto, invalidateAll, replaceState } from '$app/navigation';
 	import { page } from '$app/state';
 	import { untrack } from 'svelte';
 	import CitationPanel from '#lib/components/CitationPanel.svelte';
 	import LibraryLink from '#lib/components/LibraryLink.svelte';
 	import ModelPicker from '#lib/components/ModelPicker.svelte';
-	import ResponseActions from '#lib/components/ResponseActions.svelte';
+	import ChatTurn from '#lib/components/ChatTurn.svelte';
+	import UploadNotices from '#lib/components/UploadNotices.svelte';
 	import { parseEvents, type StreamState } from '#lib/api/sse.ts';
 	import type { ConversationSummary, MessageSummary } from '#lib/api/types.ts';
-	import { formatBytes, rejectionFor } from '#lib/upload.ts';
 	import { draft } from '#lib/draft.svelte.ts';
 	import { modelOf, unqualify } from '#lib/models.ts';
-	import { citationFrom, linkCitations } from '#lib/citations.ts';
 	import { modelChanges } from '#lib/transcript.ts';
 	import { Transcript } from '#lib/transcript.svelte.ts';
+	import { ChatUploads } from '#lib/chat-uploads.svelte.ts';
 	import { discardLibrary, uploadDocument } from '#lib/upload-client.ts';
 	import type { PageData } from './$types';
 
@@ -65,25 +55,16 @@
 	let started = $derived(conversationId !== null);
 	let dragging = $state(false);
 	let linkedName = $derived(data.libraries.find((library) => library.id === libraryId)?.name);
-	//: One card per file in flight or just finished. `done` lingers rather
-	//: than vanishing the instant the request resolves, so the card is seen
-	//: turning from greyed-out into its finished state instead of just
-	//: disappearing - the same reasoning as `uploadSuccess` below, applied to
-	//: the preview instead of the text.
-	let uploads = $state<{ id: string; name: string; size: number; status: 'uploading' | 'done' }[]>(
-		[]
-	);
-	let uploadError = $state('');
-	// Shown for a few seconds after a successful upload rather than cleared
-	// with `uploading`, because a small file uploads fast enough that the
-	// spinner it briefly replaces would be the only sign anything happened -
-	// and then it is gone, and the upload looks like it silently failed.
-	let uploadSuccess = $state('');
-	let successToken = 0;
 	let announcement = $state('');
-	//: Set only when dropping a file created the library holding it, which is
-	//: the one case where the user should be asked whether to keep it.
-	let offered = $state<{ id: string; name: string; documents: number } | null>(null);
+	const uploads = new ChatUploads({
+		upload: uploadDocument,
+		discard: discardLibrary,
+		announce: (message) => (announcement = message)
+	});
+	//: Bumped whenever the thread on screen is replaced, so each turn's own
+	//: state goes with it rather than passing to the turn at the same
+	//: position in the next thread.
+	let thread = $state(0);
 
 	//: Which stored conversation this screen is currently showing, so that
 	//: reloading the list does not look like opening a different thread.
@@ -110,10 +91,8 @@
 		sourcesFor = null;
 		sourcesOpen = false;
 		revealed = null;
-		uploadError = '';
-		uploadSuccess = '';
-		uploads = [];
-		offered = null;
+		uploads.clear();
+		thread += 1;
 	}
 
 	/**
@@ -188,85 +167,13 @@
 	//: rather than left inviting.
 	let answerable = $derived(data.models.length > 0);
 
-	//: Whether each turn's thinking is expanded, once someone has said so.
-	//: Absent means nobody has touched it, and the default applies: open
-	//: while the model is still working, folded away once it has answered.
-	//: Keyed by position, which is stable for the life of a transcript -
-	//: turns are only ever appended.
-	let thinkingOpen = $state<Record<number, boolean>>({});
-	function showingThinking(index: number, done: boolean): boolean {
-		return thinkingOpen[index] ?? !done;
-	}
-
-	//: A line of the thinking, shown on the folded header so it is worth
-	//: opening. Newlines are flattened because the header is one line and a
-	//: model's scratch work is full of them.
-	const PREVIEW_CHARACTERS = 110;
-	function thinkingPreview(reasoning: string): string {
-		const flattened = reasoning.replace(/\s+/g, ' ').trim();
-		return flattened.length > PREVIEW_CHARACTERS
-			? `${flattened.slice(0, PREVIEW_CHARACTERS).trimEnd()}…`
-			: flattened;
-	}
-
-	// Shown for a few seconds rather than cleared right away, and guarded by
-	// a token so an upload that finishes later than a fresher one cannot
-	// blank out the message the fresher one just set.
-	function showSuccess(message: string) {
-		uploadSuccess = message;
-		const token = ++successToken;
-		setTimeout(() => {
-			if (successToken === token) uploadSuccess = '';
-		}, 4000);
-	}
-
 	async function accept(files: File[]) {
-		uploadError = '';
-		uploadSuccess = '';
-		// A file dropped here would land in a library this conversation
-		// cannot be asked about, and the upload would look like it worked.
-		if (started && !libraryId) {
-			uploadError =
-				'This conversation was started without a library. Start a new chat to ask about a file.';
-			announcement = uploadError;
-			return;
-		}
-		for (const file of files) {
-			const rejection = rejectionFor(file, data.capabilities);
-			if (rejection) {
-				uploadError = rejection.message;
-				announcement = rejection.message;
-				continue;
-			}
-
-			const id = crypto.randomUUID();
-			uploads = [...uploads, { id, name: file.name, size: file.size, status: 'uploading' }];
-			announcement = `Uploading ${file.name}.`;
-			try {
-				const result = await uploadDocument(file, libraryId || undefined);
-				// Linking it is the point: a file dropped into a conversation
-				// was dropped there to be asked about.
-				libraryId = result.libraryId;
-				if (result.created && result.libraryName) {
-					offered = { id: result.libraryId, name: result.libraryName, documents: 1 };
-				} else if (offered && offered.id === result.libraryId) {
-					offered = { ...offered, documents: offered.documents + 1 };
-				}
-				const named = result.libraryName ?? linkedName ?? 'the library';
-				announcement = `${file.name} added to ${named}.`;
-				showSuccess(announcement);
-				uploads = uploads.map((upload) =>
-					upload.id === id ? { ...upload, status: 'done' } : upload
-				);
-				setTimeout(() => {
-					uploads = uploads.filter((upload) => upload.id !== id);
-				}, 4000);
-			} catch (error) {
-				uploadError = error instanceof Error ? error.message : `${file.name} could not be uploaded.`;
-				announcement = uploadError;
-				uploads = uploads.filter((upload) => upload.id !== id);
-			}
-		}
+		libraryId = await uploads.accept(files, {
+			libraryId,
+			libraryName: linkedName,
+			started,
+			capabilities: data.capabilities
+		});
 		// The sidebar counts documents, and it is on this page too. Safe to
 		// refresh everything now: the effect above adopts conversations and
 		// never clears them, so a reload cannot take the answers off screen.
@@ -274,15 +181,9 @@
 	}
 
 	async function discard() {
-		if (!offered) return;
-		const library = offered;
-		offered = null;
+		if (!uploads.offered) return;
 		libraryId = '';
-		try {
-			await discardLibrary(library.id);
-		} catch (error) {
-			uploadError = error instanceof Error ? error.message : 'That library could not be removed.';
-		}
+		await uploads.discard();
 		await invalidateAll();
 	}
 
@@ -377,39 +278,6 @@
 		sourcesFor = stream;
 		sourcesOpen = true;
 		revealed = position === null ? null : { position, token: ++revealToken };
-	}
-
-	/**
-	 * Following a citation marker in an answer to the passage it names.
-	 *
-	 * Delegated from a wrapper rather than bound to each link, because the
-	 * links are inside rendered Markdown: this page hands the renderer text
-	 * and does not own what it produces. A link the model wrote itself
-	 * falls through and behaves like a link.
-	 */
-	function followCitation(event: MouseEvent, stream: StreamState) {
-		const anchor = (event.target as Element | null)?.closest('a');
-		const position = citationFrom(anchor?.getAttribute('href'));
-		if (position === null || position > stream.citations.length) return;
-		event.preventDefault();
-		showSources(stream, position);
-	}
-
-	function completed(stream: StreamState): MessageSummary | null {
-		if (stream.message) return stream.message;
-		// A failed stream still has an answer worth copying: the text it
-		// managed to write before it stopped.
-		if (!stream.error || !stream.messageId) return null;
-		return {
-			id: stream.messageId,
-			conversation_id: stream.conversationId ?? '',
-			role: 'assistant',
-			state: 'failed',
-			content: stream.text,
-			citations: stream.citations,
-			error_code: stream.error.code,
-			created_at: new Date().toISOString()
-		};
 	}
 </script>
 
@@ -554,108 +422,11 @@
 				</Conversation.Empty>
 			{/if}
 
-			{#each transcript.turns as turn, index (index)}
-				{#if switches[index]}
-					<!--
-					  Which model wrote an answer is part of the answer, and in
-					  a conversation where someone changed it halfway it is the
-					  thing that explains why two answers do not sound alike.
-					  Above the question, because the choice was made before it
-					  was asked. Quiet: it is a note about the transcript, not
-					  a turn in it.
-					-->
-					<div class="my-3 flex items-center gap-3 text-xs text-muted-foreground">
-						<span class="h-px flex-1 bg-border"></span>
-						<span>Switched model to {switches[index]}</span>
-						<span class="h-px flex-1 bg-border"></span>
-					</div>
-				{/if}
-
-				<Message.Root from="user">
-					<Message.Content>{turn.question}</Message.Content>
-				</Message.Root>
-
-				<Message.Root from="assistant" status={turn.stream.done ? 'idle' : 'streaming'}>
-					{#if turn.stream.reasoning !== null}
-						<!--
-						  What the model worked through, above the answer it
-						  produced and folded away once it has. Null rather
-						  than empty is what keeps this off the screen
-						  entirely for the models that do not think aloud,
-						  which is most of them.
-
-						  Quiet on purpose: it is scratch work, not the
-						  answer, and it must not compete with the thing the
-						  reader actually asked for.
-						-->
-						<Reasoning.Root
-							streaming={!turn.stream.done}
-							open={showingThinking(index, turn.stream.done)}
-							onOpenChange={(open) => (thinkingOpen[index] = open)}
-							class="mb-2"
-						>
-							<!--
-							  Once the answer settles, the folded header carries a
-							  line of the thinking itself. The kit's own settled
-							  label is the elapsed time, which tells a reader
-							  nothing about whether this one is worth opening.
-							-->
-							<Reasoning.Trigger summary={thinkingPreview(turn.stream.reasoning)} />
-							<!--
-							  `overflow-wrap:anywhere` because thinking is where a
-							  model writes out a hash, a path or a URL unbroken,
-							  and `pre-wrap` alone will not break inside a word.
-							  The kit sets this on an answer already; reasoning
-							  is rendered here rather than through it.
-							-->
-							<Reasoning.Content
-								class="whitespace-pre-wrap [overflow-wrap:anywhere] border-l border-border pl-3 text-xs
-									leading-relaxed text-muted-foreground"
-							>
-								{turn.stream.reasoning}
-							</Reasoning.Content>
-						</Reasoning.Root>
-					{/if}
-
-					<Message.Content>
-						<!--
-						  Rendered as Markdown, since models write it. The text
-						  is the model's, so it is rendered rather than
-						  interpreted: nothing here acts on it.
-
-						  The wrapper catches clicks on the citation markers,
-						  which are rewritten into links on the way in. An
-						  anchor raises a click on Enter as well as on a
-						  pointer, so this is reached from the keyboard too.
-						-->
-						<div role="presentation" onclick={(event) => followCitation(event, turn.stream)}>
-							<Markdown
-								content={linkCitations(turn.stream.text, turn.stream.citations.length)}
-							/>
-						</div>
-					</Message.Content>
-
-					{#if turn.stream.error}
-						<Alert.Root variant="error" class="mt-2">
-							<Alert.Description>
-								{turn.stream.error.detail ?? 'The answer stopped before it finished.'}
-							</Alert.Description>
-						</Alert.Root>
-					{/if}
-
-					{#if turn.stream.done}
-						{@const message = completed(turn.stream)}
-						{#if message}
-							<Message.Actions>
-								<ResponseActions
-									{message}
-									onshowsources={() => showSources(turn.stream)}
-								/>
-							</Message.Actions>
-						{/if}
-					{/if}
-				</Message.Root>
-			{/each}
+			{#key thread}
+				{#each transcript.turns as turn, index (index)}
+					<ChatTurn {turn} switchedTo={switches[index]} onshowsources={showSources} />
+				{/each}
+			{/key}
 		</Conversation.Content>
 		<Conversation.ScrollButton />
 	</Conversation.Root>
@@ -687,31 +458,19 @@
 	<div class="mt-2 flex flex-wrap items-center justify-between gap-3">
 		<div class="flex flex-wrap items-center gap-2">
 			<LibraryLink libraries={data.libraries} bind:value={libraryId} locked={started} />
-			{#each uploads as upload (upload.id)}
+			{#each uploads.pending as upload (upload.id)}
 				<!--
-				  A preview of the document it is about to become, greyed out
-				  rather than a bare spinner - what is happening is that this
-				  file specifically is becoming part of the library, not that
-				  work of some kind is in progress.
+				  A preview of the document it is about to become rather than a
+				  bare spinner - what is happening is that this file specifically
+				  is becoming part of the library, not that work of some kind is in
+				  progress.
 				-->
-				<div
-					class="flex items-center gap-2 rounded-md border border-border bg-card px-2.5 py-1.5
-						text-xs transition-opacity duration-300
-						{upload.status === 'uploading' ? 'opacity-50' : 'opacity-100'}"
-				>
-					{#if upload.status === 'uploading'}
-						<Spinner size={12} aria-hidden="true" />
-					{:else}
-						<Check size={12} class="text-[var(--color-success)]" aria-hidden="true" />
-					{/if}
-					<FileText size={13} class="shrink-0 text-muted-foreground" aria-hidden="true" />
-					<span class="flex min-w-0 flex-col leading-tight">
-						<span class="max-w-[10rem] truncate font-medium text-foreground" title={upload.name}>
-							{upload.name}
-						</span>
-						<span class="text-muted-foreground">{formatBytes(upload.size)}</span>
-					</span>
-				</div>
+				<Attachment.Item
+					file={upload.file}
+					status={upload.status}
+					removable={false}
+					class="max-w-[14rem]"
+				/>
 			{/each}
 		</div>
 
@@ -726,41 +485,7 @@
 	-->
 	<p class="sr-only" aria-live="polite">{announcement}</p>
 
-	{#if uploadSuccess}
-		<Alert.Root variant="success" class="mt-3">
-			<Alert.Description>{uploadSuccess}</Alert.Description>
-		</Alert.Root>
-	{/if}
-
-	{#if uploadError}
-		<Alert.Root variant="error" class="mt-3">
-			<Alert.Description>{uploadError}</Alert.Description>
-		</Alert.Root>
-	{/if}
-
-	{#if offered}
-		<!--
-		  Asked, not assumed. Dropping a file into a conversation with nowhere
-		  to put it had to create somewhere, and a library the user never
-		  chose should not quietly become permanent. Keeping is the default
-		  action because the document is already in it and already searchable.
-		-->
-		<div
-			class="mt-3 flex flex-wrap items-center gap-3 rounded-lg border border-border
-				bg-card p-3 text-sm shadow-[var(--elevation-1)]"
-		>
-			<span class="min-w-0 flex-1">
-				Started a library called
-				<strong class="font-medium">{offered.name}</strong>
-				to hold
-				{offered.documents === 1 ? 'this file' : `these ${offered.documents} files`}. Keep it?
-			</span>
-			<div class="flex items-center gap-2">
-				<Button size="sm" onclick={() => (offered = null)}>Keep</Button>
-				<Button size="sm" variant="ghost" onclick={discard}>Discard</Button>
-			</div>
-		</div>
-	{/if}
+	<UploadNotices {uploads} ondiscard={discard} />
 </div>
 </div>
 
