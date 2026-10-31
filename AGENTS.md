@@ -125,8 +125,8 @@ uv run ruff check .
 uv run ruff format --check .
 uv run ty check
 
-# Python tests. Service suites take a PostgreSQL container (testcontainers,
-# pgvector/pgvector:pg17) and start it themselves.
+# Python tests. Service suites start the containers they need themselves
+# (testcontainers): postgres:17, qdrant/qdrant, neo4j.
 uv run pytest tests -q                      # repo, chart, compose, security policy
 uv run pytest services/<name>/tests -q      # one service
 

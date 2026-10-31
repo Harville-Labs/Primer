@@ -52,10 +52,9 @@ and says which setting to change, rather than indexing a graph nobody keeps.
 
 | Variable | Default | Notes |
 | --- | --- | --- |
-| `PRIMER_VECTOR_STORE` | `pgvector` | `pgvector` or `qdrant` |
-| `PRIMER_DATABASE_URL` | local PostgreSQL | For pgvector |
-| `PRIMER_VECTOR_SCHEMA` | `vectors` | Kept apart from Control's schema |
-| `PRIMER_QDRANT_URL` | unset | **Required** when using Qdrant |
+| `PRIMER_QDRANT_URL` | `http://localhost:6333` | Compose and the chart point it at the Qdrant they run |
+| `PRIMER_QDRANT_API_KEY` | unset | For a Qdrant that requires one |
+| `PRIMER_QDRANT_INDEX` | `primer_chunks` | The collection every library's passages share |
 | `PRIMER_EMBEDDING_MODEL` | `text-embedding-3-small` | The name your server answers to |
 | `PRIMER_EMBEDDING_DIMENSIONS` | from the model | **Required** for a model Primer does not know |
 | `PRIMER_EMBEDDING_QUERY_PREFIX` | from the model | Prompt put before every query |
@@ -212,9 +211,6 @@ Some combinations are refused rather than accepted and worked around later:
 
 - `PRIMER_AUTH_MODE=oidc` with an empty subject header. The alternative is a
   deployment that believes it is authenticated but authenticates nobody.
-- `PRIMER_VECTOR_STORE=qdrant` with no `PRIMER_QDRANT_URL`. Discovering that
-  on the first search means it surfaces as a broken product rather than a
-  broken deployment.
 
 ## Changing the embedding model
 
