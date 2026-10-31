@@ -8,8 +8,9 @@ that choosing either is not a change in behavior.
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Literal, cast
 
+from primer_contracts.embedding_models import find_embedding_model
 from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -21,7 +22,11 @@ VectorStore = Literal["pgvector", "qdrant"]
 class Settings(BaseSettings):
     """Deployment configuration for the Retrieval service."""
 
-    model_config = SettingsConfigDict(env_prefix="PRIMER_", extra="forbid")
+    #: An empty variable is an unset one. Compose can only pass an optional
+    #: setting through as `${VAR:-}`, which arrives as "" rather than absent,
+    #: and "" for the embedding dimensions would be a parse error rather than
+    #: "use the model's own".
+    model_config = SettingsConfigDict(env_prefix="PRIMER_", extra="forbid", env_ignore_empty=True)
 
     vector_store: VectorStore = "pgvector"
 
@@ -35,9 +40,13 @@ class Settings(BaseSettings):
     qdrant_index: str = Field(default="primer_chunks")
 
     #: Any OpenAI-compatible endpoint: a hosted model, or a local server.
-    #: Primer never ships an embedding model of its own.
+    #: For a model in `primer_contracts.embedding_models` the three settings
+    #: after it are filled in from there, and setting one overrides it; an
+    #: unknown model has to state its dimensions. See `_resolve_embedding_model`.
     embedding_model: str = Field(default="text-embedding-3-small")
-    embedding_dimensions: int = Field(default=1536, gt=0)
+    embedding_dimensions: int | None = Field(default=None, gt=0)
+    embedding_query_prefix: str | None = Field(default=None)
+    embedding_document_prefix: str | None = Field(default=None)
     embedding_base_url: str | None = Field(default=None)
     embedding_api_key: SecretStr | None = Field(default=None)
     embedding_timeout_seconds: float = Field(default=30.0, gt=0)
@@ -98,6 +107,41 @@ class Settings(BaseSettings):
         default=None,
         description="Shared credential for this cluster-internal API; unset denies it",
     )
+
+    @model_validator(mode="after")
+    def _resolve_embedding_model(self) -> Settings:
+        """Fill in what the model's name already says, and refuse to guess.
+
+        Dimensions are the one setting that cannot fall back to nothing: the
+        vector column is created at that width, and a wrong width surfaces
+        on the first document indexed rather than here, as a failed
+        document that names neither the model nor the setting. Prompts can:
+        an unknown model embedded without one is worse than it could be,
+        not broken.
+        """
+        known = find_embedding_model(self.embedding_model)
+        if known is not None:
+            if self.embedding_dimensions is None:
+                self.embedding_dimensions = known.dimensions
+            if self.embedding_query_prefix is None:
+                self.embedding_query_prefix = known.query_prefix
+            if self.embedding_document_prefix is None:
+                self.embedding_document_prefix = known.document_prefix
+            return self
+        if self.embedding_dimensions is None:
+            raise ValueError(
+                f"Primer does not know the embedding model {self.embedding_model!r}, so "
+                "PRIMER_EMBEDDING_DIMENSIONS must be set to its output width. If the model "
+                "was trained with query or passage prompts, set "
+                "PRIMER_EMBEDDING_QUERY_PREFIX and PRIMER_EMBEDDING_DOCUMENT_PREFIX as well; "
+                "its model card lists them."
+            )
+        return self
+
+    @property
+    def vector_dimensions(self) -> int:
+        """`embedding_dimensions`, which `_resolve_embedding_model` always sets."""
+        return cast(int, self.embedding_dimensions)
 
     @model_validator(mode="after")
     def _qdrant_needs_a_url(self) -> Settings:

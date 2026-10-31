@@ -45,8 +45,9 @@ def build_text_embedder(settings: Settings) -> TextEmbedder:
             settings.embedding_api_key.get_secret_value() if settings.embedding_api_key else "none"
         ),
         model=settings.embedding_model,
-        dimensions=settings.embedding_dimensions,
+        dimensions=settings.vector_dimensions,
         api_base_url=settings.embedding_base_url,
+        prefix=settings.embedding_query_prefix or "",
         timeout=settings.embedding_timeout_seconds,
     )
 
@@ -57,8 +58,9 @@ def build_document_embedder(settings: Settings) -> DocumentEmbedder:
             settings.embedding_api_key.get_secret_value() if settings.embedding_api_key else "none"
         ),
         model=settings.embedding_model,
-        dimensions=settings.embedding_dimensions,
+        dimensions=settings.vector_dimensions,
         api_base_url=settings.embedding_base_url,
+        prefix=settings.embedding_document_prefix or "",
         timeout=settings.embedding_timeout_seconds,
         progress_bar=False,
     )
