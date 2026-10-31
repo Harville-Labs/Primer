@@ -34,6 +34,8 @@ instead of silently keeping a default.
 | `PRIMER_MAX_CHUNKS_PER_DOCUMENT` | `5000` | Refuse rather than half-index |
 | `PRIMER_PARSE_DEADLINE_SECONDS` | `900` | Checked between phases |
 | `PRIMER_MAX_RETRIES` | `4` | Control holds its own bound |
+| `PRIMER_INDEX_BATCH_SIZE` | `64` | Passages per call to Retrieval; one timeout loses one batch |
+| `PRIMER_INDEX_CONCURRENCY` | `4` | Batches of one document in flight at once |
 | `PRIMER_GRAPH_EXTRACTION_BASE_URL` | unset | OpenAI-compatible endpoint for knowledge-graph extraction |
 | `PRIMER_GRAPH_EXTRACTION_MODEL` | unset | Must support structured output. Unset, or no base URL, turns extraction off |
 | `PRIMER_GRAPH_EXTRACTION_API_KEY` | unset | Sent as a placeholder when unset; many local servers need the header |

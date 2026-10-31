@@ -8,14 +8,23 @@ Graph extraction does happen here, when it is on. It is a model call per
 passage - slow, and failing in ways worth retrying - which is work for a
 worker with a retry budget rather than for a synchronous request to
 Retrieval that a timeout would throw away.
+
+Batches are sent several at a time, and each one's graph is extracted as
+soon as its passages are indexed, so the extraction model and the embedding
+model work at the same time rather than taking turns. Order does not
+matter: chunk ids are deterministic, so a batch written twice or out of
+turn overwrites rather than duplicates.
 """
 
 from __future__ import annotations
 
 import logging
+from collections.abc import Sequence
+from concurrent.futures import ThreadPoolExecutor
 from itertools import batched
 
 from primer_contracts.chunks import DocumentChunk
+from primer_contracts.identity import Principal
 from primer_contracts.indexing import GraphIndexRequest, IndexRequest
 from primer_contracts.ingestion import JobClaim
 from primer_storage import ArtifactStore
@@ -50,27 +59,39 @@ class EmbedStage:
         chunks = self._load(claim)
 
         principal = worker_principal(claim.owner_user_id)
-        for batch in batched(chunks, self._settings.index_batch_size, strict=False):
-            self._index.index(
-                IndexRequest(
+        batches = batched(chunks, self._settings.index_batch_size, strict=False)
+        with ThreadPoolExecutor(max_workers=self._settings.index_concurrency) as pool:
+            # Consumed, not just submitted, so the first refused batch raises
+            # here - and `map` cancels every batch it has not started when
+            # that happens, so a Retrieval that has just refused part of a
+            # document is not sent the rest. A retry rewrites every batch;
+            # the ones that landed are overwritten in place.
+            for _ in pool.map(lambda batch: self._index_batch(claim, principal, batch), batches):
+                pass
+        logger.info("job %s: indexed %d chunks", claim.job_id, len(chunks))
+
+    def _index_batch(
+        self, claim: JobClaim, principal: Principal, batch: Sequence[DocumentChunk]
+    ) -> None:
+        self._index.index(
+            IndexRequest(
+                principal=principal,
+                library_id=claim.library_id,
+                document_version_id=claim.document_version_id,
+                generation_id=claim.generation_id,
+                chunks=tuple(batch),
+            )
+        )
+        if self._extractor is not None:
+            self._index.index_graph(
+                GraphIndexRequest(
                     principal=principal,
                     library_id=claim.library_id,
                     document_version_id=claim.document_version_id,
                     generation_id=claim.generation_id,
-                    chunks=tuple(batch),
+                    graphs=tuple(self._extractor.extract(batch)),
                 )
             )
-            if self._extractor is not None:
-                self._index.index_graph(
-                    GraphIndexRequest(
-                        principal=principal,
-                        library_id=claim.library_id,
-                        document_version_id=claim.document_version_id,
-                        generation_id=claim.generation_id,
-                        graphs=tuple(self._extractor.extract(batch)),
-                    )
-                )
-        logger.info("job %s: indexed %d chunks", claim.job_id, len(chunks))
 
     def _load(self, claim: JobClaim) -> list[DocumentChunk]:
         try:

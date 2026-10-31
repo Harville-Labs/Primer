@@ -541,15 +541,21 @@
         "parse": {
           "type": "object",
           "required": [
-            "concurrency"
+            "concurrency",
+            "pool"
           ],
           "properties": {
+            "pool": {
+              "description": "prefork for CPU-bound work, threads for work that waits on the network.",
+              "type": "string",
+              "enum": ["prefork", "threads"]
+            },
             "replicas": {
               "type": "integer",
               "minimum": 0
             },
             "concurrency": {
-              "description": "Processes per pod. Absent, Celery sizes its pool from the node's CPU count, which is not what the memory limit was set for.",
+              "description": "Documents a pod works on at once. Absent, Celery sizes its pool from the node's CPU count, which is not what the memory limit was set for.",
               "type": "integer",
               "minimum": 1,
               "maximum": 64
@@ -582,15 +588,21 @@
         "index": {
           "type": "object",
           "required": [
-            "concurrency"
+            "concurrency",
+            "pool"
           ],
           "properties": {
+            "pool": {
+              "description": "prefork for CPU-bound work, threads for work that waits on the network.",
+              "type": "string",
+              "enum": ["prefork", "threads"]
+            },
             "replicas": {
               "type": "integer",
               "minimum": 0
             },
             "concurrency": {
-              "description": "Processes per pod. Absent, Celery sizes its pool from the node's CPU count, which is not what the memory limit was set for.",
+              "description": "Documents a pod works on at once. Absent, Celery sizes its pool from the node's CPU count, which is not what the memory limit was set for.",
               "type": "integer",
               "minimum": 1,
               "maximum": 64

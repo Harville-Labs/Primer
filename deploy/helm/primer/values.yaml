@@ -461,6 +461,9 @@ workers:
     # Docling's layout models: two of those in one container is two copies
     # of both. Scale this component with replicas rather than here.
     concurrency: 1
+    # Processes, because parsing holds the CPU and a thread would hold the
+    # interpreter lock with it.
+    pool: prefork
     resources:
       requests: { cpu: 500m, memory: 2Gi }
       limits: { memory: 6Gi }
@@ -491,10 +494,15 @@ workers:
       accessMode: ""
   index:
     replicas: 1
-    # Higher, because this one mostly waits: embedding is a network call to
-    # a model endpoint, and a process blocked on a socket is not using the
-    # memory the limit is protecting.
-    concurrency: 4
+    # Documents in flight at once. Higher than parse, because this worker
+    # only waits: embedding and extraction are calls to a model endpoint.
+    # Each document also keeps PRIMER_INDEX_CONCURRENCY batches (four) in
+    # flight, so the embedding endpoint sees up to the product of the two.
+    concurrency: 8
+    # Threads, because every task here waits on the network. A prefork
+    # child per document is a whole interpreter, with its own copy of every
+    # client, spent waiting on a socket; threads share one.
+    pool: threads
     resources:
       requests: { cpu: 100m, memory: 512Mi }
       limits: { memory: 2Gi }

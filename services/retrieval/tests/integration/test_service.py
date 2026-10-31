@@ -170,3 +170,84 @@ def test_a_search_returns_no_more_than_its_limit(client: TestClient) -> None:
     results = search(client, MINE, [GENERATION], "retrieval", limit=2).json()["chunks"]
 
     assert len(results) == 2
+
+
+# Counting and deleting happen inside Qdrant, not in this service.
+#
+# Verify, delete, and purge each used to read a whole generation back - every
+# passage, with its vector - only to count it or collect the ids to delete.
+# That is correct at any size and unaffordable at a large one: a document of
+# ten thousand passages at 1024 dimensions moved forty megabytes across the
+# network to produce one integer. The results are the same either way, so
+# only a store that refuses to be read back can tell the difference.
+
+
+def two_generations(client: TestClient) -> None:
+    for generation, passages in ((GENERATION, 3), (NEXT_GENERATION, 2)):
+        chunks = [chunk(MINE, generation, f"passage {n}", ordinal=n) for n in range(passages)]
+        assert index(client, MINE, generation, *chunks).status_code == 200
+
+
+def test_verify_counts_without_reading_passages(unreadable: TestClient) -> None:
+    two_generations(unreadable)
+
+    response = unreadable.post(
+        "/internal/v1/verify", json=generation_body(MINE, GENERATION), headers=TOKEN_HEADER
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["count"] == 3
+
+
+def test_delete_removes_a_generation_without_reading_it(unreadable: TestClient) -> None:
+    two_generations(unreadable)
+
+    response = unreadable.post(
+        "/internal/v1/delete", json=generation_body(MINE, GENERATION), headers=TOKEN_HEADER
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["deleted"] == 3
+    kept = unreadable.post(
+        "/internal/v1/verify", json=generation_body(MINE, NEXT_GENERATION), headers=TOKEN_HEADER
+    )
+    assert kept.json()["count"] == 2
+
+
+def test_purge_spares_the_kept_generation_without_reading_any(unreadable: TestClient) -> None:
+    two_generations(unreadable)
+    body = generation_body(MINE, GENERATION)
+    body.pop("generation_id")
+
+    response = unreadable.post(
+        "/internal/v1/purge",
+        json={**body, "keep_generation_id": str(NEXT_GENERATION)},
+        headers=TOKEN_HEADER,
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["deleted"] == 3
+    for generation, expected in ((GENERATION, 0), (NEXT_GENERATION, 2)):
+        verified = unreadable.post(
+            "/internal/v1/verify", json=generation_body(MINE, generation), headers=TOKEN_HEADER
+        )
+        assert verified.json()["count"] == expected
+
+
+def test_purge_with_nothing_to_keep_erases_the_version(unreadable: TestClient) -> None:
+    two_generations(unreadable)
+    body = generation_body(MINE, GENERATION)
+    body.pop("generation_id")
+
+    response = unreadable.post("/internal/v1/purge", json=body, headers=TOKEN_HEADER)
+
+    assert response.status_code == 200, response.text
+    assert response.json()["deleted"] == 5
+
+
+def test_readiness_does_not_count_the_collection(unreadable: TestClient) -> None:
+    """Every probe on every replica, every few seconds: an exact count of
+    tens of millions of points is a full scan each time."""
+    two_generations(unreadable)
+
+    assert unreadable.get("/health/ready").status_code == 200

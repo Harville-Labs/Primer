@@ -37,7 +37,7 @@ class Tripwire:
 class CountingStore:
     """A store that answers the readiness probe and nothing else."""
 
-    def count_documents(self) -> int:
+    def count_documents_by_filter(self, filters: dict[str, Any]) -> int:
         return 0
 
 
