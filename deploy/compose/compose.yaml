@@ -35,10 +35,12 @@ x-hardening: &hardening
 # One URL for every database user. Setting PRIMER_DATABASE_URL points them
 # all at your own PostgreSQL and leaves the bundled one stopped; unset, they
 # use the bundled one, which then needs POSTGRES_PASSWORD. It is a plain
-# postgresql:// URL because Retrieval hands it to pgvector as it is, and the
-# other services pick their own driver from it.
+# postgresql:// URL, and each service picks its own driver from it.
 x-database-url: &database-url ${PRIMER_DATABASE_URL:-postgresql://primer:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD, or PRIMER_DATABASE_URL to use your own PostgreSQL}@postgres:5432/primer}
 
+# Retrieval is not given this: it holds vectors in Qdrant and the graph in
+# Neo4j, and a service with no use for the database should not hold its
+# password.
 x-service-env: &service-env
   PRIMER_DATABASE_URL: *database-url
   PRIMER_INTERNAL_API_TOKEN: ${PRIMER_INTERNAL_API_TOKEN:?set PRIMER_INTERNAL_API_TOKEN}
@@ -49,7 +51,7 @@ services:
   # Stopped when PRIMER_DATABASE_URL names your own server: the profile is
   # empty, so always on, until that variable gives it a name nobody enables.
   postgres:
-    image: pgvector/pgvector:pg17
+    image: postgres:17
     profiles: ["${PRIMER_DATABASE_URL:+external-database}"]
     environment:
       POSTGRES_USER: primer
@@ -107,17 +109,25 @@ services:
     command: ["alembic", "upgrade", "head"]
     restart: "no"
 
-  migrate-vectors:
-    <<: [*python-image, *hardening]
-    depends_on:
-      postgres:
-        condition: service_healthy
-        required: false
+  # The vector store. Stopped when PRIMER_QDRANT_URL names your own, the
+  # same way the bundled PostgreSQL is. Not published: only Retrieval
+  # talks to it. Its vectors are derived from your documents, so losing the
+  # volume costs a reindex rather than anything only it holds.
+  qdrant:
+    image: qdrant/qdrant:v1.19.0
+    profiles: ["${PRIMER_QDRANT_URL:+external-qdrant}"]
     environment:
-      PRIMER_DATABASE_URL: *database-url
-    working_dir: /app/services/retrieval
-    command: ["alembic", "upgrade", "head"]
-    restart: "no"
+      # On by default upstream, and it reports to Qdrant's servers.
+      QDRANT__TELEMETRY_DISABLED: "true"
+    volumes:
+      - qdrant-data:/qdrant/storage
+    # The image has no curl or wget, so this is bash opening the port.
+    healthcheck:
+      test: ["CMD", "bash", "-c", ":> /dev/tcp/127.0.0.1/6333"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
 
   # The knowledge graph, off unless the `graph` profile is enabled:
   #
@@ -198,15 +208,17 @@ services:
   retrieval:
     <<: [*python-image, *hardening]
     depends_on:
-      migrate-vectors:
-        condition: service_completed_successfully
+      qdrant:
+        condition: service_healthy
+        required: false
       # Only waited for when the `graph` profile is on.
       migrate-graph:
         condition: service_completed_successfully
         required: false
     environment:
-      <<: *service-env
-      PRIMER_VECTOR_STORE: ${PRIMER_VECTOR_STORE:-pgvector}
+      PRIMER_INTERNAL_API_TOKEN: ${PRIMER_INTERNAL_API_TOKEN:?set PRIMER_INTERNAL_API_TOKEN}
+      PRIMER_QDRANT_URL: ${PRIMER_QDRANT_URL:-http://qdrant:6333}
+      PRIMER_QDRANT_API_KEY: ${PRIMER_QDRANT_API_KEY:-}
       PRIMER_EMBEDDING_BASE_URL: ${PRIMER_EMBEDDING_BASE_URL:?set PRIMER_EMBEDDING_BASE_URL}
       PRIMER_EMBEDDING_MODEL: ${PRIMER_EMBEDDING_MODEL:?set PRIMER_EMBEDDING_MODEL}
       # Empty takes the width and prompts from Primer's table of known
@@ -332,6 +344,7 @@ services:
 
 volumes:
   postgres-data:
+  qdrant-data:
   rabbitmq-data:
   source-objects:
   model-cache:
