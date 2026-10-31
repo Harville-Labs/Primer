@@ -38,7 +38,7 @@ it will need reindexing, so draining is the kinder order.
 
 ```bash
 # Stop consuming and publishing.
-kubectl scale deployment -l app.kubernetes.io/component=worker --replicas=0
+kubectl scale deployment -l 'app.kubernetes.io/component in (worker-parse,worker-index)' --replicas=0
 
 # Confirm nothing is waiting, then remove them.
 rabbitmqctl list_queues name messages | grep ingestion
@@ -46,7 +46,7 @@ for queue in ingestion.parse ingestion.embed ingestion.index ingestion.delete in
   rabbitmqctl delete_queue "$queue"
 done
 
-kubectl scale deployment -l app.kubernetes.io/component=worker --replicas=1
+kubectl scale deployment -l 'app.kubernetes.io/component in (worker-parse,worker-index)' --replicas=1
 ```
 
 The workers redeclare them on the next start. Any document left mid-flight
