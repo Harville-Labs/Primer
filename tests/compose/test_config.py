@@ -22,7 +22,13 @@ BASE = COMPOSE_DIR / "compose.yaml"
 
 #: Primer's own containers. The dependencies are third-party images whose
 #: hardening is not ours to assert.
-APPLICATION_SERVICES = ("control", "chat", "retrieval", "worker", "web")
+APPLICATION_SERVICES = ("control", "chat", "retrieval", "worker-parse", "worker-index", "web")
+
+WORKERS = ("worker-parse", "worker-index")
+
+#: Every queue Control publishes to. A queue no worker consumes is a stage
+#: whose documents sit `queued` forever without an error anywhere.
+QUEUES = {"ingestion.parse", "ingestion.embed", "ingestion.index", "ingestion.delete"}
 
 #: Placeholders that satisfy `${VAR:?}` so the file can be resolved. None is
 #: a real credential, and none has a default in the file itself.
@@ -149,14 +155,49 @@ def test_the_worker_has_its_own_image(compose_config: dict[str, Any]) -> None:
     """Torch publishes no musl wheels, so the API services cannot share Alpine
     with the worker. Keeping them apart is what keeps the API image small."""
     api = compose_config["services"]["control"]["build"]["dockerfile"]
-    worker = compose_config["services"]["worker"]["build"]["dockerfile"]
-
     assert api.endswith("Dockerfile.python")
-    assert worker.endswith("Dockerfile.worker")
-    assert api != worker
+    for name in WORKERS:
+        assert compose_config["services"][name]["build"]["dockerfile"].endswith("Dockerfile.worker")
 
     for name in ("control", "chat", "retrieval"):
         assert compose_config["services"][name]["build"]["dockerfile"] == api
+
+
+def worker_option(command: list[str], flag: str) -> str:
+    assert flag in command, command
+    return command[command.index(flag) + 1]
+
+
+def test_every_queue_is_consumed_by_exactly_one_worker(compose_config: dict[str, Any]) -> None:
+    consumed = [
+        queue
+        for name in WORKERS
+        for queue in worker_option(compose_config["services"][name]["command"], "-Q").split(",")
+    ]
+
+    assert sorted(consumed) == sorted(QUEUES)
+
+
+def test_parsing_does_not_share_a_process_with_the_stages_that_wait(
+    compose_config: dict[str, Any],
+) -> None:
+    """One process for every queue sized its pool for parsing, which holds
+    the CPU, when most of what it ran was a wait on a model endpoint - and
+    a burst of uploads queued every embedding behind the parses."""
+    parse = compose_config["services"]["worker-parse"]["command"]
+    index = compose_config["services"]["worker-index"]["command"]
+
+    assert worker_option(parse, "--pool") == "prefork"
+    assert worker_option(parse, "--concurrency") == "1"
+    assert worker_option(index, "--pool") == "threads"
+
+
+def test_only_the_parse_worker_holds_the_model_cache(compose_config: dict[str, Any]) -> None:
+    def volumes(name: str) -> set[str]:
+        return {v["source"] for v in compose_config["services"][name]["volumes"]}
+
+    assert "model-cache" in volumes("worker-parse")
+    assert "model-cache" not in volumes("worker-index")
 
 
 def test_no_model_server_is_bundled(compose_config: dict[str, Any]) -> None:
@@ -202,7 +243,7 @@ def test_both_sides_of_the_index_are_told_the_embedding_model(
     sized for something other than what reads them.
     """
     services = compose_config["services"]
-    assert services["worker"]["environment"]["PRIMER_EMBEDDING_MODEL"] == "test-embed"
+    assert services["worker-parse"]["environment"]["PRIMER_EMBEDDING_MODEL"] == "test-embed"
     assert services["retrieval"]["environment"]["PRIMER_EMBEDDING_MODEL"] == "test-embed"
 
 
@@ -322,7 +363,7 @@ def test_every_database_user_shares_the_bundled_url(compose_config: dict[str, An
     """One plain URL, from which each service chooses its own driver."""
     users = database_users(compose_config)
 
-    assert set(users) >= {"control", "chat", "worker", "migrate-control", "migrate-chat"}
+    assert set(users) >= {"control", "chat", *WORKERS, "migrate-control", "migrate-chat"}
     assert set(users.values()) == {"postgresql://primer:resolve-only@postgres:5432/primer"}
     assert "postgres" in compose_config["services"]
 
