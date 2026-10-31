@@ -108,6 +108,33 @@ An unreachable graph does not fail a search. It is logged, and the vector
 results are returned alone. Without a graph, search returns exactly what it
 returned before the graph existed.
 
+### Questions about the whole library
+
+A search with `breadth: "library"` is for a question like "what are the
+main themes here?", whose nearest passages all come from one corner of the
+library. The user asks for it per question; it is never inferred. See
+[ADR 0006](../adr/0006-library-wide-questions-from-passages.md).
+
+Retrieval reads which passages mention which entities in the active
+generations and clusters that graph with Louvain modularity, seeded so the
+same library clusters the same way on every replica. From the
+`PRIMER_GRAPH_COMMUNITIES` largest communities it takes the few passages
+that name most of each, scores them against the question through the
+scoped vector store, and returns the best passage of every community,
+nearest community first, before a second from any. As with hybrid search,
+a passage the scoped read does not return is never returned at all.
+
+The clustering is cached per library and generation set, so it is paid for
+once each time a library changes. These answers skip the reranker and the
+relevance floor: both measure resemblance to the question, which is what a
+library-wide question is trying to get past.
+
+A library with more mentions than `PRIMER_GRAPH_COMMUNITY_MAX_MENTIONS` is
+refused with a 422 that names the setting, because clustering runs in
+Retrieval's memory. Without a graph, or with the graph down, a
+library-wide question gets the focused answer. Passages that mention no
+entity belong to no community and are not reached this way.
+
 ## No Primer vector adapter
 
 Haystack's `DocumentStore` protocol is already that abstraction. Wrapping it

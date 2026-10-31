@@ -47,12 +47,15 @@ class FakeControl:
 class FakeRetrieval:
     """Retrieval, recording every search so the tests can prove one never happened."""
 
-    def __init__(self, contents: list[str] | None = None) -> None:
+    def __init__(self, contents: list[str] | None = None, failure: Exception | None = None) -> None:
         self.contents = contents if contents is not None else ["The conclusion is well supported."]
+        self.failure = failure
         self.searches: list[SearchRequest] = []
 
     async def search(self, request: SearchRequest) -> SearchResult:
         self.searches.append(request)
+        if self.failure is not None:
+            raise self.failure
         return SearchResult(
             chunks=tuple(
                 RetrievedChunk(
@@ -172,17 +175,26 @@ class ChatUser:
         self._headers = {"X-Forwarded-User": subject}
 
     async def ask(
-        self, library_id: str | None, message: str, *, model: str | None = None
+        self,
+        library_id: str | None,
+        message: str,
+        *,
+        model: str | None = None,
+        breadth: str | None = None,
     ) -> list[dict[str, Any]]:
         """Ask a question, of a library or of nothing.
 
         `None` omits a field rather than sending null, which is how a client
         with nothing selected actually behaves.
         """
-        return parse_events((await self.post_ask(message, library_id, model)).text)
+        return parse_events((await self.post_ask(message, library_id, model, breadth)).text)
 
     async def post_ask(
-        self, message: str, library_id: str | None = None, model: str | None = None
+        self,
+        message: str,
+        library_id: str | None = None,
+        model: str | None = None,
+        breadth: str | None = None,
     ) -> Response:
         """The raw response, for the cases where it is not a stream."""
         payload: dict[str, Any] = {"message": message}
@@ -190,12 +202,19 @@ class ChatUser:
             payload["library_id"] = library_id
         if model is not None:
             payload["model"] = model
+        if breadth is not None:
+            payload["breadth"] = breadth
         return await self._http.post("/api/v1/conversations", json=payload, headers=self._headers)
 
-    async def follow_up(self, conversation_id: str, message: str) -> Response:
+    async def follow_up(
+        self, conversation_id: str, message: str, *, breadth: str | None = None
+    ) -> Response:
+        payload: dict[str, Any] = {"message": message}
+        if breadth is not None:
+            payload["breadth"] = breadth
         return await self._http.post(
             f"/api/v1/conversations/{conversation_id}/messages",
-            json={"message": message},
+            json=payload,
             headers=self._headers,
         )
 

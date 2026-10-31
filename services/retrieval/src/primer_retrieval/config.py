@@ -102,6 +102,15 @@ class Settings(BaseSettings):
     #: How many passages the graph contributes before fusion. Kept about as
     #: wide as the vector candidates so neither ranking drowns the other.
     graph_candidates: int = Field(default=20, ge=1, le=200)
+    #: The most mentions a library-wide question will cluster. Clustering
+    #: runs in this process's memory, about a kilobyte per mention, so the
+    #: default keeps one library's clustering near 200 MB. A library over it
+    #: is refused rather than answered from a focused search. See ADR 0006.
+    graph_community_max_mentions: int = Field(default=200_000, ge=1)
+    #: How many of a library's largest communities a library-wide question
+    #: considers. More reaches smaller topics at the cost of more passages
+    #: scored per question.
+    graph_communities: int = Field(default=16, ge=1, le=100)
 
     @property
     def reranking_enabled(self) -> bool:

@@ -12,6 +12,7 @@ from typing import Protocol
 from uuid import UUID
 
 import httpx2
+from primer_contracts.errors import ErrorCode
 from primer_contracts.identity import Principal
 from primer_contracts.indexing import (
     LibraryAccessRequest,
@@ -37,21 +38,45 @@ class PassageSource(Protocol):
     async def search(self, request: SearchRequest) -> SearchResult: ...
 
 
-class SearchUnavailable(Exception):
-    """A library could not be searched because Retrieval could not do it.
+class SearchFailed(Exception):
+    """A library could not be searched, in Retrieval's own words.
 
-    Distinct from a failed answer: nothing was wrong with the question, and
-    the thing to fix is a dependency rather than the model.
+    Distinct from a failed answer: nothing was wrong with the model. Each
+    kind carries the code the stream reports it under, so the user is told
+    which of the two it was and the stream handles both in one place.
     """
+
+    code: str
+
+
+class SearchUnavailable(SearchFailed):
+    """Retrieval could not search: a dependency is down. Worth asking again."""
+
+    code = "search_unavailable"
+
+
+class SearchRefused(SearchFailed):
+    """Retrieval will not search this way: a library too large to ask across.
+
+    Asking again gets the same answer, so it is reported as a refusal rather
+    than an outage, with Retrieval's sentence saying what to do instead.
+    """
+
+    code = "search_refused"
+
+
+def _problem_of(response: httpx2.Response) -> dict[str, object]:
+    try:
+        body = response.json()
+    except Exception:  # noqa: BLE001 - a body that is not JSON says nothing
+        return {}
+    return body if isinstance(body, dict) else {}
 
 
 def _detail_of(response: httpx2.Response) -> str:
     """Retrieval's own words, when it sent any."""
-    try:
-        detail = response.json().get("detail")
-    except Exception:  # noqa: BLE001 - a body that is not JSON says nothing
-        detail = None
-    return detail or "This library could not be searched just now."
+    detail = _problem_of(response).get("detail")
+    return str(detail) if detail else "This library could not be searched just now."
 
 
 class LibraryForbidden(Exception):
@@ -116,5 +141,11 @@ class RetrievalClient(_Client):
             # service could invent. Carried through rather than flattened to
             # "the answer stopped", which points at the model instead.
             raise SearchUnavailable(_detail_of(response))
+        if response.status_code == 422 and _problem_of(response).get("code") == (
+            ErrorCode.QUOTA_EXCEEDED
+        ):
+            # By code as well as status: any other 422 is a request Chat
+            # built wrongly, which is a bug here and should fail as one.
+            raise SearchRefused(_detail_of(response))
         response.raise_for_status()
         return SearchResult.model_validate(response.json())

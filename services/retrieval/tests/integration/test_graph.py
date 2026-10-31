@@ -158,6 +158,27 @@ def test_no_generations_finds_nothing_rather_than_everything(graph: GraphStore) 
     assert reached(graph, library, [], "A") == set()
 
 
+def test_mentions_are_read_from_one_library_and_the_named_generations(
+    graph: GraphStore,
+) -> None:
+    """What a library-wide question clusters, scoped as every other read is.
+
+    A shared entity name in another library, and a pending generation of
+    this one, would otherwise put passages the caller cannot read into its
+    communities.
+    """
+    library, active, pending = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
+    mine = chunk_graph(("Marie Curie", "Polonium"))
+    graph.write(library, uuid.uuid4(), active, [mine])
+    graph.write(library, uuid.uuid4(), pending, [chunk_graph(("Marie Curie",))])
+    graph.write(uuid.uuid4(), uuid.uuid4(), active, [chunk_graph(("Marie Curie",))])
+
+    found = graph.mentions(library, [active], limit=50)
+
+    assert sorted(found) == [(str(mine.chunk_id), "marie curie"), (str(mine.chunk_id), "polonium")]
+    assert len(graph.mentions(library, [active], limit=1)) == 1
+
+
 def test_rewriting_a_chunk_replaces_what_it_said(graph: GraphStore, count: Count) -> None:
     library, version, generation = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
     chunk_id = uuid.uuid4()

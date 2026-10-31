@@ -8,6 +8,7 @@ configured with.
 
 from __future__ import annotations
 
+from typing import Literal
 from uuid import UUID
 
 from pydantic import Field
@@ -104,6 +105,13 @@ class LibraryScope(WireModel):
     generation_ids: tuple[UUID, ...] = ()
 
 
+#: How much of a library a question is about. A focused question reads the
+#: passages closest to it; a library-wide one reads passages chosen to cover
+#: the library's communities, most of which do not resemble the question.
+#: See ADR 0006.
+Breadth = Literal["focused", "library"]
+
+
 class SearchRequest(WireModel):
     """Search one library, within a known set of active generations.
 
@@ -118,6 +126,7 @@ class SearchRequest(WireModel):
     generation_ids: tuple[UUID, ...] = Field(min_length=1)
     query: str = Field(min_length=1, max_length=4000)
     limit: int = Field(default=8, ge=1, le=50)
+    breadth: Breadth = "focused"
 
 
 class SearchResult(WireModel):

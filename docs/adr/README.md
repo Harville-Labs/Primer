@@ -7,3 +7,4 @@
 | [0003](0003-bundle-postgresql.md) | Offer a bundled PostgreSQL in the chart | Accepted |
 | [0004](0004-qdrant-only.md) | Keep vectors in Qdrant, and only Qdrant | Accepted |
 | [0005](0005-lab-local-research-model.md) | Let Lab load a small open model of its own | Accepted |
+| [0006](0006-library-wide-questions-from-passages.md) | Answer library-wide questions from passages chosen across communities | Accepted |

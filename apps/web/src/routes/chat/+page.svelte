@@ -1,6 +1,14 @@
 <script lang="ts">
-	import { Alert, Attachment, Button, Composer, Conversation, Progress } from '@sivir-ui/svelte';
-	import { Plus } from '@lucide/svelte';
+	import {
+		Alert,
+		Attachment,
+		Button,
+		Composer,
+		Conversation,
+		Progress,
+		Toggle
+	} from '@sivir-ui/svelte';
+	import { Library, Plus } from '@lucide/svelte';
 	import { afterNavigate, goto, invalidateAll, replaceState } from '$app/navigation';
 	import { page } from '$app/state';
 	import { untrack } from 'svelte';
@@ -32,6 +40,11 @@
 	// the two disagree.
 	let model = $state('');
 	let question = $state('');
+	// Whether the next question reads the passages nearest it or passages
+	// from across the library. Off by default and never guessed from the
+	// wording: the two answers differ enough that the user should know which
+	// one they asked for. See ADR 0006.
+	let acrossLibrary = $state(false);
 	// The turns, and the machinery for writing one as it arrives. Held
 	// there rather than here because folding a stream into a turn is the
 	// one thing on this page that has to be careful about how Svelte sees
@@ -213,6 +226,9 @@
 					message: asked,
 					...(conversationId ? { conversation_id: conversationId } : {}),
 					...(libraryId ? { library_id: libraryId } : {}),
+					// Sent with every question, follow-ups included, because Chat
+					// reads it per question and treats a missing one as focused.
+					...(libraryId && acrossLibrary ? { breadth: 'library' } : {}),
 					// Split back into the two fields the request carries. The
 					// picker's value names both, because a model name alone
 					// cannot say which provider serves it.
@@ -458,6 +474,17 @@
 	<div class="mt-2 flex flex-wrap items-center justify-between gap-3">
 		<div class="flex flex-wrap items-center gap-2">
 			<LibraryLink libraries={data.libraries} bind:value={libraryId} locked={started} />
+			{#if libraryId}
+				<Toggle
+					bind:pressed={acrossLibrary}
+					size="sm"
+					variant="outlined"
+					title="Answer from passages across the whole library, not only the nearest ones"
+				>
+					<Library class="size-4" aria-hidden="true" />
+					Across the library
+				</Toggle>
+			{/if}
 			{#each uploads.pending as upload (upload.id)}
 				<!--
 				  A preview of the document it is about to become rather than a

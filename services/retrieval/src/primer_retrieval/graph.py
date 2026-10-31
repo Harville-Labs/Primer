@@ -151,6 +151,16 @@ ORDER BY distance ASC, support DESC, chunk_id ASC
 LIMIT $limit
 """
 
+#: Every mention in the named generations, which is the whole of what
+#: clustering a library needs. Entities are reached only through a mention,
+#: so one whose mentions are all pending is not read.
+_MENTIONS = """
+MATCH (chunk:Chunk {library_id: $library_id})-[:MENTIONS]->(entity:Entity)
+WHERE chunk.generation_id IN $generation_ids
+RETURN chunk.chunk_id AS chunk_id, entity.key AS key
+LIMIT $limit
+"""
+
 #: `only` and `keep` mirror the vector store's delete and purge: one
 #: generation of a version, or all of a version but the generation in use.
 #: The library and version are matched in the pattern and are never
@@ -317,6 +327,28 @@ class GraphStore:
             )
             for record in records
         ]
+
+    def mentions(
+        self, library_id: UUID, generation_ids: Sequence[UUID], limit: int
+    ) -> list[tuple[str, str]]:
+        """(chunk id, entity key) for each mention in these generations.
+
+        At most `limit`, in no particular order. A caller that needs to know
+        whether there were more asks for one more than it will use.
+        """
+        if not generation_ids:
+            return []
+        records = self._driver.execute_query(
+            Query(_MENTIONS, timeout=self._timeout),
+            parameters_={
+                "library_id": str(library_id),
+                "generation_ids": [str(generation) for generation in generation_ids],
+                "limit": limit,
+            },
+            routing_=RoutingControl.READ,
+            database_=self._database,
+        ).records
+        return [(record["chunk_id"], record["key"]) for record in records]
 
     def count(self, library_id: UUID, generation_id: UUID) -> int:
         """Chunks this generation's graph holds, whether or not they named anything."""

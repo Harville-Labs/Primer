@@ -35,6 +35,7 @@ from primer_contracts.indexing import (
 from primer_service.errors import ProblemError, problem_response
 
 from primer_retrieval import __version__
+from primer_retrieval.breadth import Communities, library_wide
 from primer_retrieval.config import Settings
 from primer_retrieval.errors import (
     embedding_endpoint,
@@ -96,6 +97,7 @@ class RetrievalState:
         self.reranker = reranker if reranker is not None else build_reranker(settings)
         # None unless Neo4j is configured, for the same reason as above.
         self.graph: GraphStore | None = build_graph_store(settings)
+        self.communities = Communities(self.graph, settings) if self.graph else None
 
 
 def build_reranker(settings: Settings) -> Reranker | None:
@@ -234,9 +236,33 @@ def search(payload: SearchRequest, state: State) -> SearchResult:
     order is the fusion's; the scores are still the store's similarity or
     the reranker's, because a fused rank score is not something a relevance
     floor can be measured against.
+
+    A library-wide question reads passages chosen to cover the library's
+    communities instead, and skips the reranker and the floor: both measure
+    how well a passage answers the question, and the point of asking across
+    the library is to read passages that do not. See ADR 0006.
     """
     with embedding_endpoint("this library cannot be searched"):
         embedded = state.text_embedder.run(payload.query)
+
+    # Passages the graph found are read back through the retriever rather
+    # than fetched by id, so each carries the store's own similarity to the
+    # question. That keeps every score on one scale and the floor meaningful
+    # for them too, where a lookup by id would return them unscored.
+    def fetch(chunk_ids: list[str]) -> list[Any]:
+        return state.retriever.run(
+            query_embedding=embedded["embedding"],
+            filters=chunks_filter(payload.library_id, payload.generation_ids, chunk_ids),
+            top_k=len(chunk_ids),
+        )["documents"]
+
+    if payload.breadth == "library":
+        covering = library_wide(
+            state.communities, payload.library_id, payload.generation_ids, payload.limit, fetch
+        )
+        if covering is not None:
+            return SearchResult(chunks=tuple(to_retrieved(hit) for hit in covering))
+
     # Fetch wider than the answer needs when a reranker will read them: the
     # passage that answers the question is often inside the first twenty and
     # outside the first six. Without one, the vector ordering is the answer,
@@ -259,17 +285,6 @@ def search(payload: SearchRequest, state: State) -> SearchResult:
         hops=state.settings.graph_hops,
         limit=state.settings.graph_candidates,
     )
-
-    # Passages the graph found are read back through the retriever rather
-    # than fetched by id, so each carries the store's own similarity to the
-    # question. That keeps every score on one scale and the floor meaningful
-    # for them too, where a lookup by id would return them unscored.
-    def fetch(chunk_ids: list[str]) -> list[Any]:
-        return state.retriever.run(
-            query_embedding=embedded["embedding"],
-            filters=chunks_filter(payload.library_id, payload.generation_ids, chunk_ids),
-            top_k=len(chunk_ids),
-        )["documents"]
 
     kept = reorder(
         state.reranker,

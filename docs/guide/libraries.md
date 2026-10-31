@@ -88,3 +88,20 @@ The copy belongs to you, even if you copied a library someone shared with
 you, and it is named after the original unless you give it a name. That is
 the way to keep something that has been shared with you: a copy is yours,
 and stays yours if the original is unshared.
+
+## Asking about the whole library
+
+A question is normally answered from the passages that most resemble it.
+That suits "what did the 2019 trial find?" and fails "what are the main
+themes here?", because the passages nearest that question all come from one
+corner of the library.
+
+Switch on **Across the library**, beside the library picker, before asking a
+question of that kind. Primer then reads a passage or two from each of the
+library's main topics and answers from those, still citing each one. The
+answer covers breadth rather than depth: it names a theme and cites an
+example of it.
+
+This needs the knowledge graph. Without one, the question gets an ordinary
+answer. A library too large for the deployment to group into topics is
+refused, with a message saying so.

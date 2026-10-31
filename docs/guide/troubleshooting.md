@@ -26,6 +26,13 @@ which:
 | `validation_failed` | Missing or unusable filename |
 | `not_found` | The library does not exist, or is not yours |
 
+## A question was not answered
+
+| Code | Meaning |
+| --- | --- |
+| `search_unavailable` | Retrieval, or a store it reads, could not be reached. Asking again later may work |
+| `search_refused` | The library is too large to ask across. Ask a focused question, or ask an operator to raise `PRIMER_GRAPH_COMMUNITY_MAX_MENTIONS` |
+
 ## A document says `failed`
 
 A stage failed after exhausting its retries. The detail carries a short,
