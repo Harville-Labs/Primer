@@ -17,9 +17,11 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 from haystack import Document
+from haystack_integrations.document_stores.qdrant import QdrantDocumentStore
 from primer_retrieval.app import create_app
 from primer_retrieval.config import Settings
 from primer_retrieval.graph import GraphStore, build_graph_store
+from primer_retrieval.stores import build_document_store
 from testcontainers.community.neo4j import Neo4jContainer
 from testcontainers.community.qdrant import QdrantContainer
 
@@ -96,6 +98,39 @@ def client(qdrant_url: str, request: pytest.FixtureRequest) -> TestClient:
     )
     app = create_app(
         settings, document_embedder=StubDocumentEmbedder(), text_embedder=StubTextEmbedder()
+    )
+    return TestClient(app)
+
+
+class UnreadableStore(QdrantDocumentStore):
+    """Qdrant, except that reading passages back is a test failure."""
+
+    def filter_documents(self, filters: Any = None) -> list[Document]:
+        raise AssertionError("a route read passages back to count or delete them")
+
+    def count_documents(self) -> int:
+        raise AssertionError("a route counted the whole collection")
+
+
+@pytest.fixture
+def unreadable(qdrant_url: str, request: pytest.FixtureRequest) -> TestClient:
+    """A service whose store fails any route that reads passages back."""
+    unique = abs(hash(request.node.nodeid)) % 10**9
+    settings = Settings(
+        qdrant_url=qdrant_url,
+        qdrant_index=f"unreadable_{unique}",
+        embedding_dimensions=DIMENSIONS,
+        internal_api_token=SERVICE_TOKEN,
+    )
+    store = build_document_store(settings)
+    # Swapped after construction so the store is built exactly the way
+    # Retrieval builds it; only the two reads under suspicion change.
+    store.__class__ = UnreadableStore
+    app = create_app(
+        settings,
+        store=store,
+        document_embedder=StubDocumentEmbedder(),
+        text_embedder=StubTextEmbedder(),
     )
     return TestClient(app)
 

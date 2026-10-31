@@ -28,8 +28,11 @@ SERVICE_TOKEN = "test-service-token"  # noqa: S105 - a fixture value, not a real
 class EmptyStore:
     """A vector store holding nothing, so only the graph can fail."""
 
-    def filter_documents(self, filters: dict[str, Any]) -> list[Any]:
-        return []
+    def count_documents_by_filter(self, filters: dict[str, Any]) -> int:
+        return 0
+
+    def delete_by_filter(self, filters: dict[str, Any]) -> int:
+        return 0
 
 
 class FixedEmbedder:

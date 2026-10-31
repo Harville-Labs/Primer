@@ -17,7 +17,8 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, FastAPI, Request
 from fastapi.responses import JSONResponse
-from haystack.document_stores.types import DocumentStore, DuplicatePolicy
+from haystack.document_stores.types import DuplicatePolicy
+from haystack_integrations.document_stores.qdrant import QdrantDocumentStore
 from primer_contracts.indexing import (
     DeleteRequest,
     DeleteResult,
@@ -44,7 +45,7 @@ from primer_retrieval.errors import (
 from primer_retrieval.graph import GraphStore, build_graph_store
 from primer_retrieval.hybrid import blend, related_chunks
 from primer_retrieval.pipelines import (
-    GENERATION_ID,
+    LIBRARY_ID,
     DocumentEmbedder,
     TextEmbedder,
     build_document_embedder,
@@ -52,9 +53,9 @@ from primer_retrieval.pipelines import (
     build_text_embedder,
     chunks_filter,
     scope_filter,
+    superseded_filter,
     to_documents,
     to_retrieved,
-    version_filter,
 )
 from primer_retrieval.reranking import Reranker, reorder
 from primer_retrieval.security import require_service_credential
@@ -69,13 +70,17 @@ router = APIRouter(
 )
 
 
+#: Matches nothing: no library is named this, since library ids are UUIDs.
+READINESS_FILTER = {"field": f"meta.{LIBRARY_ID}", "operator": "==", "value": "readiness-probe"}
+
+
 class RetrievalState:
     """Everything a request needs, built once at startup."""
 
     def __init__(
         self,
         settings: Settings,
-        store: DocumentStore,
+        store: QdrantDocumentStore,
         document_embedder: DocumentEmbedder,
         text_embedder: TextEmbedder,
         retriever: Any | None = None,
@@ -136,11 +141,14 @@ def live() -> dict[str, str]:
 def ready(state: State) -> JSONResponse:
     """Whether this instance can serve a search.
 
-    Counting documents in an empty filter is the cheapest call that proves
-    the store is reachable and the schema exists.
+    Counts a library that cannot exist, which proves the store is reachable
+    and the collection is there while touching nothing in it: the count is
+    answered from the `library_id` payload index. Counting the collection
+    instead is exact by default, and on a deployment holding tens of
+    millions of passages every probe on every replica would be a full scan.
     """
     try:
-        state.store.count_documents()
+        state.store.count_documents_by_filter(READINESS_FILTER)
     except Exception:
         # Logged, because the response deliberately says nothing: a readiness
         # probe is reachable to anyone who can reach the port, and the reason
@@ -178,15 +186,18 @@ def verify_generation(payload: GenerationQuery, state: State) -> GenerationCount
     the missing passages from every future answer, with nothing to show that
     anything was lost.
     """
-    documents = state.store.filter_documents(
-        filters=scope_filter(payload.library_id, (payload.generation_id,))
+    # Counted inside Qdrant. Reading the generation back to take its length
+    # would move every passage's text and vector across the network, which
+    # for one large document is hundreds of megabytes to produce a number.
+    count = state.store.count_documents_by_filter(
+        scope_filter(payload.library_id, (payload.generation_id,))
     )
     graph_count = None
     if state.graph is not None:
         with graph_store("this document's graph cannot be verified"):
             graph_count = state.graph.count(payload.library_id, payload.generation_id)
     return GenerationCount(
-        generation_id=payload.generation_id, count=len(documents), graph_count=graph_count
+        generation_id=payload.generation_id, count=count, graph_count=graph_count
     )
 
 
@@ -308,39 +319,30 @@ def delete_generation(payload: DeleteRequest, state: State) -> DeleteResult:
     keeping the names they mentioned would leave part of a document in the
     library after the document had gone.
     """
-    documents = state.store.filter_documents(
-        filters=scope_filter(payload.library_id, (payload.generation_id,))
+    deleted = state.store.delete_by_filter(
+        scope_filter(payload.library_id, (payload.generation_id,))
     )
-    if documents:
-        state.store.delete_documents([document.id for document in documents])
     if state.graph is not None:
         with graph_store("this document's graph cannot be erased"):
             state.graph.erase(
                 payload.library_id, payload.document_version_id, only=payload.generation_id
             )
-    return DeleteResult(generation_id=payload.generation_id, deleted=len(documents))
+    return DeleteResult(generation_id=payload.generation_id, deleted=deleted)
 
 
 @router.post("/purge", summary="Remove a version's chunks")
 def purge_version(payload: PurgeRequest, state: State) -> DeleteResult:
     """Erase a version, optionally sparing the generation now in use.
 
-    The generation to keep is excluded here rather than in the store's
-    filter, because a not-equals filter is not something every backend
-    supports the same way, and cleanup is the one operation where being
-    approximately right means deleting the wrong thing.
+    Deleted by filter inside Qdrant, which excludes the generation to keep
+    with a `must_not` it applies exactly. Reading every passage back to pick
+    the ids out here instead moved each one's vector across the network.
     """
-    documents = state.store.filter_documents(
-        filters=version_filter(payload.library_id, payload.document_version_id)
+    deleted = state.store.delete_by_filter(
+        superseded_filter(
+            payload.library_id, payload.document_version_id, payload.keep_generation_id
+        )
     )
-    keep = str(payload.keep_generation_id) if payload.keep_generation_id else None
-    doomed = [
-        document.id
-        for document in documents
-        if keep is None or str(document.meta.get(GENERATION_ID)) != keep
-    ]
-    if doomed:
-        state.store.delete_documents(doomed)
     if state.graph is not None:
         with graph_store("this document's graph cannot be erased"):
             state.graph.erase(
@@ -348,13 +350,13 @@ def purge_version(payload: PurgeRequest, state: State) -> DeleteResult:
             )
     return DeleteResult(
         generation_id=payload.keep_generation_id or payload.document_version_id,
-        deleted=len(doomed),
+        deleted=deleted,
     )
 
 
 def create_app(
     settings: Settings | None = None,
-    store: DocumentStore | None = None,
+    store: QdrantDocumentStore | None = None,
     document_embedder: DocumentEmbedder | None = None,
     text_embedder: TextEmbedder | None = None,
     retriever: Any | None = None,

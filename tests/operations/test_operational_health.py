@@ -47,7 +47,7 @@ class UnreachableStore:
 
 
 class ReachableStore:
-    def count_documents(self) -> int:
+    def count_documents_by_filter(self, filters: object) -> int:
         return 0
 
 

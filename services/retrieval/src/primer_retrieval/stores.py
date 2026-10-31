@@ -1,16 +1,19 @@
 """The document store, built directly from the official Haystack integration.
 
-There is deliberately no Primer vector adapter interface. Haystack's
-`DocumentStore` protocol is already that abstraction, and wrapping it would
-add a layer whose only job is to be a second place for isolation bugs to
-live. What Primer owns is the filter every query carries, not the store.
+There is deliberately no Primer vector adapter interface. Wrapping the
+integration would add a layer whose only job is to be a second place for
+isolation bugs to live. What Primer owns is the filter every query carries,
+not the store.
+
+The concrete type is used rather than Haystack's `DocumentStore` protocol
+because the routes count and delete by filter, and the protocol has no such
+methods: without them a count means reading every passage back.
 """
 
 from __future__ import annotations
 
 from typing import Any
 
-from haystack.document_stores.types import DocumentStore
 from haystack.utils import Secret
 from haystack_integrations.document_stores.qdrant import QdrantDocumentStore
 
@@ -26,7 +29,7 @@ LAYOUTS: dict[str, dict[str, Any]] = {
 }
 
 
-def build_document_store(settings: Settings) -> DocumentStore:
+def build_document_store(settings: Settings) -> QdrantDocumentStore:
     """Instantiate Qdrant, unchanged from the integration.
 
     The conformance suite runs Primer's isolation cases against it, so an

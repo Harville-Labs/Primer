@@ -125,6 +125,22 @@ def version_filter(library_id: UUID, document_version_id: UUID) -> dict[str, Any
     }
 
 
+def superseded_filter(
+    library_id: UUID, document_version_id: UUID, keep_generation_id: UUID | None
+) -> dict[str, Any]:
+    """`version_filter`, sparing the generation now in use if there is one."""
+    version = version_filter(library_id, document_version_id)
+    if keep_generation_id is None:
+        return version
+    return {
+        "operator": "AND",
+        "conditions": [
+            *version["conditions"],
+            {"field": f"meta.{GENERATION_ID}", "operator": "!=", "value": str(keep_generation_id)},
+        ],
+    }
+
+
 def to_documents(chunks: tuple[DocumentChunk, ...], embedder: DocumentEmbedder) -> list[Document]:
     """Embed chunks, then store what the document actually says.
 
