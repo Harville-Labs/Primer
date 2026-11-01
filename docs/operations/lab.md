@@ -118,6 +118,44 @@ How long a run may be is the operator's choice: the run limits under
 many edits one run applies. The GPU is shared, and a run holds it from its
 first step to its last.
 
+## Saved experiments
+
+Nothing Lab does is kept unless someone saves it. A saved experiment holds
+the prompt, its edits or detector settings, the result, and the steering
+vectors and probes the run used, so it can be opened again after the model
+has changed. It is private to the person who saved it: to anyone else, it
+does not exist.
+
+Lab keeps them in the shared PostgreSQL, in a `lab` schema of its own
+([ADR 0008](../adr/0008-lab-saves-experiments-in-postgresql.md)). Without a
+database URL, Lab runs as before and says that saving is unavailable.
+
+An experiment is kept for `PRIMER_LAB_EXPERIMENT_RETENTION_DAYS` days from
+when it was saved, 90 by default, and then deleted. Lab checks every hour,
+and an expired experiment is left out of every list and read before then,
+so nobody sees one past its date. The web app shows each experiment's
+expiry date. Shortening the period deletes the newly expired ones within the
+hour; lengthening it keeps the rest longer, but brings back none already
+deleted.
+
+Opening an experiment puts its vectors and probes back, under the ids the
+saved request names, so the run can be repeated as it was. It does that
+only on the model it was saved from: a vector is a direction in one model's
+residual stream and means nothing in another's.
+
+Lab's database URL can reach every service's schema. To limit what a
+compromise of Lab could read, give it a URL for a role granted only the
+`lab` schema:
+
+```sql
+CREATE ROLE primer_lab LOGIN PASSWORD '...';
+GRANT USAGE ON SCHEMA lab TO primer_lab;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA lab TO primer_lab;
+```
+
+Run this after the first migration has created the schema. The migration
+itself still needs the role that owns it.
+
 ## Docker Compose
 
 Turn on the `lab` profile, and tell Control where Lab is so the web app
@@ -167,6 +205,15 @@ while the new one loads its model. Two pods would each need the volume and a
 copy of the model in memory, and on a GPU node there is rarely room for the
 second.
 
-Lab accepts connections from the web app and nothing else, and it is given
-none of Primer's shared secrets: no database, no internal token. It needs
-egress to the Hugging Face hub, or to your mirror, to download a model.
+Lab accepts connections from the web app and nothing else. Of Primer's
+shared secrets it is given the database URL alone, for saved experiments: no
+internal token, no settings key. It needs egress to the Hugging Face hub, or
+to your mirror, to download a model.
+
+Experiments are kept for 90 days unless you say otherwise:
+
+```yaml
+lab:
+  enabled: true
+  experimentRetentionDays: 30
+```

@@ -9,3 +9,4 @@
 | [0005](0005-lab-local-research-model.md) | Let Lab load a small open model of its own | Accepted; superseded in part by 0007 |
 | [0006](0006-library-wide-questions-from-passages.md) | Answer library-wide questions from passages chosen across communities | Accepted |
 | [0007](0007-lab-saes-as-weights-only-pickles.md) | Open Qwen-Scope's SAEs as weights-only pickles | Accepted |
+| [0008](0008-lab-saves-experiments-in-postgresql.md) | Keep Lab's saved experiments in the shared PostgreSQL | Accepted |

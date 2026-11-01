@@ -74,3 +74,28 @@ def test_the_web_app_knows_where_lab_is_and_control_waits_to_be_told() -> None:
     assert services["control"]["environment"]["PRIMER_LAB_SERVICE_URL"] == ""
     told = resolve(BASE, env=LAB | {"PRIMER_LAB_SERVICE_URL": "http://lab:8000"})
     assert told["services"]["control"]["environment"]["PRIMER_LAB_SERVICE_URL"] == "http://lab:8000"
+
+
+def test_lab_saves_to_a_schema_migrated_before_it_starts(with_lab: dict[str, Any]) -> None:
+    """In Lab's own image, since no other holds Lab's migrations."""
+    services = with_lab["services"]
+    migrate = services["migrate-lab"]
+
+    assert migrate["working_dir"] == "/app/services/lab"
+    assert migrate["command"] == ["alembic", "upgrade", "head"]
+    assert migrate["build"] == services["lab"]["build"]
+    assert services["lab"]["depends_on"]["migrate-lab"]["condition"] == (
+        "service_completed_successfully"
+    )
+    assert (
+        services["lab"]["environment"]["PRIMER_DATABASE_URL"]
+        == (migrate["environment"]["PRIMER_DATABASE_URL"])
+    )
+
+
+def test_the_gpu_override_migrates_from_the_image_lab_runs() -> None:
+    if shutil.which("docker") is None:
+        pytest.skip("docker is not installed")
+    services = resolve(BASE, COMPOSE_DIR / "compose.gpu.yaml", env=LAB)["services"]
+
+    assert services["migrate-lab"]["build"] == services["lab"]["build"]

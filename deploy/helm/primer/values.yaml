@@ -487,6 +487,9 @@ lab:
   hubEndpoint: ""
   device: auto     # auto, cpu, or cuda
   dtype: auto      # auto, float32, bfloat16, or float16
+  # Days a saved experiment is kept, from when it was saved. Lab deletes it
+  # after that, within the hour. Nothing is kept that nobody saved.
+  experimentRetentionDays: 90
   # GPUs to request as nvidia.com/gpu. Above zero, the CUDA image is used.
   gpu: 0
   # Where fetched and operator-supplied weights live. Nothing is evicted:

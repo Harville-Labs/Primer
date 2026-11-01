@@ -712,6 +712,12 @@
           "type": "string",
           "enum": ["auto", "float32", "bfloat16", "float16"]
         },
+        "experimentRetentionDays": {
+          "description": "Days a saved experiment is kept, from when it was saved.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 3650
+        },
         "gpu": {
           "description": "GPUs to request as nvidia.com/gpu. Above zero, the CUDA image is used.",
           "type": "integer",

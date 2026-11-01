@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from typing import Any
 
+import pytest
 from test_chart import containers, named, of_kind, refusal, render, workloads
 
 BUNDLED = ("postgresql.bundled.enabled=true",)
@@ -79,9 +80,10 @@ def test_sql_migrations_run_after_install_and_before_upgrade() -> None:
         assert "timeout 300" in wait["command"][-1]
 
 
-def test_only_the_workloads_given_the_database_may_reach_it() -> None:
+@pytest.mark.parametrize("lab", [(), ("lab.enabled=true",)], ids=["without-lab", "with-lab"])
+def test_only_the_workloads_given_the_database_may_reach_it(lab: tuple[str, ...]) -> None:
     """The policy and the environment are written separately; they must agree."""
-    rendered = render(*BUNDLED)
+    rendered = render(*BUNDLED, *lab)
     policy = named(rendered, "NetworkPolicy", "-allow-postgresql")
     admitted = {
         peer["podSelector"]["matchLabels"]["app.kubernetes.io/component"]
