@@ -4,7 +4,8 @@
 
 	/** Signed readings as bars drawn out from a centre line, strongest first. */
 	interface Props {
-		rows: { index: number; activation: number }[];
+		//: A row's label, when it has one, is printed under its bar.
+		rows: { index: number; activation: number; label?: string }[];
 		//: Printed before each index: `n` for a neuron, `f` for a feature.
 		prefix: string;
 		//: Given, each row can be added as an edit; `noun` names it for that.
@@ -55,6 +56,14 @@
 					<Plus size={12} aria-hidden="true" />
 					<span class="sr-only">Edit {noun} {row.index}</span>
 				</button>
+			{/if}
+			{#if row.label}
+				<span
+					class="col-start-2 col-end-[-1] -mt-0.5 truncate text-[11px] text-muted-foreground"
+					title={row.label}
+				>
+					{row.label}
+				</span>
 			{/if}
 		</li>
 	{/each}

@@ -3,6 +3,7 @@
 	import { Button, Input, ReorderList, Select, Slider } from '@sivir-ui/svelte';
 	import type { DraftEdit, Edits, Generator, Steering } from '#lib/lab/edits.svelte.ts';
 	import { editEffect, editTarget } from '#lib/lab/generation.ts';
+	import { featureLabel } from '#lib/lab/heatmap.ts';
 	import type { Inspector } from '#lib/lab/inspector.svelte.ts';
 	import EditEditor from './EditEditor.svelte';
 
@@ -29,7 +30,16 @@
 	let runnable = $derived(Boolean(inspector.prompt.trim()) && !inspector.running);
 
 	function name(edit: DraftEdit): string {
-		return editTarget(edit, edit.vector_id ? steering.label(edit.vector_id) : undefined);
+		return editTarget(edit, label(edit));
+	}
+
+	// A feature's label comes from the reading on screen, which carries
+	// labels only for the features it fired: one typed in by index that the
+	// reading did not fire shows its index alone.
+	function label(edit: DraftEdit): string | undefined {
+		if (edit.vector_id) return steering.label(edit.vector_id);
+		if (edit.site !== 'sae_feature' || edit.index == null || !inspector.reading) return undefined;
+		return featureLabel(inspector.reading, edit.layer, edit.index);
 	}
 
 	// Each row is the reorder list's own button, so a click is read from

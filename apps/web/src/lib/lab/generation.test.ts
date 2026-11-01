@@ -147,6 +147,16 @@ describe('naming an edit', () => {
 				positions: 'all',
 			}),
 		).toBe('L3 · neuron 412');
+		const feature = {
+			site: 'sae_feature' as const,
+			layer: 1,
+			index: 412,
+			op: 'zero' as const,
+			value: 0,
+			positions: 'all' as const,
+		};
+		expect(editTarget(feature, 'French words')).toBe('L1 · feature 412 · French words');
+		expect(editTarget(feature)).toBe('L1 · feature 412');
 		expect(editTarget({ site: 'attn_out', layer: 0, op: 'zero', value: 0, positions: 'all' })).toBe(
 			'L0 · attn out',
 		);
