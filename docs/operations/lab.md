@@ -91,6 +91,33 @@ are downloading, ready, or refused.
 To turn the feature view off, set `lab.saes: null` in the chart or
 `PRIMER_LAB_SAES={}` in Compose.
 
+## Editing a run
+
+A generation runs the prompt twice, greedily: once as the model is, and
+once with the edits applied at every step. Greedy, so the edits are the
+only thing that can make the two answers differ, and the stream says where
+they first do. An edit names a site, a layer, and an operation:
+
+- **Sites**: the attention output, the MLP's neurons, the MLP output, the
+  residual stream after the layer, or an SAE feature at a layer that has
+  an SAE.
+- **Operations**: `zero`, `mean` (the site's average over the prompt),
+  `scale`, `clamp` to a value, or `add` a value or a steering vector.
+- **Positions**: every text token, the prompt, the generated tokens, or a
+  span. Only a span can edit the chat template's own tokens.
+
+A feature is edited through its SAE's decoder, adding only the change in
+that feature: what the SAE does not reconstruct is left alone.
+
+A steering vector is the difference between the mean residual stream of two
+sets of prompts, read at each one's last token. Lab keeps it, in memory and
+for the person who made it, until the model changes.
+
+How long a run may be is the operator's choice: the run limits under
+[Configuration](configuration.md#lab) bound the prompt, the answer, and how
+many edits one run applies. The GPU is shared, and a run holds it from its
+first step to its last.
+
 ## Docker Compose
 
 Turn on the `lab` profile, and tell Control where Lab is so the web app

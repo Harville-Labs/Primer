@@ -231,6 +231,11 @@ Compose passes one.
 | `PRIMER_LAB_DEVICE` | `lab.device` | `auto` | `auto` uses CUDA when torch can see a GPU |
 | `PRIMER_LAB_DTYPE` | `lab.dtype` | `auto` | `auto` is `bfloat16` on CUDA and `float32` on CPU |
 | `PRIMER_LAB_WEIGHTS_DIR` | | `/models` | Where the volume is mounted; fetched weights go under `hub/` |
+| `PRIMER_LAB_MAX_PROMPT_TOKENS` | | `512` | Longest prompt a run reads, counted with the chat template |
+| `PRIMER_LAB_MAX_NEW_TOKENS` | | `128` | Most tokens a generation writes, for each of its two runs |
+| `PRIMER_LAB_MAX_INTERVENTIONS` | | `16` | Most edits one generation applies |
+| `PRIMER_LAB_RUN_TIMEOUT_SECONDS` | | `120` | A run past this is abandoned, and its caller told so |
+| `PRIMER_LAB_MAX_WAITING_RUNS` | | `32` | Runs that may wait behind the one in progress before more are refused |
 | | `lab.gpu` | `0` | GPUs to request. Above zero, the `-cuda` image is used |
 | | `lab.persistence.size` | `50Gi` | Nothing is evicted; see [Lab](lab.md) |
 | | `lab.nodeSelector`, `lab.tolerations` | none | To place Lab on a GPU node |

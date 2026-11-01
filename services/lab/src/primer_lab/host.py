@@ -13,7 +13,7 @@ import asyncio
 import gc
 import logging
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import torch
 from primer_contracts.lab import HubModel, LabModelStatus, LocalModel, ModelSwitch
@@ -30,6 +30,7 @@ from primer_lab.loader import (
 from primer_lab.queue import RunQueue, RunTimedOut
 from primer_lab.saes import Attachment, SaeSet, fetch_saes
 from primer_lab.sources import Hub, ModelUnavailable, check_allowed, resolve
+from primer_lab.steering import SteeringVectors
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +50,8 @@ class Resident:
     reference: HubModel | LocalModel
     loaded: LoadedModel
     saes: Attachment | None = None
+    #: Made on this model and meaningless on any other, so they go with it.
+    vectors: SteeringVectors = field(default_factory=SteeringVectors)
 
     @property
     def ready_saes(self) -> SaeSet | None:

@@ -9,44 +9,16 @@ something that did not share its mistake.
 from __future__ import annotations
 
 import builtins
-from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
 import pytest
 import torch
 from fastapi.testclient import TestClient
-from lab_support import build_saes, lab, settle
-from primer_contracts.lab import HubModel
+from lab_support import SAES, build_saes, lab_with_saes, settle
 from primer_lab.config import Settings
 
-MODEL = "lab/tiny"
-SAES = "lab/tiny-saes"
 PROMPT = "hello world w3 w7 w7"
-
-
-@pytest.fixture
-def published(hub, tiny_model: Path) -> None:
-    hub.publish(MODEL, tiny_model)
-
-
-def lab_with_saes(weights_dir: Path, hub, factory, **overrides: Any) -> TestClient:
-    return lab(
-        weights_dir,
-        hub,
-        factory,
-        lab_model=HubModel(repository=MODEL),
-        lab_saes={MODEL: SAES},
-        **overrides,
-    )
-
-
-@pytest.fixture
-def with_saes(weights_dir, hub, factory, published, tmp_path) -> Iterator[TestClient]:
-    hub.publish(SAES, build_saes(tmp_path / "saes", layers=[1]))
-    with lab_with_saes(weights_dir, hub, factory) as client:
-        settle(client)
-        yield client
 
 
 def inspect(client: TestClient, **body: Any) -> dict:

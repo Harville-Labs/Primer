@@ -9,9 +9,10 @@ from __future__ import annotations
 
 from typing import Annotated, Literal
 
-from pydantic import ConfigDict, Field
+from pydantic import ConfigDict, Field, model_validator
 
 from primer_contracts.base import WireModel
+from primer_contracts.errors import ProblemDetail
 
 #: A repository id as the hub writes it, `owner/name`. Held to the hub's own
 #: character set so a name can never carry a path separator past the owner.
@@ -213,3 +214,172 @@ class ActivationVector(WireModel):
     token: int
     site: ActivationSite
     values: list[float]
+
+
+#: Where an intervention edits a layer. The activation sites, plus an SAE
+#: feature, which is read from and written back to the residual stream
+#: after the layer through the SAE trained there.
+InterventionSite = Literal["resid_post", "mlp_neuron", "mlp_out", "attn_out", "sae_feature"]
+#: zero and mean replace the value; mean is its mean over the prompt's own
+#: tokens. scale multiplies by `value`, clamp fixes it at `value`, and add
+#: adds `value` - or, with a steering vector, `value` times that vector.
+InterventionOp = Literal["zero", "mean", "scale", "clamp", "add"]
+#: Which tokens an edit applies to. "all" and "prompt" skip the special
+#: tokens a tokenizer or chat template added, which a model reads very
+#: differently from text and which an edit meant for the prompt would
+#: otherwise swamp. "generated" is every token the model writes, from the
+#: first one read back in. A [start, end) span is exactly those positions,
+#: special or not.
+InterventionPositions = Literal["all", "prompt", "generated"] | tuple[int, int]
+
+#: The sites whose vectors are as wide as the residual stream, which is
+#: what a steering vector is.
+RESIDUAL_WIDTH_SITES = ("resid_post", "mlp_out", "attn_out")
+
+
+class Intervention(WireModel):
+    """One edit to the forward pass, applied at every step of a generation.
+
+    What can be checked without the model is checked here; the layer and
+    index bounds depend on the model resident, and Lab checks those.
+    """
+
+    site: InterventionSite
+    layer: int = Field(ge=0)
+    #: A neuron, a residual component, or a feature. None edits the whole
+    #: vector at the site.
+    index: int | None = Field(default=None, ge=0)
+    op: InterventionOp
+    value: float = Field(default=0.0, allow_inf_nan=False)
+    vector_id: str | None = Field(default=None, pattern=r"^[0-9a-f]{32}$")
+    positions: InterventionPositions = "all"
+
+    @model_validator(mode="after")
+    def _well_formed(self) -> Intervention:
+        if self.site == "sae_feature" and self.index is None:
+            raise ValueError("an sae_feature intervention names its feature in index")
+        if self.op == "clamp" and self.index is None:
+            raise ValueError("clamp fixes one component at a value, so it needs an index")
+        if self.vector_id is not None:
+            if self.op != "add" or self.index is not None:
+                raise ValueError("a steering vector is added to a whole vector: op add, no index")
+            if self.site not in RESIDUAL_WIDTH_SITES:
+                raise ValueError(
+                    f"a steering vector is residual-width, so it goes at "
+                    f"{', '.join(RESIDUAL_WIDTH_SITES)}"
+                )
+        elif self.op == "add" and self.index is None:
+            raise ValueError("adding to a whole vector needs a vector_id to add")
+        if not isinstance(self.positions, str):
+            start, end = self.positions
+            if not 0 <= start < end:
+                raise ValueError("a span of positions is [start, end), with 0 <= start < end")
+        return self
+
+
+class GenerateRequest(PromptInput):
+    #: Applied in the order the model runs them, by layer and then by site;
+    #: edits at the same site apply in the order given here.
+    interventions: list[Intervention] = Field(default_factory=list, max_length=256)
+    max_new_tokens: int = Field(default=32, ge=1, le=2048)
+    #: A token to watch: how likely the model thinks it is as the first
+    #: token of the answer, before and after the edits. It must be one
+    #: token in this model's vocabulary.
+    target: str | None = Field(default=None, min_length=1, max_length=200)
+
+
+class SteeringVectorRequest(WireModel):
+    """A difference of means between two sets of prompts at one layer.
+
+    Contrastive activation addition: the mean residual stream after
+    `layer`, at each prompt's last token, over the positive prompts minus
+    the same over the negative ones. Added back in, it pushes the model
+    towards whatever separates the two sets.
+    """
+
+    model_config = VERBATIM
+
+    label: str = Field(min_length=1, max_length=120)
+    layer: int = Field(ge=0)
+    positive: list[Annotated[str, Field(min_length=1, max_length=20_000)]] = Field(
+        min_length=1, max_length=64
+    )
+    negative: list[Annotated[str, Field(min_length=1, max_length=20_000)]] = Field(
+        min_length=1, max_length=64
+    )
+    chat: bool = True
+
+
+class SteeringVector(WireModel):
+    """A steering vector Lab holds for its owner until the model changes."""
+
+    id: str
+    label: str
+    layer: int
+    #: Its L2 norm, so a reader can choose a coefficient on the same scale
+    #: as the residual stream's own norm.
+    norm: float
+    positive: int = Field(ge=1)
+    negative: int = Field(ge=1)
+
+
+class TargetChange(WireModel):
+    """The watched token at the first answer position, before and after."""
+
+    token: InspectedToken
+    baseline_logit: float
+    edited_logit: float
+    baseline_probability: float
+    edited_probability: float
+
+
+class GenerationEvent(WireModel):
+    #: Monotonic within a stream.
+    id: int = Field(ge=0)
+
+
+class GenerationQueued(GenerationEvent):
+    type: Literal["queued"] = "queued"
+    #: Runs ahead of this one. Sent each time it changes, and not at all
+    #: when the run starts at once.
+    ahead: int = Field(ge=1)
+
+
+class GeneratedToken(GenerationEvent):
+    """One token of the baseline or the edited answer, as it is written.
+
+    The baseline is written in full before the edited answer starts.
+    """
+
+    type: Literal["token"] = "token"
+    run: Literal["baseline", "edited"]
+    index: int = Field(ge=0)
+    token: InspectedToken
+
+
+class GenerationCompleted(GenerationEvent):
+    model_config = VERBATIM
+
+    type: Literal["completed"] = "completed"
+    model: LabModelStatus
+    prompt: list[InspectedToken]
+    baseline: list[InspectedToken]
+    edited: list[InspectedToken]
+    #: The first position at which the two answers differ, or None when
+    #: they are the same. One being a prefix of the other differs where the
+    #: shorter one ends.
+    diverged_at: int | None = Field(default=None, ge=0)
+    target: TargetChange | None = None
+
+
+class GenerationFailed(GenerationEvent):
+    """A terminal failure, as the problem a plain request would have answered."""
+
+    type: Literal["error"] = "error"
+    problem: ProblemDetail
+
+
+GenerationStreamEvent = Annotated[
+    GenerationQueued | GeneratedToken | GenerationCompleted | GenerationFailed,
+    Field(discriminator="type"),
+]
