@@ -88,6 +88,236 @@
         "title": "ActivationVector",
         "type": "object"
       },
+      "ErrorCode": {
+        "description": "Error codes clients may branch on. Values are part of the contract.",
+        "enum": [
+          "identity_missing",
+          "identity_invalid",
+          "not_found",
+          "conflict",
+          "validation_failed",
+          "unsupported_content",
+          "quota_exceeded",
+          "dependency_unavailable",
+          "internal_error"
+        ],
+        "title": "ErrorCode",
+        "type": "string"
+      },
+      "GenerateRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "chat": {
+            "default": true,
+            "title": "Chat",
+            "type": "boolean"
+          },
+          "interventions": {
+            "items": {
+              "$ref": "#/components/schemas/Intervention"
+            },
+            "maxItems": 256,
+            "title": "Interventions",
+            "type": "array"
+          },
+          "max_new_tokens": {
+            "default": 32,
+            "maximum": 2048.0,
+            "minimum": 1.0,
+            "title": "Max New Tokens",
+            "type": "integer"
+          },
+          "prompt": {
+            "maxLength": 100000,
+            "minLength": 1,
+            "title": "Prompt",
+            "type": "string"
+          },
+          "target": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target"
+          }
+        },
+        "required": [
+          "prompt"
+        ],
+        "title": "GenerateRequest",
+        "type": "object"
+      },
+      "GeneratedToken": {
+        "additionalProperties": false,
+        "description": "One token of the baseline or the edited answer, as it is written.\n\nThe baseline is written in full before the edited answer starts.",
+        "properties": {
+          "id": {
+            "minimum": 0.0,
+            "title": "Id",
+            "type": "integer"
+          },
+          "index": {
+            "minimum": 0.0,
+            "title": "Index",
+            "type": "integer"
+          },
+          "run": {
+            "enum": [
+              "baseline",
+              "edited"
+            ],
+            "title": "Run",
+            "type": "string"
+          },
+          "token": {
+            "$ref": "#/components/schemas/InspectedToken"
+          },
+          "type": {
+            "const": "token",
+            "default": "token",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "run",
+          "index",
+          "token"
+        ],
+        "title": "GeneratedToken",
+        "type": "object"
+      },
+      "GenerationCompleted": {
+        "additionalProperties": false,
+        "properties": {
+          "baseline": {
+            "items": {
+              "$ref": "#/components/schemas/InspectedToken"
+            },
+            "title": "Baseline",
+            "type": "array"
+          },
+          "diverged_at": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Diverged At"
+          },
+          "edited": {
+            "items": {
+              "$ref": "#/components/schemas/InspectedToken"
+            },
+            "title": "Edited",
+            "type": "array"
+          },
+          "id": {
+            "minimum": 0.0,
+            "title": "Id",
+            "type": "integer"
+          },
+          "model": {
+            "$ref": "#/components/schemas/LabModelStatus"
+          },
+          "prompt": {
+            "items": {
+              "$ref": "#/components/schemas/InspectedToken"
+            },
+            "title": "Prompt",
+            "type": "array"
+          },
+          "target": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TargetChange"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "type": {
+            "const": "completed",
+            "default": "completed",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "model",
+          "prompt",
+          "baseline",
+          "edited"
+        ],
+        "title": "GenerationCompleted",
+        "type": "object"
+      },
+      "GenerationFailed": {
+        "additionalProperties": false,
+        "description": "A terminal failure, as the problem a plain request would have answered.",
+        "properties": {
+          "id": {
+            "minimum": 0.0,
+            "title": "Id",
+            "type": "integer"
+          },
+          "problem": {
+            "$ref": "#/components/schemas/ProblemDetail"
+          },
+          "type": {
+            "const": "error",
+            "default": "error",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "problem"
+        ],
+        "title": "GenerationFailed",
+        "type": "object"
+      },
+      "GenerationQueued": {
+        "additionalProperties": false,
+        "properties": {
+          "ahead": {
+            "minimum": 1.0,
+            "title": "Ahead",
+            "type": "integer"
+          },
+          "id": {
+            "minimum": 0.0,
+            "title": "Id",
+            "type": "integer"
+          },
+          "type": {
+            "const": "queued",
+            "default": "queued",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "ahead"
+        ],
+        "title": "GenerationQueued",
+        "type": "object"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -253,6 +483,102 @@
           "special"
         ],
         "title": "InspectedToken",
+        "type": "object"
+      },
+      "Intervention": {
+        "additionalProperties": false,
+        "description": "One edit to the forward pass, applied at every step of a generation.\n\nWhat can be checked without the model is checked here; the layer and\nindex bounds depend on the model resident, and Lab checks those.",
+        "properties": {
+          "index": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Index"
+          },
+          "layer": {
+            "minimum": 0.0,
+            "title": "Layer",
+            "type": "integer"
+          },
+          "op": {
+            "enum": [
+              "zero",
+              "mean",
+              "scale",
+              "clamp",
+              "add"
+            ],
+            "title": "Op",
+            "type": "string"
+          },
+          "positions": {
+            "anyOf": [
+              {
+                "enum": [
+                  "all",
+                  "prompt",
+                  "generated"
+                ],
+                "type": "string"
+              },
+              {
+                "maxItems": 2,
+                "minItems": 2,
+                "prefixItems": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "integer"
+                  }
+                ],
+                "type": "array"
+              }
+            ],
+            "default": "all",
+            "title": "Positions"
+          },
+          "site": {
+            "enum": [
+              "resid_post",
+              "mlp_neuron",
+              "mlp_out",
+              "attn_out",
+              "sae_feature"
+            ],
+            "title": "Site",
+            "type": "string"
+          },
+          "value": {
+            "default": 0.0,
+            "title": "Value",
+            "type": "number"
+          },
+          "vector_id": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{32}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vector Id"
+          }
+        },
+        "required": [
+          "site",
+          "layer",
+          "op"
+        ],
+        "title": "Intervention",
         "type": "object"
       },
       "LabModelStatus": {
@@ -597,6 +923,58 @@
         "title": "ModelSwitch",
         "type": "object"
       },
+      "ProblemDetail": {
+        "additionalProperties": false,
+        "description": "Sanitized error body. Operational context stays in logs, not here.",
+        "properties": {
+          "code": {
+            "$ref": "#/components/schemas/ErrorCode"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          },
+          "request_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Request Id"
+          },
+          "status": {
+            "maximum": 599.0,
+            "minimum": 400.0,
+            "title": "Status",
+            "type": "integer"
+          },
+          "title": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "title",
+          "status"
+        ],
+        "title": "ProblemDetail",
+        "type": "object"
+      },
       "SaeStatus": {
         "additionalProperties": false,
         "description": "The sparse autoencoders attached to the resident model, if any.\n\nFetched after the model loads, so the model is usable while they\ndownload; until they are ready an inspection reads no features.",
@@ -675,6 +1053,134 @@
           "state"
         ],
         "title": "SaeStatus",
+        "type": "object"
+      },
+      "SteeringVector": {
+        "additionalProperties": false,
+        "description": "A steering vector Lab holds for its owner until the model changes.",
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "layer": {
+            "title": "Layer",
+            "type": "integer"
+          },
+          "negative": {
+            "minimum": 1.0,
+            "title": "Negative",
+            "type": "integer"
+          },
+          "norm": {
+            "title": "Norm",
+            "type": "number"
+          },
+          "positive": {
+            "minimum": 1.0,
+            "title": "Positive",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "layer",
+          "norm",
+          "positive",
+          "negative"
+        ],
+        "title": "SteeringVector",
+        "type": "object"
+      },
+      "SteeringVectorRequest": {
+        "additionalProperties": false,
+        "description": "A difference of means between two sets of prompts at one layer.\n\nContrastive activation addition: the mean residual stream after\n`layer`, at each prompt's last token, over the positive prompts minus\nthe same over the negative ones. Added back in, it pushes the model\ntowards whatever separates the two sets.",
+        "properties": {
+          "chat": {
+            "default": true,
+            "title": "Chat",
+            "type": "boolean"
+          },
+          "label": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Label",
+            "type": "string"
+          },
+          "layer": {
+            "minimum": 0.0,
+            "title": "Layer",
+            "type": "integer"
+          },
+          "negative": {
+            "items": {
+              "maxLength": 20000,
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 64,
+            "minItems": 1,
+            "title": "Negative",
+            "type": "array"
+          },
+          "positive": {
+            "items": {
+              "maxLength": 20000,
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 64,
+            "minItems": 1,
+            "title": "Positive",
+            "type": "array"
+          }
+        },
+        "required": [
+          "label",
+          "layer",
+          "positive",
+          "negative"
+        ],
+        "title": "SteeringVectorRequest",
+        "type": "object"
+      },
+      "TargetChange": {
+        "additionalProperties": false,
+        "description": "The watched token at the first answer position, before and after.",
+        "properties": {
+          "baseline_logit": {
+            "title": "Baseline Logit",
+            "type": "number"
+          },
+          "baseline_probability": {
+            "title": "Baseline Probability",
+            "type": "number"
+          },
+          "edited_logit": {
+            "title": "Edited Logit",
+            "type": "number"
+          },
+          "edited_probability": {
+            "title": "Edited Probability",
+            "type": "number"
+          },
+          "token": {
+            "$ref": "#/components/schemas/InspectedToken"
+          }
+        },
+        "required": [
+          "token",
+          "baseline_logit",
+          "edited_logit",
+          "baseline_probability",
+          "edited_probability"
+        ],
+        "title": "TargetChange",
         "type": "object"
       },
       "ValidationError": {
@@ -763,6 +1269,72 @@
           }
         },
         "summary": "Read one whole activation vector",
+        "tags": [
+          "lab"
+        ]
+      }
+    },
+    "/api/v1/lab/generate": {
+      "post": {
+        "description": "Generates greedily from the prompt twice, first as the model is and then with the interventions applied at every step, and streams both answers token by token as server-sent events. A request that cannot run is refused before the stream opens; one that fails once it has started ends the stream with an `error` event.",
+        "operationId": "generate_api_v1_lab_generate_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GenerateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "discriminator": {
+                    "mapping": {
+                      "completed": "#/components/schemas/GenerationCompleted",
+                      "error": "#/components/schemas/GenerationFailed",
+                      "queued": "#/components/schemas/GenerationQueued",
+                      "token": "#/components/schemas/GeneratedToken"
+                    },
+                    "propertyName": "type"
+                  },
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/GenerationQueued"
+                    },
+                    {
+                      "$ref": "#/components/schemas/GeneratedToken"
+                    },
+                    {
+                      "$ref": "#/components/schemas/GenerationCompleted"
+                    },
+                    {
+                      "$ref": "#/components/schemas/GenerationFailed"
+                    }
+                  ],
+                  "title": "Response 200 Generate Api V1 Lab Generate Post",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Generate with and without edits to the forward pass",
         "tags": [
           "lab"
         ]
@@ -868,6 +1440,71 @@
           }
         },
         "summary": "The resident model and any switch in progress",
+        "tags": [
+          "lab"
+        ]
+      }
+    },
+    "/api/v1/lab/vectors": {
+      "get": {
+        "operationId": "list_vectors_api_v1_lab_vectors_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/SteeringVector"
+                  },
+                  "title": "Response List Vectors Api V1 Lab Vectors Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "The steering vectors you have made on this model",
+        "tags": [
+          "lab"
+        ]
+      },
+      "post": {
+        "description": "The mean residual stream after the layer, at each prompt's last token, over the positive prompts minus the same over the negative ones. Lab holds it for the person who made it until the model changes; add it with an `add` edit at a residual site.",
+        "operationId": "make_vector_api_v1_lab_vectors_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SteeringVectorRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SteeringVector"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Make a steering vector from two sets of prompts",
         "tags": [
           "lab"
         ]

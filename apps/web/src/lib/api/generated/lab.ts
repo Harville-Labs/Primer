@@ -24,6 +24,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/lab/generate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Generate with and without edits to the forward pass
+         * @description Generates greedily from the prompt twice, first as the model is and then with the interventions applied at every step, and streams both answers token by token as server-sent events. A request that cannot run is refused before the stream opens; one that fails once it has started ends the stream with an `error` event.
+         */
+        post: operations["generate_api_v1_lab_generate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/lab/inspect": {
         parameters: {
             query?: never;
@@ -75,6 +95,27 @@ export interface paths {
         get: operations["lab_status_api_v1_lab_status_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lab/vectors": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The steering vectors you have made on this model */
+        get: operations["list_vectors_api_v1_lab_vectors_get"];
+        put?: never;
+        /**
+         * Make a steering vector from two sets of prompts
+         * @description The mean residual stream after the layer, at each prompt's last token, over the positive prompts minus the same over the negative ones. Lab holds it for the person who made it until the model changes; add it with an `add` edit at a residual site.
+         */
+        post: operations["make_vector_api_v1_lab_vectors_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -164,6 +205,100 @@ export interface components {
             /** Values */
             values: number[];
         };
+        /**
+         * ErrorCode
+         * @description Error codes clients may branch on. Values are part of the contract.
+         * @enum {string}
+         */
+        ErrorCode: "identity_missing" | "identity_invalid" | "not_found" | "conflict" | "validation_failed" | "unsupported_content" | "quota_exceeded" | "dependency_unavailable" | "internal_error";
+        /** GenerateRequest */
+        GenerateRequest: {
+            /**
+             * Chat
+             * @default true
+             */
+            chat: boolean;
+            /** Interventions */
+            interventions?: components["schemas"]["Intervention"][];
+            /**
+             * Max New Tokens
+             * @default 32
+             */
+            max_new_tokens: number;
+            /** Prompt */
+            prompt: string;
+            /** Target */
+            target?: string | null;
+        };
+        /**
+         * GeneratedToken
+         * @description One token of the baseline or the edited answer, as it is written.
+         *
+         *     The baseline is written in full before the edited answer starts.
+         */
+        GeneratedToken: {
+            /** Id */
+            id: number;
+            /** Index */
+            index: number;
+            /**
+             * Run
+             * @enum {string}
+             */
+            run: "baseline" | "edited";
+            token: components["schemas"]["InspectedToken"];
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "token";
+        };
+        /** GenerationCompleted */
+        GenerationCompleted: {
+            /** Baseline */
+            baseline: components["schemas"]["InspectedToken"][];
+            /** Diverged At */
+            diverged_at?: number | null;
+            /** Edited */
+            edited: components["schemas"]["InspectedToken"][];
+            /** Id */
+            id: number;
+            model: components["schemas"]["LabModelStatus"];
+            /** Prompt */
+            prompt: components["schemas"]["InspectedToken"][];
+            target?: components["schemas"]["TargetChange"] | null;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "completed";
+        };
+        /**
+         * GenerationFailed
+         * @description A terminal failure, as the problem a plain request would have answered.
+         */
+        GenerationFailed: {
+            /** Id */
+            id: number;
+            problem: components["schemas"]["ProblemDetail"];
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "error";
+        };
+        /** GenerationQueued */
+        GenerationQueued: {
+            /** Ahead */
+            ahead: number;
+            /** Id */
+            id: number;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "queued";
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -246,6 +381,44 @@ export interface components {
             special: boolean;
             /** Text */
             text: string;
+        };
+        /**
+         * Intervention
+         * @description One edit to the forward pass, applied at every step of a generation.
+         *
+         *     What can be checked without the model is checked here; the layer and
+         *     index bounds depend on the model resident, and Lab checks those.
+         */
+        Intervention: {
+            /** Index */
+            index?: number | null;
+            /** Layer */
+            layer: number;
+            /**
+             * Op
+             * @enum {string}
+             */
+            op: "zero" | "mean" | "scale" | "clamp" | "add";
+            /**
+             * Positions
+             * @default all
+             */
+            positions: ("all" | "prompt" | "generated") | [
+                number,
+                number
+            ];
+            /**
+             * Site
+             * @enum {string}
+             */
+            site: "resid_post" | "mlp_neuron" | "mlp_out" | "attn_out" | "sae_feature";
+            /**
+             * Value
+             * @default 0
+             */
+            value: number;
+            /** Vector Id */
+            vector_id?: string | null;
         };
         /**
          * LabModelStatus
@@ -349,6 +522,21 @@ export interface components {
             state: "fetching" | "loading" | "failed";
         };
         /**
+         * ProblemDetail
+         * @description Sanitized error body. Operational context stays in logs, not here.
+         */
+        ProblemDetail: {
+            code: components["schemas"]["ErrorCode"];
+            /** Detail */
+            detail?: string | null;
+            /** Request Id */
+            request_id?: string | null;
+            /** Status */
+            status: number;
+            /** Title */
+            title: string;
+        };
+        /**
          * SaeStatus
          * @description The sparse autoencoders attached to the resident model, if any.
          *
@@ -373,6 +561,63 @@ export interface components {
             state: "fetching" | "ready" | "failed";
             /** Width */
             width?: number | null;
+        };
+        /**
+         * SteeringVector
+         * @description A steering vector Lab holds for its owner until the model changes.
+         */
+        SteeringVector: {
+            /** Id */
+            id: string;
+            /** Label */
+            label: string;
+            /** Layer */
+            layer: number;
+            /** Negative */
+            negative: number;
+            /** Norm */
+            norm: number;
+            /** Positive */
+            positive: number;
+        };
+        /**
+         * SteeringVectorRequest
+         * @description A difference of means between two sets of prompts at one layer.
+         *
+         *     Contrastive activation addition: the mean residual stream after
+         *     `layer`, at each prompt's last token, over the positive prompts minus
+         *     the same over the negative ones. Added back in, it pushes the model
+         *     towards whatever separates the two sets.
+         */
+        SteeringVectorRequest: {
+            /**
+             * Chat
+             * @default true
+             */
+            chat: boolean;
+            /** Label */
+            label: string;
+            /** Layer */
+            layer: number;
+            /** Negative */
+            negative: string[];
+            /** Positive */
+            positive: string[];
+        };
+        /**
+         * TargetChange
+         * @description The watched token at the first answer position, before and after.
+         */
+        TargetChange: {
+            /** Baseline Logit */
+            baseline_logit: number;
+            /** Baseline Probability */
+            baseline_probability: number;
+            /** Edited Logit */
+            edited_logit: number;
+            /** Edited Probability */
+            edited_probability: number;
+            token: components["schemas"]["InspectedToken"];
         };
         /** ValidationError */
         ValidationError: {
@@ -416,6 +661,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ActivationVector"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    generate_api_v1_lab_generate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GenerateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": string & (components["schemas"]["GenerationQueued"] | components["schemas"]["GeneratedToken"] | components["schemas"]["GenerationCompleted"] | components["schemas"]["GenerationFailed"]);
                 };
             };
             /** @description Validation Error */
@@ -511,6 +789,59 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["LabStatus"];
+                };
+            };
+        };
+    };
+    list_vectors_api_v1_lab_vectors_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SteeringVector"][];
+                };
+            };
+        };
+    };
+    make_vector_api_v1_lab_vectors_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SteeringVectorRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SteeringVector"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

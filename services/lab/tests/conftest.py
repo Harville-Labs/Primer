@@ -18,7 +18,7 @@ import pytest
 from fastapi.testclient import TestClient
 from huggingface_hub.errors import RepositoryNotFoundError
 from huggingface_hub.utils import filter_repo_objects
-from lab_support import TINY, build_tiny_model, lab, settle
+from lab_support import MODEL, SAES, TINY, build_saes, build_tiny_model, lab, lab_with_saes, settle
 from nnterp import StandardizedTransformer
 from primer_lab.sources import Listing
 
@@ -119,5 +119,19 @@ def make_model(tmp_path: Path):
 @pytest.fixture
 def client(weights_dir, hub, factory) -> Iterator[TestClient]:
     with lab(weights_dir, hub, factory) as client:
+        settle(client)
+        yield client
+
+
+@pytest.fixture
+def published(hub, tiny_model: Path) -> None:
+    hub.publish(MODEL, tiny_model)
+
+
+@pytest.fixture
+def with_saes(weights_dir, hub, factory, published, tmp_path) -> Iterator[TestClient]:
+    """Lab on the tiny model from the hub, with an SAE at layer 1 only."""
+    hub.publish(SAES, build_saes(tmp_path / "saes", layers=[1]))
+    with lab_with_saes(weights_dir, hub, factory) as client:
         settle(client)
         yield client

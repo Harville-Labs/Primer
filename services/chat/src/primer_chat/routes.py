@@ -21,6 +21,7 @@ from primer_contracts.indexing import Breadth
 from primer_service.db import get_session
 from primer_service.durable import DurableRoute
 from primer_service.errors import ProblemError
+from primer_service.sse import encode
 from pydantic import Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -31,7 +32,6 @@ from primer_chat.identity import CurrentPrincipal
 from primer_chat.model_catalog import catalog
 from primer_chat.providers_store import ProviderStore
 from primer_chat.repository import ChatRepository, summarize_conversation
-from primer_chat.sse import encode
 from primer_chat.streaming import Answering, Responder
 
 logger = logging.getLogger(__name__)

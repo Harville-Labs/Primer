@@ -2,14 +2,23 @@
 
 One event per message, typed by its `type` field, with the monotonic id in
 the SSE `id:` field so a reconnecting client can resume from what it saw.
+Chat streams answers and Lab streams generations in this one shape, so the
+web app reads both with the same parser.
 """
 
 from __future__ import annotations
 
-from primer_contracts.chat import StreamEvent
+from typing import Protocol
 
 
-def encode(event: StreamEvent) -> str:
+class Event(Protocol):
+    @property
+    def id(self) -> int: ...
+
+    def model_dump_json(self) -> str: ...
+
+
+def encode(event: Event) -> str:
     """Frame one event.
 
     The payload is compact JSON on a single `data:` line. A newline inside

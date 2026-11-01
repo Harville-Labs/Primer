@@ -99,15 +99,19 @@ def validation_problem(error: RequestValidationError) -> ProblemDetail:
     )
 
 
-def problem_response(request: Request, error: ProblemError) -> JSONResponse:
-    problem = ProblemDetail(
+def problem_of(request: Request, error: ProblemError) -> ProblemDetail:
+    """The problem document for `error`, for a response or a stream's last event."""
+    return ProblemDetail(
         code=error.code,
         title=error.title,
         status=error.status_code,
         detail=error.detail,
         request_id=request_id_of(request),
     )
-    return rendered(request, problem)
+
+
+def problem_response(request: Request, error: ProblemError) -> JSONResponse:
+    return rendered(request, problem_of(request, error))
 
 
 def rendered(request: Request, problem: ProblemDetail) -> JSONResponse:

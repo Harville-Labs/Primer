@@ -104,13 +104,14 @@ def inspect_prompt(
     ]
     named = {i for layer in layers for row in layer.lens_tokens for i in row}
     return Reading(
-        tokens=[
-            InspectedToken(id=i, text=tokenizer.decode([i]), special=i in special)
-            for i in prompt.ids
-        ],
+        tokens=describe(tokenizer, prompt.ids, special),
         vocabulary={i: tokenizer.decode([i]) for i in sorted(named)},
         layers=layers,
     )
+
+
+def describe(tokenizer: Any, ids: list[int], special: set[int]) -> list[InspectedToken]:
+    return [InspectedToken(id=i, text=tokenizer.decode([i]), special=i in special) for i in ids]
 
 
 def read_activation(
@@ -119,13 +120,32 @@ def read_activation(
     """The whole activation vector at one site, layer and position."""
     saved: list[Any] = []
     with torch.no_grad(), model.trace(torch.tensor([prompt.ids])):
-        if site == "attn_out":
-            value = model.attentions_output[layer]
-        elif site == "mlp_neuron":
-            value = model.mlps[layer].down_proj.input
-        elif site == "mlp_out":
-            value = model.mlps_output[layer]
-        else:
-            value = model.layers_output[layer]
-        saved.append(value[0, token])
+        saved.append(read_site(model, site, layer)[0, token])
     return saved[0].float().tolist()
+
+
+def read_site(model: Any, site: ActivationSite, layer: int) -> Any:
+    """The (batch, positions, width) activation at a site, inside a trace.
+
+    The MLP's neurons are read where they enter its down projection: after
+    the gate and the activation function, which is what a neuron's value is.
+    """
+    if site == "attn_out":
+        return model.attentions_output[layer]
+    if site == "mlp_neuron":
+        return model.mlps[layer].down_proj.input
+    if site == "mlp_out":
+        return model.mlps_output[layer]
+    return model.layers_output[layer]
+
+
+def write_site(model: Any, site: ActivationSite, layer: int, value: Any) -> None:
+    """Replace the activation at a site, inside a trace, for what runs after it."""
+    if site == "attn_out":
+        model.attentions_output[layer] = value
+    elif site == "mlp_neuron":
+        model.mlps[layer].down_proj.input = value
+    elif site == "mlp_out":
+        model.mlps_output[layer] = value
+    else:
+        model.layers_output[layer] = value

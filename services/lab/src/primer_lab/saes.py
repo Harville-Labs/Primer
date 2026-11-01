@@ -69,6 +69,8 @@ class SaeLayer:
     encoder: torch.Tensor
     #: (d_sae,)
     bias: torch.Tensor
+    #: (d_model, d_sae): column f is what feature f writes into the stream.
+    decoder: torch.Tensor
 
 
 @dataclass(frozen=True, slots=True)
@@ -93,6 +95,14 @@ class SaeSet:
         return encode(self.layers[layer], residual, min(top, self.config.k))
 
 
+def feature_activation(sae: SaeLayer, k: int, residual: torch.Tensor, feature: int) -> torch.Tensor:
+    """What `feature` reads at each position: its pre-activation where it is
+    among the k that fire, and zero where it is not."""
+    pre = pre_activations(sae, residual)
+    fires = (pre.topk(k, dim=-1).indices == feature).any(dim=-1)
+    return torch.where(fires, pre[..., feature], torch.zeros((), device=pre.device))
+
+
 def encode(sae: SaeLayer, residual: torch.Tensor, top: int) -> torch.return_types.topk:
     """A TopK SAE's strongest features for `residual`, shaped (positions, d_model).
 
@@ -100,12 +110,16 @@ def encode(sae: SaeLayer, residual: torch.Tensor, top: int) -> torch.return_type
     no decoder bias subtracted first, which is what makes it different from
     the SAEs most tutorials describe. Taking fewer than k of the k largest
     is the same as taking the top few of the pre-activations, so the full
-    k never needs to be materialised. Run on the residual's device, in
-    float32, so a bfloat16 model does not round away the smaller features.
+    k never needs to be materialised.
     """
+    return pre_activations(sae, residual).topk(top, dim=-1)
+
+
+def pre_activations(sae: SaeLayer, residual: torch.Tensor) -> torch.Tensor:
+    """Every feature's pre-activation. On the residual's device, in float32,
+    so a bfloat16 model does not round away the smaller features."""
     device = residual.device
-    pre = residual.float() @ sae.encoder.to(device).T + sae.bias.to(device)
-    return pre.topk(top, dim=-1)
+    return residual.float() @ sae.encoder.to(device).T + sae.bias.to(device)
 
 
 class Attachment:
@@ -206,6 +220,7 @@ def load_layer(path: Path, config: SaeConfig) -> SaeLayer:
             raise WeightsRefused(
                 f"{path.name}: {name} is {tuple(tensor.shape)}, and the config says {shape}."
             )
-    # The decoder is checked and not kept: nothing reads a feature back
-    # into the residual stream yet.
-    return SaeLayer(encoder=state["W_enc"], bias=state["b_enc"])
+    # The decoder bias is checked and not kept. A feature edit adds the
+    # change in one feature times its decoder column; the bias is the same
+    # on both sides of that change, so it cancels.
+    return SaeLayer(encoder=state["W_enc"], bias=state["b_enc"], decoder=state["W_dec"])

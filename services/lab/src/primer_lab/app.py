@@ -11,7 +11,7 @@ from fastapi.responses import JSONResponse
 from nnterp import StandardizedTransformer
 from primer_service.errors import ProblemError, problem_response, rendered, validation_problem
 
-from primer_lab import __version__
+from primer_lab import __version__, editing
 from primer_lab.config import Settings
 from primer_lab.host import ModelHost
 from primer_lab.loader import ModelFactory, resolve_device
@@ -86,4 +86,5 @@ def create_app(
         return {"status": "ok"}
 
     app.include_router(router)
+    app.include_router(editing.router)
     return app

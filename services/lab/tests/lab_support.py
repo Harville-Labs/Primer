@@ -15,13 +15,16 @@ from typing import Any, cast
 import torch
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from primer_contracts.lab import LocalModel
+from primer_contracts.lab import HubModel, LocalModel
 from primer_lab.app import create_app
 from primer_lab.config import Settings
 from tokenizers import Tokenizer, models, pre_tokenizers
 from transformers import PreTrainedTokenizerFast, Qwen3Config, Qwen3ForCausalLM
 
 TINY = "tiny"
+#: The tiny model published to the fake hub, and the SAEs mapped to it.
+MODEL = "lab/tiny"
+SAES = "lab/tiny-saes"
 
 
 def build_tiny_model(
@@ -109,6 +112,17 @@ def lab(weights_dir: Path, hub, factory, **overrides: Any) -> TestClient:
     }
     settings = Settings(**defaults | overrides)
     return TestClient(create_app(settings, hub=hub, factory=factory, cuda_available=lambda: False))
+
+
+def lab_with_saes(weights_dir: Path, hub, factory, **overrides: Any) -> TestClient:
+    return lab(
+        weights_dir,
+        hub,
+        factory,
+        lab_model=HubModel(repository=MODEL),
+        lab_saes={MODEL: SAES},
+        **overrides,
+    )
 
 
 def settle(client: TestClient) -> dict:
