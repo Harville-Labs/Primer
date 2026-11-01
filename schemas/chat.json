@@ -101,6 +101,16 @@
               }
             ],
             "title": "Provider Name"
+          },
+          "supports_logprobs": {
+            "default": false,
+            "title": "Supports Logprobs",
+            "type": "boolean"
+          },
+          "supports_prompt_logprobs": {
+            "default": false,
+            "title": "Supports Prompt Logprobs",
+            "type": "boolean"
           }
         },
         "required": [

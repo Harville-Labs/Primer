@@ -9,8 +9,10 @@ from primer_anomaly import (
     SpanKind,
     TokenScore,
     TopLogprobs,
+    entropy_bits,
     find_spans,
     robust_z_scores,
+    score_exact,
     score_full,
     score_truncated,
 )
@@ -72,6 +74,20 @@ def test_a_local_score_carries_exact_entropy_and_no_truncated_field() -> None:
     assert score.top_k is None
     assert all(token.truncated_entropy_bits is None for token in score.tokens)
     assert score.tokens[0].entropy_bits == pytest.approx(0.569, abs=1e-3)
+
+
+def test_entropies_measured_in_blocks_score_the_same_as_the_whole_distribution() -> None:
+    """Lab measures a long sequence a block at a time; the answer must not depend on it."""
+    rng = np.random.default_rng(0)
+    logits = rng.normal(size=(7, 5))
+    rows = logits - np.log(np.exp(logits).sum(axis=1, keepdims=True))
+    logprobs = rows[:, 0].tolist()
+    tokens = [f"t{index}" for index in range(7)]
+    blocks = [entropy_bits(rows[start : start + 3]) for start in range(0, 7, 3)]
+
+    pieced = score_exact(tokens, logprobs, np.concatenate(blocks).tolist())
+
+    assert pieced == score_full(tokens, logprobs, rows)
 
 
 def test_full_and_truncated_entropy_are_serialized_under_different_keys() -> None:

@@ -17,7 +17,7 @@ from primer_anomaly.measures import (
     truncated_entropy_bits,
 )
 from primer_anomaly.models import EntropyEstimate, SequenceScore, Span, SpanKind, TokenScore
-from primer_anomaly.scoring import TopLogprobs, score_full, score_truncated
+from primer_anomaly.scoring import TopLogprobs, score_exact, score_full, score_truncated
 from primer_anomaly.spans import find_spans, robust_z_scores
 
 __all__ = [
@@ -32,6 +32,7 @@ __all__ = [
     "find_spans",
     "perplexity",
     "robust_z_scores",
+    "score_exact",
     "score_full",
     "score_truncated",
     "surprisal_bits",

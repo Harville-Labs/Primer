@@ -5,6 +5,8 @@ import type {
 	GenerateRequest,
 	InspectRequest,
 	InspectResponse,
+	LabScored,
+	LabScoreRequest,
 	LabStatus,
 	ProblemDetail,
 	SteeringVector,
@@ -106,6 +108,11 @@ export class LabApi {
 	 */
 	generate(payload: GenerateRequest): Promise<Response> {
 		return this.send('/api/v1/lab/generate', jsonPost(payload));
+	}
+
+	/** The resident model's surprise at each token, with entropy over the whole vocabulary. */
+	score(payload: LabScoreRequest): Promise<LabScored> {
+		return this.post('/api/v1/lab/score', payload);
 	}
 
 	vectors(): Promise<SteeringVector[]> {

@@ -1,4 +1,4 @@
-import type { InspectResponse } from '#lib/api/types.ts';
+import type { ChatModel, InspectResponse, LabModelStatus, SequenceScore } from '#lib/api/types.ts';
 
 /**
  * A reading small enough to reason about by eye: three layers, two tokens,
@@ -84,6 +84,48 @@ export function reading(overrides: Partial<InspectResponse> = {}): InspectRespon
 				],
 			},
 		],
+		...overrides,
+	};
+}
+
+/** A chat model whose provider declared logprobs, but not prompt logprobs. */
+export function chatModel(id: string, overrides: Partial<ChatModel> = {}): ChatModel {
+	return {
+		id,
+		default: false,
+		provider_id: 'p1',
+		provider_name: 'Local vLLM',
+		supports_logprobs: true,
+		supports_prompt_logprobs: false,
+		...overrides,
+	};
+}
+
+export const RESIDENT: LabModelStatus = {
+	architecture: 'Qwen3ForCausalLM',
+	device: 'cpu',
+	dtype: 'float32',
+	num_layers: 2,
+	reference: { source: 'local', path: 'qwen3-tiny' },
+} as LabModelStatus;
+
+export function sequence(
+	surprisals: number[],
+	overrides: Partial<SequenceScore> = {},
+): SequenceScore {
+	return {
+		estimate: 'truncated',
+		top_k: 20,
+		perplexity: 2,
+		spans: [],
+		tokens: surprisals.map((surprisal_bits, index) => ({
+			index,
+			token: ` t${index}`,
+			logprob: -surprisal_bits * Math.LN2,
+			surprisal_bits,
+			entropy_bits: null,
+			truncated_entropy_bits: 1,
+		})),
 		...overrides,
 	};
 }

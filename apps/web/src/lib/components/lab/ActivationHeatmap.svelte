@@ -19,11 +19,17 @@
 		values: number[][];
 		//: Text printed in each cell, `[layer][token]`; omitted when dense.
 		labels?: string[][];
+		//: What that text is, for a screen reader: `lens top "Paris"`.
+		labelsAre?: string;
 		selected: Cell;
 		//: Narrow, textless cells, for a prompt too long to read cell by cell.
 		dense?: boolean;
 		//: What the grid is a reading of, for a screen reader's name for it.
 		label: string;
+		//: What each row is, printed beside it; layers `L0`, `L1`... when omitted.
+		rows?: string[];
+		//: What the rows are, printed above them.
+		corner?: string;
 		onselect: (cell: Cell) => void;
 		//: Returns whether the key moved the selection, so others pass through.
 		onkey: (key: string) => boolean;
@@ -34,9 +40,12 @@
 		tokens,
 		values,
 		labels,
+		labelsAre = 'lens top',
 		selected,
 		dense = false,
 		label,
+		rows,
+		corner = 'layer',
 		onselect,
 		onkey,
 		onpeek,
@@ -86,7 +95,7 @@
 			class="sticky left-0 top-0 z-30 flex items-end justify-end bg-card pb-2 pr-2
 				text-[9px] uppercase tracking-[0.12em] text-muted-foreground"
 		>
-			layer
+			{corner}
 		</div>
 		{#each tokens as token, index (index)}
 			{@const active = index === selected.token}
@@ -121,7 +130,9 @@
 					transition-colors duration-100 motion-reduce:transition-none
 					{onRow ? 'font-semibold text-foreground' : 'text-muted-foreground'}"
 			>
-				{#if onRow}<span aria-hidden="true" class="mr-1 text-[8px]">▸</span>{/if}L{layer}
+				{#if onRow}<span aria-hidden="true" class="mr-1 text-[8px]">▸</span>{/if}{rows?.[
+					layer
+				] ?? `L${layer}`}
 			</div>
 			{#each row as value, token (token)}
 				{@const current = onRow && token === selected.token}
@@ -137,8 +148,8 @@
 					data-cell="{layer}:{token}"
 					tabindex={current ? 0 : -1}
 					aria-selected={current}
-					aria-label="Layer {layer}, token {token}{labels
-						? `, lens top ${JSON.stringify(labels[layer][token])}`
+					aria-label="{rows?.[layer] ?? `Layer ${layer}`}, token {token}{labels
+						? `, ${labelsAre} ${JSON.stringify(labels[layer][token])}`
 						: ''}"
 					onclick={() => onselect({ layer, token })}
 					onfocus={() => onselect({ layer, token })}

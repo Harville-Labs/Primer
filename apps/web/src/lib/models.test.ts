@@ -13,7 +13,14 @@ import { modelOf, qualify, unqualify } from './models';
  */
 
 function model(id: string, provider_id?: string): ChatModel {
-	return { id, default: false, provider_id: provider_id ?? null, provider_name: null };
+	return {
+		id,
+		default: false,
+		provider_id: provider_id ?? null,
+		provider_name: null,
+		supports_logprobs: false,
+		supports_prompt_logprobs: false,
+	};
 }
 
 describe('qualifying a model', () => {

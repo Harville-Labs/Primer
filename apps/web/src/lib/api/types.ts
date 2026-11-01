@@ -42,6 +42,11 @@ export type ProviderSummary = ChatSchemas['ProviderSummary'];
 export type ProviderCreate = ChatSchemas['ProviderCreate'];
 export type ProviderUpdate = ChatSchemas['ProviderUpdate'];
 export type ProviderCheck = ChatSchemas['ProviderCheck'];
+export type ScoreRequest = ChatSchemas['ScoreRequest'];
+export type ScoredText = ChatSchemas['ScoredText'];
+export type SequenceScore = ChatSchemas['SequenceScore'];
+export type TokenScore = ChatSchemas['TokenScore'];
+export type Span = ChatSchemas['Span'];
 
 export type LabStatus = LabSchemas['LabStatus'];
 export type LabModelStatus = LabSchemas['LabModelStatus'];
@@ -62,6 +67,8 @@ export type GenerationQueued = LabSchemas['GenerationQueued'];
 export type TargetChange = LabSchemas['TargetChange'];
 export type SteeringVector = LabSchemas['SteeringVector'];
 export type SteeringVectorRequest = LabSchemas['SteeringVectorRequest'];
+export type LabScoreRequest = LabSchemas['LabScoreRequest'];
+export type LabScored = LabSchemas['LabScored'];
 export type ActivationSite = ActivationRequest['site'];
 
 /** States where nothing further will happen without the user acting. */

@@ -103,6 +103,8 @@ async def catalog(
                     default=False,
                     provider_id=result.provider.id,
                     provider_name=result.provider.name,
+                    supports_logprobs=result.provider.supports_logprobs,
+                    supports_prompt_logprobs=result.provider.supports_prompt_logprobs,
                 )
             )
 

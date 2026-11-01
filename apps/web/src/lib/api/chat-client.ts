@@ -8,6 +8,8 @@ import type {
 	ProviderCreate,
 	ProviderSummary,
 	ProviderUpdate,
+	ScoredText,
+	ScoreRequest,
 } from './types';
 
 /**
@@ -26,6 +28,22 @@ export interface ChatApiOptions {
 	baseUrl?: string;
 }
 
+/**
+ * What a caller reads when Chat did not answer at all.
+ *
+ * Named for Chat for the reason Lab's is named for Lab: a transport error
+ * reaching a catch-all reads as the same "something went wrong" every
+ * unrelated bug produces. Usually a restart or a deploy in progress, so
+ * trying again is the advice.
+ */
+export const CHAT_UNREACHABLE: ProblemDetail = {
+	code: 'chat_unreachable',
+	title: 'Chat is unreachable',
+	status: 503,
+	detail: 'The chat service did not answer. Try again in a minute.',
+	request_id: null,
+};
+
 export class ChatApi {
 	private readonly fetch: typeof globalThis.fetch;
 	private readonly baseUrl: string;
@@ -36,7 +54,14 @@ export class ChatApi {
 	}
 
 	private async request<T>(path: string, init: RequestInit = {}): Promise<T> {
-		const response = await this.fetch(`${this.baseUrl}${path}`, init);
+		let response: Response;
+		try {
+			response = await this.fetch(`${this.baseUrl}${path}`, init);
+		} catch {
+			// Only the transport failing lands here; an answer with an error
+			// status is Chat's own words, read below.
+			throw new ApiError(CHAT_UNREACHABLE);
+		}
 		if (!response.ok) {
 			let problem: ProblemDetail;
 			try {
@@ -98,6 +123,19 @@ export class ChatApi {
 	/** Ask an endpoint what it serves, now. */
 	checkProvider(id: string): Promise<ProviderCheck> {
 		return this.request(`/api/v1/admin/providers/${id}/check`, { method: 'POST' });
+	}
+
+	/**
+	 * An endpoint's surprise at each token, from the top-k logprobs it
+	 * returns. Refused before the endpoint is called when its provider has
+	 * not declared that it returns them.
+	 */
+	score(payload: ScoreRequest): Promise<ScoredText> {
+		return this.request('/api/v1/score', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify(payload),
+		});
 	}
 
 	/** The caller's own conversations, most recently updated first. */

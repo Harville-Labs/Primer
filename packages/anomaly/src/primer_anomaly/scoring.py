@@ -49,10 +49,25 @@ def score_full(
     """
     if not tokens:
         raise EmptySequence("a score")
-    entropies = entropy_bits(distributions).tolist()
+    return score_exact(tokens, logprobs, entropy_bits(distributions).tolist())
+
+
+def score_exact(
+    tokens: Sequence[str], logprobs: Sequence[float], entropies: Sequence[float]
+) -> SequenceScore:
+    """Score tokens whose exact entropies were measured with `entropy_bits`.
+
+    For a sequence too long to hold every distribution at once: at a
+    vocabulary of 150 thousand, six hundred positions in float64 are most
+    of a gigabyte, so Lab measures them a block of rows at a time and
+    passes what it measured. `entropy_bits` refuses anything that is not a
+    whole distribution, which is what makes these exact.
+    """
+    if not tokens:
+        raise EmptySequence("a score")
     if not len(tokens) == len(logprobs) == len(entropies):
         raise ValueError(
-            f"score_full needs one logprob and one distribution per token; got "
+            f"Scoring needs one logprob and one distribution per token; got "
             f"{len(tokens)} tokens, {len(logprobs)} logprobs, {len(entropies)} distributions."
         )
     scores = [
@@ -71,7 +86,7 @@ def score_full(
         estimate=EntropyEstimate.FULL,
         perplexity=perplexity(logprobs),
         tokens=scores,
-        spans=_spans(scores, entropies),
+        spans=_spans(scores, list(entropies)),
     )
 
 

@@ -19,6 +19,7 @@ are different states, and only a real connection tells them apart.
 
 from __future__ import annotations
 
+import dataclasses
 import uuid
 
 from primer_chat.model_catalog import catalog
@@ -64,6 +65,23 @@ async def test_every_model_says_which_provider_serves_it() -> None:
 
     assert [model.provider_name for model in listed.models] == ["Workstation", "Server"]
     assert len({model.provider_id for model in listed.models}) == 2
+
+
+async def test_every_model_carries_what_its_provider_declared() -> None:
+    """A user who cannot read the provider list still needs to know what can be scored."""
+    async with (
+        StubProvider(models=["alpha"]) as first,
+        StubProvider(models=["beta"]) as second,
+    ):
+        scoring = dataclasses.replace(
+            provider_at(first.port, "Scoring"),
+            supports_logprobs=True,
+            supports_prompt_logprobs=True,
+        )
+        listed = await catalog([scoring, provider_at(second.port, "Plain")], preferred_model=None)
+
+    declared = [(m.id, m.supports_logprobs, m.supports_prompt_logprobs) for m in listed.models]
+    assert declared == [("alpha", True, True), ("beta", False, False)]
 
 
 async def test_one_sleeping_provider_does_not_break_the_others() -> None:

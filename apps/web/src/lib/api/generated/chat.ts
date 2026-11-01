@@ -317,6 +317,16 @@ export interface components {
             provider_id?: string | null;
             /** Provider Name */
             provider_name?: string | null;
+            /**
+             * Supports Logprobs
+             * @default false
+             */
+            supports_logprobs: boolean;
+            /**
+             * Supports Prompt Logprobs
+             * @default false
+             */
+            supports_prompt_logprobs: boolean;
         };
         /**
          * ChatModelList

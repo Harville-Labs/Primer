@@ -84,6 +84,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/lab/score": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Score the resident model's surprise at each token
+         * @description Either generates a greedy answer to the prompt and scores it, or scores the prompt itself as plain text, without the chat template. Entropy is over the whole vocabulary. The first token of a text is not scored: nothing came before it.
+         */
+        post: operations["score_api_v1_lab_score_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/lab/status": {
         parameters: {
             query?: never;
@@ -205,6 +225,12 @@ export interface components {
             /** Values */
             values: number[];
         };
+        /**
+         * EntropyEstimate
+         * @description How much of each next-token distribution the score could see.
+         * @enum {string}
+         */
+        EntropyEstimate: "full" | "truncated";
         /**
          * ErrorCode
          * @description Error codes clients may branch on. Values are part of the contract.
@@ -442,6 +468,38 @@ export interface components {
             reference: components["schemas"]["HubModel"] | components["schemas"]["LocalModel"];
             saes?: components["schemas"]["SaeStatus"] | null;
         };
+        /** LabScoreRequest */
+        LabScoreRequest: {
+            /**
+             * Chat
+             * @default true
+             */
+            chat: boolean;
+            /**
+             * Max New Tokens
+             * @default 64
+             */
+            max_new_tokens: number;
+            /**
+             * Mode
+             * @enum {string}
+             */
+            mode: "generate" | "text";
+            /** Prompt */
+            prompt: string;
+        };
+        /** LabScored */
+        LabScored: {
+            /**
+             * Mode
+             * @enum {string}
+             */
+            mode: "generate" | "text";
+            model: components["schemas"]["LabModelStatus"];
+            score: components["schemas"]["SequenceScore"];
+            /** Text */
+            text: string;
+        };
         /** LabStatus */
         LabStatus: {
             /** Can Choose Model */
@@ -562,6 +620,41 @@ export interface components {
             /** Width */
             width?: number | null;
         };
+        /** SequenceScore */
+        SequenceScore: {
+            estimate: components["schemas"]["EntropyEstimate"];
+            /** Perplexity */
+            perplexity: number;
+            /** Spans */
+            spans: components["schemas"]["Span"][];
+            /** Tokens */
+            tokens: components["schemas"]["TokenScore"][];
+            /**
+             * Top K
+             * @description How many logprobs each truncated entropy saw.
+             */
+            top_k?: number | null;
+        };
+        /**
+         * Span
+         * @description Consecutive tokens that stand out, `start` inclusive, `end` exclusive.
+         */
+        Span: {
+            /** End */
+            end: number;
+            kind: components["schemas"]["SpanKind"];
+            /** Peak Index */
+            peak_index: number;
+            /** Peak Z */
+            peak_z: number;
+            /** Start */
+            start: number;
+        };
+        /**
+         * SpanKind
+         * @enum {string}
+         */
+        SpanKind: "surprisal_spike" | "low_confidence";
         /**
          * SteeringVector
          * @description A steering vector Lab holds for its owner until the model changes.
@@ -618,6 +711,27 @@ export interface components {
             /** Edited Probability */
             edited_probability: number;
             token: components["schemas"]["InspectedToken"];
+        };
+        /** TokenScore */
+        TokenScore: {
+            /**
+             * Entropy Bits
+             * @description Exact entropy over the full vocabulary.
+             */
+            entropy_bits?: number | null;
+            /** Index */
+            index: number;
+            /** Logprob */
+            logprob: number;
+            /** Surprisal Bits */
+            surprisal_bits: number;
+            /** Token */
+            token: string;
+            /**
+             * Truncated Entropy Bits
+             * @description A lower bound on entropy, from only the top-k logprobs.
+             */
+            truncated_entropy_bits?: number | null;
         };
         /** ValidationError */
         ValidationError: {
@@ -760,6 +874,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["LabStatus"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    score_api_v1_lab_score_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LabScoreRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LabScored"];
                 };
             };
             /** @description Validation Error */
