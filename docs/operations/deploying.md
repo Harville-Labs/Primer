@@ -15,11 +15,22 @@
 ## Running it with Compose
 
 ```bash
-cp deploy/compose/env.example deploy/compose/.env
+cp deploy/compose/env.example .env
 # fill in the passwords and your model endpoint, then:
-docker compose -f deploy/compose/compose.yaml up --wait
+docker compose up --wait
 deploy/compose/scripts/smoke.sh
 ```
+
+Run these from the repository root. Its `compose.yaml` includes
+`deploy/compose/compose.yaml`, which is the stack itself.
+
+!!! note "Keep `.env` at the root"
+    Compose reads its own settings, such as `COMPOSE_PROFILES`, only from
+    the `.env` in the directory it was started in. A `.env` left in
+    `deploy/compose` from an older checkout still fills in the passwords,
+    but any profile it turns on is quietly ignored. Move it to the root.
+    Starting the stack with `docker compose -f deploy/compose/compose.yaml`
+    still works, and reads `deploy/compose/.env`.
 
 !!! danger "The Compose profile is for one person, and stays that way"
     It runs with authentication off: every request is the same fixed local
@@ -38,7 +49,7 @@ deploy/compose/scripts/smoke.sh
     failed for user "primer"`.
 
     ```bash
-    docker compose -f deploy/compose/compose.yaml down -v
+    docker compose down -v
     ```
 
     That deletes the database along with the volume, so only do it on a stack

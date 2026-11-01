@@ -1,0 +1,20 @@
+# Primer's local stack, startable from the repository root:
+#
+#   docker compose up --wait
+#
+# The stack itself is deploy/compose/compose.yaml; read that file's header
+# before running it. This one only includes it, so the two cannot drift.
+#
+# Keep `.env` here, beside this file, when starting from the root. Compose
+# reads its own settings - COMPOSE_PROFILES above all - from the directory
+# it was started in, so a `.env` left in deploy/compose still fills in the
+# stack's variables but silently loses its profiles.
+#
+# The name is the included file's, said again because an included file's
+# name does not carry over. Without it the project would be named after
+# this checkout's directory, and the volumes with it: a stack started here
+# would not find the database one started from deploy/compose had created.
+name: primer
+
+include:
+  - deploy/compose/compose.yaml

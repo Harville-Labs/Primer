@@ -1,6 +1,9 @@
 # Primer, locally, for one person on one machine.
 #
-#   docker compose -f deploy/compose/compose.yaml up --wait
+#   docker compose up --wait     # from the repository root
+#
+# The root compose.yaml includes this file. Starting it directly with -f
+# works too, and then reads the `.env` in this directory instead.
 #
 # This profile has no authentication and is not meant to gain any. Every
 # request is the same fixed local user, so anyone who can reach the
