@@ -220,6 +220,7 @@ Compose passes one.
 
 | Variable | Chart value | Default | Notes |
 | --- | --- | --- | --- |
+| `PRIMER_LAB_SERVICE_URL` | set by `lab.enabled` | unset | Read by Control. Set, the web app shows the Lab section. In Compose, set it to `http://lab:8000` with the profile |
 | `PRIMER_LAB_MODEL` | `lab.model` | `{"source": "hub", "repository": "Qwen/Qwen3-1.7B"}` | JSON. `{"source": "local", "path": "..."}` loads a directory inside the weights volume |
 | `PRIMER_LAB_MODEL_CHOICE` | `lab.modelChoice` | `users` | Who may switch the model every run uses: `users`, `admins`, or `operator` |
 | `PRIMER_ADMIN_GROUP` | `auth.adminGroup` | unset | Who counts as an admin for `admins` |

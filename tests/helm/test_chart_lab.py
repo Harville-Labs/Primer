@@ -103,3 +103,18 @@ def test_without_a_gpu_lab_asks_for_none() -> None:
 def test_lab_has_its_own_service_account() -> None:
     accounts = [doc["metadata"]["name"] for doc in of_kind(render(*ENABLED), "ServiceAccount")]
     assert any(name.endswith("-lab") for name in accounts)
+
+
+def test_control_and_web_are_told_where_lab_is_only_when_it_is_on() -> None:
+    """Control's capability report is what shows the Lab section, so it follows the switch."""
+    off = render()
+    for name in ("-control", "-web"):
+        env = env_of(named(off, "Deployment", name))
+        assert not {"PRIMER_LAB_SERVICE_URL", "PRIMER_LAB_URL"} & set(env), name
+
+    on = render(*ENABLED)
+    service = named(on, "Service", "-lab")["metadata"]["name"]
+    assert env_of(named(on, "Deployment", "-control"))["PRIMER_LAB_SERVICE_URL"] == (
+        f"http://{service}:8000"
+    )
+    assert env_of(named(on, "Deployment", "-web"))["PRIMER_LAB_URL"] == f"http://{service}:8000"

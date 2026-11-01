@@ -44,6 +44,10 @@ spec:
             {{- include "primer.brokerEnv" . | nindent 12 }}
             - name: PRIMER_CHAT_SERVICE_URL
               value: http://{{ include "primer.fullname" . }}-chat:8000
+            {{- if .Values.lab.enabled }}
+            - name: PRIMER_LAB_SERVICE_URL
+              value: http://{{ include "primer.fullname" . }}-lab:8000
+            {{- end }}
             - name: PRIMER_TOOLS_ENABLED
               value: {{ .Values.tools.enabled | quote }}
           ports:

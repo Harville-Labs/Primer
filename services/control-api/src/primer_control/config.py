@@ -52,6 +52,10 @@ class Settings(BaseSettings):
         default=None,
         description="Chat service URL; unset means this deployment has no chat",
     )
+    lab_service_url: str | None = Field(
+        default=None,
+        description="Lab service URL; unset means this deployment has no Lab",
+    )
     tools_enabled: bool = Field(
         default=False,
         description="Deployment-wide switch for MCP tools; off is the safe default",

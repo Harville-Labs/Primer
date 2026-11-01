@@ -63,17 +63,19 @@ can run code: remove them.
 
 ## Docker Compose
 
-Turn on the `lab` profile:
+Turn on the `lab` profile, and tell Control where Lab is so the web app
+shows its section. Compose can't tell Control which profiles are on, so this
+is a second variable:
 
 ```bash
-COMPOSE_PROFILES=lab docker compose -f deploy/compose/compose.yaml up --wait
+COMPOSE_PROFILES=lab PRIMER_LAB_SERVICE_URL=http://lab:8000 docker compose -f deploy/compose/compose.yaml up --wait
 ```
 
 On a machine with an NVIDIA GPU and the NVIDIA Container Toolkit, add the GPU
 override, which builds the CUDA image and gives Lab the GPU:
 
 ```bash
-COMPOSE_PROFILES=lab docker compose -f deploy/compose/compose.yaml -f deploy/compose/compose.gpu.yaml up --wait
+COMPOSE_PROFILES=lab PRIMER_LAB_SERVICE_URL=http://lab:8000 docker compose -f deploy/compose/compose.yaml -f deploy/compose/compose.gpu.yaml up --wait
 ```
 
 The weights live in the `lab-models` volume. `env.example` lists the

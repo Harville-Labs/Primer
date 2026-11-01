@@ -46,6 +46,10 @@ spec:
               value: http://{{ include "primer.fullname" . }}-control:8000
             - name: PRIMER_CHAT_URL
               value: http://{{ include "primer.fullname" . }}-chat:8000
+            {{- if .Values.lab.enabled }}
+            - name: PRIMER_LAB_URL
+              value: http://{{ include "primer.fullname" . }}-lab:8000
+            {{- end }}
             # adapter-node rejects anything over this before a request ever
             # reaches upload validation, so it has to be at least as large as
             # Control's own max_upload_bytes (100MB by default) plus room for
