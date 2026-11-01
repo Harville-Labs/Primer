@@ -4,6 +4,46 @@
  */
 
 export interface paths {
+    "/api/v1/lab/activation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Read one whole activation vector
+         * @description The full vector at one site, layer and position of a prompt. A POST rather than a GET so the prompt travels in the body, not in a URL that proxies and logs keep.
+         */
+        post: operations["activation_api_v1_lab_activation_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lab/inspect": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Read the logit lens and top MLP neurons for a prompt
+         * @description Runs the prompt through the resident model once and returns, for every layer and position, the residual stream's norm, the logit lens's likeliest tokens, and the MLP neurons with the largest activations. Summaries, not raw activations: read one whole vector with the activation route.
+         */
+        post: operations["inspect_api_v1_lab_inspect_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/lab/model": {
         parameters: {
             query?: never;
@@ -87,6 +127,43 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** ActivationRequest */
+        ActivationRequest: {
+            /**
+             * Chat
+             * @default true
+             */
+            chat: boolean;
+            /** Layer */
+            layer: number;
+            /** Prompt */
+            prompt: string;
+            /**
+             * Site
+             * @enum {string}
+             */
+            site: "resid_post" | "mlp_neuron" | "mlp_out" | "attn_out";
+            /**
+             * Token
+             * @description Position in the inspected tokens
+             */
+            token: number;
+        };
+        /** ActivationVector */
+        ActivationVector: {
+            /** Layer */
+            layer: number;
+            model: components["schemas"]["LabModelStatus"];
+            /**
+             * Site
+             * @enum {string}
+             */
+            site: "resid_post" | "mlp_neuron" | "mlp_out" | "attn_out";
+            /** Token */
+            token: number;
+            /** Values */
+            values: number[];
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -112,6 +189,58 @@ export interface components {
              * @enum {string}
              */
             source: "hub";
+        };
+        /** InspectRequest */
+        InspectRequest: {
+            /**
+             * Chat
+             * @default true
+             */
+            chat: boolean;
+            /**
+             * Neurons
+             * @default 8
+             */
+            neurons: number;
+            /** Prompt */
+            prompt: string;
+        };
+        /**
+         * InspectResponse
+         * @description What a prompt does inside the resident model.
+         *
+         *     Bounded by its shape: num_layers x tokens x (LENS_TOP + neurons) values,
+         *     with tokens at most the deployment's max_prompt_tokens and neurons at
+         *     most MAX_NEURONS.
+         */
+        InspectResponse: {
+            /**
+             * Chat Template
+             * @description Whether the chat template was applied
+             */
+            chat_template: boolean;
+            /** Hidden Size */
+            hidden_size: number;
+            /** Layers */
+            layers: components["schemas"]["LayerReadings"][];
+            /** Mlp Width */
+            mlp_width: number;
+            model: components["schemas"]["LabModelStatus"];
+            /** Tokens */
+            tokens: components["schemas"]["InspectedToken"][];
+            /** Vocabulary */
+            vocabulary: {
+                [key: string]: string;
+            };
+        };
+        /** InspectedToken */
+        InspectedToken: {
+            /** Id */
+            id: number;
+            /** Special */
+            special: boolean;
+            /** Text */
+            text: string;
         };
         /**
          * LabModelStatus
@@ -150,6 +279,27 @@ export interface components {
             /** Ready */
             ready: boolean;
             switch: components["schemas"]["ModelSwitch"] | null;
+        };
+        /**
+         * LayerReadings
+         * @description One layer's summary at every position, as parallel arrays.
+         *
+         *     Indexed by token position first. Columns rather than an object per
+         *     position, because a full-length prompt on a 36-layer model is about
+         *     eighteen thousand of them, and naming every field in every one roughly
+         *     doubles a response that is already the largest Lab sends.
+         */
+        LayerReadings: {
+            /** Lens Probabilities */
+            lens_probabilities: number[][];
+            /** Lens Tokens */
+            lens_tokens: number[][];
+            /** Neuron Activations */
+            neuron_activations: number[][];
+            /** Neuron Indices */
+            neuron_indices: number[][];
+            /** Residual Norm */
+            residual_norm: number[];
         };
         /** LoadModelRequest */
         LoadModelRequest: {
@@ -210,6 +360,72 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    activation_api_v1_lab_activation_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ActivationRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActivationVector"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    inspect_api_v1_lab_inspect_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InspectRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InspectResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     choose_model_api_v1_lab_model_put: {
         parameters: {
             query?: never;

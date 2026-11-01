@@ -3,44 +3,15 @@
 from __future__ import annotations
 
 import shutil
-from collections.abc import Iterator
-from pathlib import Path
-from typing import Any, cast
 
 import pytest
-from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from primer_contracts.lab import LocalModel
+from lab_support import TINY, lab, settle
 from primer_lab.app import create_app
 from primer_lab.config import Settings
 from primer_lab.loader import DeviceUnavailable
 
-TINY = "tiny"
 REPO = "someone/tiny-qwen"
-
-
-def lab(weights_dir: Path, hub, factory, **overrides: Any) -> TestClient:
-    settings = Settings(
-        lab_weights_dir=weights_dir,
-        lab_model=LocalModel(path=TINY),
-        lab_device="cpu",
-        **overrides,
-    )
-    return TestClient(create_app(settings, hub=hub, factory=factory, cuda_available=lambda: False))
-
-
-@pytest.fixture
-def client(weights_dir, hub, factory) -> Iterator[TestClient]:
-    with lab(weights_dir, hub, factory) as client:
-        settle(client)
-        yield client
-
-
-def settle(client: TestClient) -> dict:
-    app = cast(FastAPI, client.app)
-    assert client.portal is not None, "settle needs a client inside its `with`"
-    client.portal.call(app.state.host.wait)
-    return client.get("/api/v1/lab/status").json()
 
 
 def test_the_startup_model_loads_and_is_reported_ready(client):

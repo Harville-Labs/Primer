@@ -1,0 +1,114 @@
+"""Read what a prompt does inside the resident model, in one forward pass.
+
+Named for what it does rather than `inspect`, which would shadow the
+standard library module of that name for anything importing from here.
+
+Everything is reduced inside the trace. The logit lens alone is a
+vocabulary-wide distribution at every layer and position - for Qwen3 about
+150 thousand floats per cell - and carrying that out of the pass to take a
+top five would hold gigabytes for a response that needs kilobytes.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Any
+
+import torch
+from primer_contracts.lab import LENS_TOP, ActivationSite, InspectedToken, LayerReadings
+
+
+@dataclass(frozen=True, slots=True)
+class Prompt:
+    """A prompt as the model will read it."""
+
+    ids: list[int]
+    chat_template: bool
+
+
+@dataclass(frozen=True, slots=True)
+class Reading:
+    tokens: list[InspectedToken]
+    vocabulary: dict[int, str]
+    layers: list[LayerReadings]
+
+
+def tokenize(tokenizer: Any, prompt: str, *, chat: bool) -> Prompt:
+    """Turn a prompt into token ids, through the chat template if asked and present.
+
+    The template is rendered to text and then encoded, rather than asking
+    for ids directly, because what `apply_chat_template(tokenize=True)`
+    returns has changed shape between `transformers` releases. A template
+    writes its own special tokens, so the encode adds none of its own.
+    """
+    if chat and getattr(tokenizer, "chat_template", None):
+        text = tokenizer.apply_chat_template(
+            [{"role": "user", "content": prompt}], tokenize=False, add_generation_prompt=True
+        )
+        return Prompt(ids=tokenizer.encode(text, add_special_tokens=False), chat_template=True)
+    return Prompt(ids=tokenizer.encode(prompt, add_special_tokens=True), chat_template=False)
+
+
+def special_ids(tokenizer: Any) -> set[int]:
+    # A chat template's markers (`<|im_start|>`) are added tokens flagged
+    # special, and not always among the tokenizer's named special ones.
+    added = {i for i, token in tokenizer.added_tokens_decoder.items() if token.special}
+    return set(tokenizer.all_special_ids) | added
+
+
+def inspect_prompt(model: Any, prompt: Prompt, *, neurons: int) -> Reading:
+    """Residual norm, logit lens and top neurons at every layer and position."""
+    norms: list[Any] = []
+    lens: list[Any] = []
+    top: list[tuple[Any, Any]] = []
+    # nnsight requires modules to be read in the order they run. Within a
+    # layer the MLP's input to its down projection comes before the layer's
+    # output, so the neurons are read first.
+    with torch.no_grad(), model.trace(torch.tensor([prompt.ids])):
+        for layer in range(model.num_layers):
+            activations = model.mlps[layer].down_proj.input[0]
+            strongest = activations.abs().topk(neurons, dim=-1).indices
+            top.append((strongest, activations.gather(-1, strongest)))
+            residual = model.layers_output[layer][0]
+            norms.append(residual.norm(dim=-1))
+            lens.append(model.project_on_vocab(residual).softmax(dim=-1).topk(LENS_TOP, dim=-1))
+
+    tokenizer = model.tokenizer
+    special = special_ids(tokenizer)
+    layers = [
+        LayerReadings(
+            residual_norm=norm.float().tolist(),
+            lens_tokens=read.indices.tolist(),
+            lens_probabilities=read.values.float().tolist(),
+            neuron_indices=indices.tolist(),
+            neuron_activations=values.float().tolist(),
+        )
+        for norm, read, (indices, values) in zip(norms, lens, top, strict=True)
+    ]
+    named = {i for layer in layers for row in layer.lens_tokens for i in row}
+    return Reading(
+        tokens=[
+            InspectedToken(id=i, text=tokenizer.decode([i]), special=i in special)
+            for i in prompt.ids
+        ],
+        vocabulary={i: tokenizer.decode([i]) for i in sorted(named)},
+        layers=layers,
+    )
+
+
+def read_activation(
+    model: Any, prompt: Prompt, *, layer: int, token: int, site: ActivationSite
+) -> list[float]:
+    """The whole activation vector at one site, layer and position."""
+    saved: list[Any] = []
+    with torch.no_grad(), model.trace(torch.tensor([prompt.ids])):
+        if site == "attn_out":
+            value = model.attentions_output[layer]
+        elif site == "mlp_neuron":
+            value = model.mlps[layer].down_proj.input
+        elif site == "mlp_out":
+            value = model.mlps_output[layer]
+        else:
+            value = model.layers_output[layer]
+        saved.append(value[0, token])
+    return saved[0].float().tolist()
