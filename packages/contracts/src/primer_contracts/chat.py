@@ -71,6 +71,11 @@ class ChatModel(WireModel):
     #: model runs without a second lookup. A hostname would not do: what a
     #: user needs to tell apart is "my machine" from "the paid one".
     provider_name: str | None = Field(default=None, max_length=80)
+    #: What the provider declared it returns, so a page that scores text can
+    #: offer only what will be answered. On the model rather than read from
+    #: the provider list, which is for administrators.
+    supports_logprobs: bool = False
+    supports_prompt_logprobs: bool = False
 
 
 class ChatModelList(WireModel):
