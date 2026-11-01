@@ -114,6 +114,27 @@ def test_a_search_cannot_ask_for_an_unbounded_page(client: TestClient) -> None:
     assert post(client, "/search", search_body(limit=0)).status_code == 422
 
 
+def passages_body(**overrides: Any) -> dict[str, Any]:
+    body = {"principal": principal(), "library_id": LIBRARY_ID, "generation_ids": [GENERATION_ID]}
+    body.update(overrides)
+    return body
+
+
+@pytest.mark.parametrize("missing", ["library_id", "generation_ids", "principal"])
+def test_an_unscoped_listing_is_refused_before_the_store(client: TestClient, missing: str) -> None:
+    """The store here is a tripwire, so reaching it would fail rather than answer."""
+    body = passages_body()
+    del body[missing]
+
+    assert post(client, "/passages", body).status_code == 422
+    assert post(client, "/passages", passages_body(generation_ids=[])).status_code == 422
+
+
+def test_a_listing_cannot_ask_for_an_unbounded_page(client: TestClient) -> None:
+    assert post(client, "/passages", passages_body(limit=5000)).status_code == 422
+    assert post(client, "/passages", passages_body(limit=0)).status_code == 422
+
+
 def test_indexing_nothing_is_refused(client: TestClient) -> None:
     """An empty index call is a bug in the caller, not a no-op worth accepting."""
     response = post(
@@ -134,6 +155,7 @@ def test_indexing_nothing_is_refused(client: TestClient) -> None:
 def test_every_route_requires_the_service_credential(client: TestClient, token: str | None) -> None:
     for path, body in [
         ("/search", search_body()),
+        ("/passages", passages_body()),
         (
             "/verify",
             {
