@@ -21,6 +21,9 @@ docs = [
 
 [tool.uv.workspace]
 members = ["packages/*", "services/*"]
+#: The attribution-graph builder needs an older `transformers` than the rest
+#: of Primer, so it is its own project with its own lock. See ADR 0009.
+exclude = ["services/lab-graphs"]
 
 #: Docling's layout models run on torch. Primer parses documents on CPU, and
 #: the default Linux wheels carry a bundled CUDA runtime that is several
@@ -54,7 +57,8 @@ select = ["E", "F", "I", "B", "BLE", "UP", "ASYNC", "S", "C4", "SIM", "RUF"]
 [tool.pytest.ini_options]
 testpaths = ["tests", "packages", "services"]
 asyncio_mode = "auto"
-addopts = "-ra"
+# The graph builder runs its tests in its own environment. See ADR 0009.
+addopts = "-ra --ignore=services/lab-graphs"
 markers = [
     "integration: needs Docker; runs against a real PostgreSQL container",
     "models: needs network on first run; downloads Docling's layout models",
@@ -62,3 +66,7 @@ markers = [
 
 [tool.ty.environment]
 python-version = "3.13"
+
+# Checked in its own environment, which has circuit-tracer. See ADR 0009.
+[tool.ty.src]
+exclude = ["services/lab-graphs"]

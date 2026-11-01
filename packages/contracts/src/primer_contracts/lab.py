@@ -73,6 +73,21 @@ class SaeStatus(WireModel):
     labels_error: str | None = Field(default=None, max_length=2000)
 
 
+class TranscoderStatus(WireModel):
+    """The transcoders an attribution graph is built from, if any.
+
+    Fetched after the model loads, like SAEs, and much larger: a set for
+    Qwen3-4B is about 60 GB. A graph cannot be built until they are ready.
+    """
+
+    repository: str = Field(pattern=REPOSITORY_PATTERN)
+    commit: str | None = None
+    state: Literal["fetching", "ready", "failed"]
+    error: str | None = Field(default=None, max_length=2000)
+    #: Features per transcoder. There is one transcoder for every layer.
+    width: int | None = Field(default=None, ge=1)
+
+
 class LabModelStatus(WireModel):
     """The resident model, as a user choosing what to inspect needs it."""
 
@@ -88,6 +103,8 @@ class LabModelStatus(WireModel):
     num_layers: int = Field(ge=1)
     #: None when this deployment has no SAEs for the model.
     saes: SaeStatus | None = None
+    #: None when this deployment builds no attribution graphs for the model.
+    transcoders: TranscoderStatus | None = None
 
 
 class ModelSwitch(WireModel):
@@ -117,6 +134,9 @@ class LabStatus(WireModel):
     #: How long a saved experiment is kept. None when this Lab has no
     #: database, and so cannot save experiments at all.
     experiment_retention_days: int | None = Field(default=None, ge=1)
+    #: The longest prompt an attribution graph is built for. None when this
+    #: Lab builds no graphs at all.
+    graph_max_prompt_tokens: int | None = Field(default=None, ge=1)
 
 
 #: How many tokens the logit lens reports at each layer and position.
