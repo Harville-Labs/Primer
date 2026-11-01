@@ -48,14 +48,14 @@ settings page.
 git clone https://github.com/isaiah-harville/Primer.git
 cd Primer
 
-cat > deploy/compose/.env <<'ENV'
+cat > .env <<'ENV'
 POSTGRES_PASSWORD=change-me
 RABBITMQ_PASSWORD=change-me
 PRIMER_INTERNAL_API_TOKEN=change-me
 PRIMER_CHAT_BASE_URL=http://host.docker.internal:11434/v1
 ENV
 
-docker compose -f deploy/compose/compose.yaml up --wait
+docker compose up --wait
 ```
 
 The first start downloads the embedding and reranking models, a few

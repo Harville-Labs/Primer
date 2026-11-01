@@ -52,9 +52,9 @@ Nothing durable lives in these queues between runs on a single-machine
 profile, so removing the broker's data is the simplest route:
 
 ```bash
-docker compose -f deploy/compose/compose.yaml down
+docker compose down
 docker volume rm primer_rabbitmq-data
-docker compose -f deploy/compose/compose.yaml up --wait
+docker compose up --wait
 ```
 
 ### Kubernetes, or any broker with work in flight
