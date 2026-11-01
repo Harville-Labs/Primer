@@ -316,6 +316,8 @@ services:
       PRIMER_AUTH_MODE: disabled
       PRIMER_BROKER_URL: amqp://primer:${RABBITMQ_PASSWORD:?set RABBITMQ_PASSWORD}@rabbitmq:5672//
       PRIMER_CHAT_SERVICE_URL: http://chat:8000
+      # Set with the lab profile; Compose cannot tell Control which profiles are on.
+      PRIMER_LAB_SERVICE_URL: ${PRIMER_LAB_SERVICE_URL:-}
       PRIMER_MAX_UPLOAD_BYTES: ${PRIMER_MAX_UPLOAD_BYTES:-104857600}
     volumes:
       - source-objects:/var/lib/primer/sources
@@ -482,6 +484,7 @@ services:
     environment:
       PRIMER_CONTROL_URL: http://control:8000
       PRIMER_CHAT_URL: http://chat:8000
+      PRIMER_LAB_URL: http://lab:8000
       PORT: ${PRIMER_WEB_PORT:-3000}
       ORIGIN: ${PRIMER_WEB_ORIGIN:-http://localhost:${PRIMER_WEB_PORT:-3000}}
       # adapter-node's own 512K default rejects uploads long before Control's

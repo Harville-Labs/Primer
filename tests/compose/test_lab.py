@@ -63,3 +63,14 @@ def test_the_gpu_override_builds_cuda_and_reserves_the_gpu() -> None:
     assert service["build"]["target"] == "cuda"
     devices = service["deploy"]["resources"]["reservations"]["devices"]
     assert devices == [{"driver": "nvidia", "count": 1, "capabilities": ["gpu"]}]
+
+
+def test_the_web_app_knows_where_lab_is_and_control_waits_to_be_told() -> None:
+    """Control cannot see which profiles are on, so the operator sets its URL with the profile."""
+    if shutil.which("docker") is None:
+        pytest.skip("docker is not installed")
+    services = resolve(BASE)["services"]
+    assert services["web"]["environment"]["PRIMER_LAB_URL"] == "http://lab:8000"
+    assert services["control"]["environment"]["PRIMER_LAB_SERVICE_URL"] == ""
+    told = resolve(BASE, env=LAB | {"PRIMER_LAB_SERVICE_URL": "http://lab:8000"})
+    assert told["services"]["control"]["environment"]["PRIMER_LAB_SERVICE_URL"] == "http://lab:8000"

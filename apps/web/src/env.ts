@@ -27,4 +27,8 @@ export const variables = defineEnvVars({
 		description: 'Where Chat listens. Answers stream through this server.',
 		schema: serviceUrl('PRIMER_CHAT_URL', 'http://localhost:8100'),
 	},
+	PRIMER_LAB_URL: {
+		description: 'Where Lab listens, when this deployment has one. Control says whether it does.',
+		schema: serviceUrl('PRIMER_LAB_URL', 'http://localhost:8200'),
+	},
 });

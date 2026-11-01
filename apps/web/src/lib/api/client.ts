@@ -20,6 +20,7 @@ import type {
 export class ApiError extends Error {
 	readonly status: number;
 	readonly code: string;
+	readonly title: string;
 	readonly requestId: string | null;
 
 	constructor(problem: ProblemDetail) {
@@ -30,6 +31,7 @@ export class ApiError extends Error {
 		this.name = 'ApiError';
 		this.status = problem.status;
 		this.code = problem.code;
+		this.title = problem.title;
 		this.requestId = problem.request_id;
 	}
 }

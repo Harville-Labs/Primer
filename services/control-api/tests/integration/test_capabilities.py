@@ -22,6 +22,7 @@ async def make_client(database: Database, clean_tables: AsyncEngine, source_stor
     def build(
         broker_url: str | None = None,
         chat_service_url: str | None = None,
+        lab_service_url: str | None = None,
         tools_enabled: bool = False,
     ) -> AsyncClient:
         """Spelled out rather than **kwargs, so the settings stay type-checked."""
@@ -30,6 +31,7 @@ async def make_client(database: Database, clean_tables: AsyncEngine, source_stor
                 auth_mode="oidc",
                 broker_url=broker_url,
                 chat_service_url=chat_service_url,
+                lab_service_url=lab_service_url,
                 tools_enabled=tools_enabled,
             ),
             database=database,
@@ -60,6 +62,14 @@ async def test_chat_is_unavailable_until_it_is_configured(make_client) -> None:
         assert (await capabilities_for(client))["chat_available"] is False
     async with make_client(chat_service_url="http://chat:8000") as client:
         assert (await capabilities_for(client))["chat_available"] is True
+
+
+async def test_lab_is_unavailable_until_it_is_configured(make_client) -> None:
+    """Lab is optional, so its section stays hidden on a deployment without one."""
+    async with make_client() as client:
+        assert (await capabilities_for(client))["lab_available"] is False
+    async with make_client(lab_service_url="http://lab:8000") as client:
+        assert (await capabilities_for(client))["lab_available"] is True
 
 
 async def test_tools_are_off_by_default(make_client) -> None:

@@ -62,6 +62,11 @@
             "title": "Is Admin",
             "type": "boolean"
           },
+          "lab_available": {
+            "default": false,
+            "title": "Lab Available",
+            "type": "boolean"
+          },
           "max_upload_bytes": {
             "minimum": 0.0,
             "title": "Max Upload Bytes",
@@ -560,7 +565,7 @@
     },
     "/api/v1/capabilities": {
       "get": {
-        "description": "Report the deployment's shape.\n\nAuthenticated, because the answer describes a specific deployment's\nconfiguration and there is no reason for it to be readable by anyone who\ncannot already use it.\n\nChat and tool availability are reported by Control rather than probed\nhere: Control does not hold the inference configuration, and asking Chat\non every page load would make a browser refresh depend on a model\nendpoint being awake.",
+        "description": "Report the deployment's shape.\n\nAuthenticated, because the answer describes a specific deployment's\nconfiguration and there is no reason for it to be readable by anyone who\ncannot already use it.\n\nChat, Lab and tool availability are reported by Control rather than probed\nhere: Control does not hold the inference configuration, and asking Chat\non every page load would make a browser refresh depend on a model\nendpoint being awake.",
         "operationId": "capabilities_api_v1_capabilities_get",
         "responses": {
           "200": {

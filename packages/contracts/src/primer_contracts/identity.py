@@ -72,6 +72,8 @@ class DeploymentCapabilities(WireModel):
     ingestion_available: bool
     chat_available: bool
     tools_available: bool
+    #: Lab is optional and off by default; without it the Lab section is not shown.
+    lab_available: bool = False
     max_upload_bytes: int = Field(ge=0)
     supported_extensions: tuple[str, ...] = ()
     #: Whether the caller may reach the deployment's own settings. Reported

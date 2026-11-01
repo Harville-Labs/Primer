@@ -36,7 +36,7 @@ async def capabilities(principal: CurrentPrincipal, settings: Config) -> Deploym
     configuration and there is no reason for it to be readable by anyone who
     cannot already use it.
 
-    Chat and tool availability are reported by Control rather than probed
+    Chat, Lab and tool availability are reported by Control rather than probed
     here: Control does not hold the inference configuration, and asking Chat
     on every page load would make a browser refresh depend on a model
     endpoint being awake.
@@ -49,6 +49,7 @@ async def capabilities(principal: CurrentPrincipal, settings: Config) -> Deploym
         ingestion_available=bool(settings.broker_url),
         chat_available=bool(settings.chat_service_url),
         tools_available=settings.tools_enabled,
+        lab_available=bool(settings.lab_service_url),
         max_upload_bytes=settings.max_upload_bytes,
         supported_extensions=tuple(sorted(SUPPORTED_EXTENSIONS)),
         # Reported rather than left for the browser to work out: it cannot

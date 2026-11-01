@@ -78,10 +78,16 @@ def test_the_identity_boundary_is_still_written_by_hand() -> None:
     document describing something else.
     """
     server = REPO_ROOT / "apps" / "web" / "src" / "lib" / "server"
-    forwarding = (server / "api.ts").read_text() + (server / "chat.ts").read_text()
+    forwarding = (server / "forward.ts").read_text()
 
-    assert forwarding.count("x-forwarded-user") == 2
+    assert forwarding.count("x-forwarded-user") == 1
     assert "generated" not in forwarding
+    # And every client for a service goes through it, rather than one of
+    # them growing its own list of headers that the others do not have.
+    for client in ("api.ts", "chat.ts", "lab.ts"):
+        source = (server / client).read_text()
+        assert "forwardingIdentity(" in source, client
+        assert "x-forwarded-user" not in source, client
 
 
 def test_the_schemas_are_written_deterministically() -> None:

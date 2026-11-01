@@ -44,7 +44,7 @@ export interface paths {
          *     configuration and there is no reason for it to be readable by anyone who
          *     cannot already use it.
          *
-         *     Chat and tool availability are reported by Control rather than probed
+         *     Chat, Lab and tool availability are reported by Control rather than probed
          *     here: Control does not hold the inference configuration, and asking Chat
          *     on every page load would make a browser refresh depend on a model
          *     endpoint being awake.
@@ -417,6 +417,11 @@ export interface components {
              * @default false
              */
             is_admin: boolean;
+            /**
+             * Lab Available
+             * @default false
+             */
+            lab_available: boolean;
             /** Max Upload Bytes */
             max_upload_bytes: number;
             /**
