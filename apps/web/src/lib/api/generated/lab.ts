@@ -34,8 +34,8 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Read the logit lens and top MLP neurons for a prompt
-         * @description Runs the prompt through the resident model once and returns, for every layer and position, the residual stream's norm, the logit lens's likeliest tokens, and the MLP neurons with the largest activations. Summaries, not raw activations: read one whole vector with the activation route.
+         * Read the logit lens, top MLP neurons and SAE features for a prompt
+         * @description Runs the prompt through the resident model once and returns, for every layer and position, the residual stream's norm, the logit lens's likeliest tokens, and the MLP neurons with the largest activations, and the strongest SAE features at layers this deployment has SAEs for. Summaries, not raw activations: read one whole vector with the activation route.
          */
         post: operations["inspect_api_v1_lab_inspect_post"];
         delete?: never;
@@ -198,6 +198,11 @@ export interface components {
              */
             chat: boolean;
             /**
+             * Features
+             * @default 8
+             */
+            features: number;
+            /**
              * Neurons
              * @default 8
              */
@@ -209,9 +214,9 @@ export interface components {
          * InspectResponse
          * @description What a prompt does inside the resident model.
          *
-         *     Bounded by its shape: num_layers x tokens x (LENS_TOP + neurons) values,
-         *     with tokens at most the deployment's max_prompt_tokens and neurons at
-         *     most MAX_NEURONS.
+         *     Bounded by its shape: num_layers x tokens x (LENS_TOP + neurons + features)
+         *     values, with tokens at most the deployment's max_prompt_tokens, neurons
+         *     at most MAX_NEURONS, and features at most MAX_FEATURES.
          */
         InspectResponse: {
             /**
@@ -262,6 +267,7 @@ export interface components {
             num_layers: number;
             /** Reference */
             reference: components["schemas"]["HubModel"] | components["schemas"]["LocalModel"];
+            saes?: components["schemas"]["SaeStatus"] | null;
         };
         /** LabStatus */
         LabStatus: {
@@ -290,6 +296,10 @@ export interface components {
          *     doubles a response that is already the largest Lab sends.
          */
         LayerReadings: {
+            /** Feature Activations */
+            feature_activations?: number[][] | null;
+            /** Feature Indices */
+            feature_indices?: number[][] | null;
             /** Lens Probabilities */
             lens_probabilities: number[][];
             /** Lens Tokens */
@@ -337,6 +347,32 @@ export interface components {
              * @enum {string}
              */
             state: "fetching" | "loading" | "failed";
+        };
+        /**
+         * SaeStatus
+         * @description The sparse autoencoders attached to the resident model, if any.
+         *
+         *     Fetched after the model loads, so the model is usable while they
+         *     download; until they are ready an inspection reads no features.
+         */
+        SaeStatus: {
+            /** Commit */
+            commit?: string | null;
+            /** Error */
+            error?: string | null;
+            /** K */
+            k?: number | null;
+            /** Layers */
+            layers?: number[];
+            /** Repository */
+            repository: string;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "fetching" | "ready" | "failed";
+            /** Width */
+            width?: number | null;
         };
         /** ValidationError */
         ValidationError: {

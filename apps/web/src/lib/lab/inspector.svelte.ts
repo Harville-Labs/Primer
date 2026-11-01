@@ -76,7 +76,7 @@ export class Inspector {
 		};
 	}
 
-	async run(neurons = 8): Promise<void> {
+	async run(neurons = 8, features = 8): Promise<void> {
 		const prompt = this.prompt.trim();
 		if (!prompt || this.running) return;
 		this.running = true;
@@ -84,7 +84,11 @@ export class Inspector {
 		const asked = { prompt, chat: this.chat };
 		const stopPolling = this.pollQueue();
 		try {
-			const reading = await this.post<InspectResponse>('/lab/inspect', { ...asked, neurons });
+			const reading = await this.post<InspectResponse>('/lab/inspect', {
+				...asked,
+				neurons,
+				features,
+			});
 			this.asked = asked;
 			this.reading = reading;
 			this.vector = null;

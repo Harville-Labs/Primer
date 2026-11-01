@@ -17,6 +17,8 @@ from typing import Any
 import torch
 from primer_contracts.lab import LENS_TOP, ActivationSite, InspectedToken, LayerReadings
 
+from primer_lab.saes import SaeSet
+
 
 @dataclass(frozen=True, slots=True)
 class Prompt:
@@ -56,11 +58,15 @@ def special_ids(tokenizer: Any) -> set[int]:
     return set(tokenizer.all_special_ids) | added
 
 
-def inspect_prompt(model: Any, prompt: Prompt, *, neurons: int) -> Reading:
-    """Residual norm, logit lens and top neurons at every layer and position."""
+def inspect_prompt(
+    model: Any, prompt: Prompt, *, neurons: int, features: int, saes: SaeSet | None
+) -> Reading:
+    """Residual norm, logit lens, top neurons and SAE features at every layer and position."""
     norms: list[Any] = []
     lens: list[Any] = []
     top: list[tuple[Any, Any]] = []
+    residuals: dict[int, Any] = {}
+    covered = saes.layers if saes else {}
     # nnsight requires modules to be read in the order they run. Within a
     # layer the MLP's input to its down projection comes before the layer's
     # output, so the neurons are read first.
@@ -71,10 +77,19 @@ def inspect_prompt(model: Any, prompt: Prompt, *, neurons: int) -> Reading:
             top.append((strongest, activations.gather(-1, strongest)))
             residual = model.layers_output[layer][0]
             norms.append(residual.norm(dim=-1))
+            # Encoded after the pass rather than in it: the SAE's matrices
+            # are memory-mapped files, and nothing in the trace needs them.
+            if layer in covered:
+                residuals[layer] = residual
             lens.append(model.project_on_vocab(residual).softmax(dim=-1).topk(LENS_TOP, dim=-1))
 
     tokenizer = model.tokenizer
     special = special_ids(tokenizer)
+    encoded = {
+        layer: saes.encode(layer, residual, features)
+        for layer, residual in residuals.items()
+        if saes is not None
+    }
     layers = [
         LayerReadings(
             residual_norm=norm.float().tolist(),
@@ -82,8 +97,10 @@ def inspect_prompt(model: Any, prompt: Prompt, *, neurons: int) -> Reading:
             lens_probabilities=read.values.float().tolist(),
             neuron_indices=indices.tolist(),
             neuron_activations=values.float().tolist(),
+            feature_indices=encoded[layer].indices.tolist() if layer in encoded else None,
+            feature_activations=encoded[layer].values.tolist() if layer in encoded else None,
         )
-        for norm, read, (indices, values) in zip(norms, lens, top, strict=True)
+        for layer, (norm, read, (indices, values)) in enumerate(zip(norms, lens, top, strict=True))
     ]
     named = {i for layer in layers for row in layer.lens_tokens for i in row}
     return Reading(

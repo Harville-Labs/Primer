@@ -7,6 +7,8 @@ checker finds first.
 
 from __future__ import annotations
 
+import json
+from collections.abc import Iterable
 from pathlib import Path
 from typing import Any, cast
 
@@ -55,14 +57,57 @@ def build_tiny_model(
     return directory
 
 
+def build_saes(
+    directory: Path,
+    *,
+    layers: Iterable[int] = (0, 1),
+    d_model: int = 16,
+    d_sae: int = 64,
+    k: int = 8,
+    seed: int = 0,
+    **config: Any,
+) -> Path:
+    """An SAE repository laid out as Qwen-Scope's is, small enough for a test.
+
+    It includes a Python file, as the real one does, so a test can prove
+    Lab never downloads it.
+    """
+    directory.mkdir(parents=True, exist_ok=True)
+    layers = list(layers)
+    settings = {
+        "model_type": "topk_sae",
+        "d_model": d_model,
+        "d_sae": d_sae,
+        "k": k,
+        "num_layers": 2,
+        "layers": layers,
+        "hook_point": "resid_post",
+        "dtype": "float32",
+    }
+    (directory / "config.json").write_text(json.dumps(settings | config))
+    (directory / "app.py").write_text("raise SystemExit('Lab downloaded the demo application')\n")
+    generator = torch.Generator().manual_seed(seed)
+    for layer in layers:
+        torch.save(
+            {
+                "W_enc": torch.randn(d_sae, d_model, generator=generator),
+                "W_dec": torch.randn(d_model, d_sae, generator=generator),
+                "b_enc": torch.randn(d_sae, generator=generator),
+                "b_dec": torch.randn(d_model, generator=generator),
+            },
+            directory / f"layer{layer}.sae.pt",
+        )
+    return directory
+
+
 def lab(weights_dir: Path, hub, factory, **overrides: Any) -> TestClient:
     """Lab on CPU, starting on the tiny model in `weights_dir`."""
-    settings = Settings(
-        lab_weights_dir=weights_dir,
-        lab_model=LocalModel(path=TINY),
-        lab_device="cpu",
-        **overrides,
-    )
+    defaults: dict[str, Any] = {
+        "lab_weights_dir": weights_dir,
+        "lab_model": LocalModel(path=TINY),
+        "lab_device": "cpu",
+    }
+    settings = Settings(**defaults | overrides)
     return TestClient(create_app(settings, hub=hub, factory=factory, cuda_available=lambda: False))
 
 

@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import fnmatch
 import logging
+from collections.abc import Generator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
@@ -158,13 +160,25 @@ def fetch(settings: Settings, model: HubModel, hub: Hub) -> Resolved:
     """
     repository = model.repository
     check_allowed(settings, model)
-    try:
+    with hub_errors(repository, model.revision):
         listing = hub.describe(repository, model.revision)
         wanted = list(filter_repo_objects(listing.files, allow_patterns=list(FETCHED_PATTERNS)))
         _check_listing(settings, repository, listing, wanted)
         check_config(hub.download(repository, listing.commit, ["config.json"]) / "config.json")
         directory = hub.download(repository, listing.commit, list(FETCHED_PATTERNS))
         architecture = check_weights(directory)
+    return Resolved(directory=directory, architecture=architecture, commit=listing.commit)
+
+
+@contextmanager
+def hub_errors(repository: str, revision: str | None) -> Generator[None]:
+    """Translate what the hub and the volume raise into a ModelUnavailable.
+
+    Shared by everything Lab fetches, so a model and the SAEs for it fail
+    in the same words.
+    """
+    try:
+        yield
     except WeightsRefused as error:
         raise ModelUnavailable(f"{repository}: {error}") from None
     except GatedRepoError:
@@ -175,7 +189,7 @@ def fetch(settings: Settings, model: HubModel, hub: Hub) -> Resolved:
     except RepositoryNotFoundError:
         raise ModelUnavailable(f"There is no public repository called {repository}.") from None
     except RevisionNotFoundError:
-        raise ModelUnavailable(f"{repository} has no revision {model.revision!r}.") from None
+        raise ModelUnavailable(f"{repository} has no revision {revision!r}.") from None
     except (HfHubHTTPError, OSError) as error:
         # The network, the hub, or the volume - not the user's choice. Logged
         # with the cause; told to the user as worth trying again.
@@ -184,7 +198,19 @@ def fetch(settings: Settings, model: HubModel, hub: Hub) -> Resolved:
             f"Lab could not fetch {repository} from the model hub. Try again shortly.",
             retryable=True,
         ) from error
-    return Resolved(directory=directory, architecture=architecture, commit=listing.commit)
+
+
+def check_size(settings: Settings, repository: str, listing: Listing, wanted: list[str]) -> None:
+    """Refuse a fetch the hub cannot size, or that is over the operator's limit."""
+    sizes = [listing.files.get(name) for name in wanted]
+    if any(size is None for size in sizes):
+        raise ModelUnavailable(f"The hub did not report the size of every file in {repository}.")
+    total = sum(size for size in sizes if size is not None)
+    if total > settings.lab_max_model_bytes:
+        raise ModelUnavailable(
+            f"{repository} is {total / 1e9:.1f} GB, over this deployment's limit of "
+            f"{settings.lab_max_model_bytes / 1e9:.1f} GB."
+        )
 
 
 def _check_listing(
@@ -196,12 +222,4 @@ def _check_listing(
             f"{repository} publishes no safetensors weights. Lab loads nothing else, because "
             "other checkpoint formats can run code when they are opened."
         )
-    sizes = [listing.files[name] for name in wanted]
-    if any(size is None for size in sizes):
-        raise ModelUnavailable(f"The hub did not report the size of every file in {repository}.")
-    total = sum(size for size in sizes if size is not None)
-    if total > settings.lab_max_model_bytes:
-        raise ModelUnavailable(
-            f"{repository} is {total / 1e9:.1f} GB, over this deployment's limit of "
-            f"{settings.lab_max_model_bytes / 1e9:.1f} GB."
-        )
+    check_size(settings, repository, listing, wanted)

@@ -49,6 +49,24 @@ class LoadModelRequest(WireModel):
     model: ModelReference
 
 
+class SaeStatus(WireModel):
+    """The sparse autoencoders attached to the resident model, if any.
+
+    Fetched after the model loads, so the model is usable while they
+    download; until they are ready an inspection reads no features.
+    """
+
+    repository: str = Field(pattern=REPOSITORY_PATTERN)
+    commit: str | None = None
+    state: Literal["fetching", "ready", "failed"]
+    error: str | None = Field(default=None, max_length=2000)
+    #: Features per SAE, and how many fire at each position.
+    width: int | None = Field(default=None, ge=1)
+    k: int | None = Field(default=None, ge=1)
+    #: The layers an SAE was trained for. Every other layer has none.
+    layers: list[int] = Field(default_factory=list)
+
+
 class LabModelStatus(WireModel):
     """The resident model, as a user choosing what to inspect needs it."""
 
@@ -62,6 +80,8 @@ class LabModelStatus(WireModel):
     device: Literal["cpu", "cuda"]
     dtype: str
     num_layers: int = Field(ge=1)
+    #: None when this deployment has no SAEs for the model.
+    saes: SaeStatus | None = None
 
 
 class ModelSwitch(WireModel):
@@ -94,6 +114,8 @@ class LabStatus(WireModel):
 LENS_TOP = 5
 #: The most MLP neurons a reading may ask for at each layer and position.
 MAX_NEURONS = 32
+#: The most SAE features a reading may ask for at each layer and position.
+MAX_FEATURES = 32
 
 #: Whitespace is part of what is being inspected - " world" and "world" are
 #: different tokens - so these models keep strings as they were sent,
@@ -113,6 +135,7 @@ class PromptInput(WireModel):
 
 class InspectRequest(PromptInput):
     neurons: int = Field(default=8, ge=1, le=MAX_NEURONS)
+    features: int = Field(default=8, ge=1, le=MAX_FEATURES)
 
 
 class InspectedToken(WireModel):
@@ -144,14 +167,19 @@ class LayerReadings(WireModel):
     #: they enter the down projection. Activations keep their sign.
     neuron_indices: list[list[int]]
     neuron_activations: list[list[float]]
+    #: The SAE features that fire most strongly on the residual stream after
+    #: this layer. None where there is no SAE for the layer, or none ready -
+    #: which is not the same as no feature firing.
+    feature_indices: list[list[int]] | None = None
+    feature_activations: list[list[float]] | None = None
 
 
 class InspectResponse(WireModel):
     """What a prompt does inside the resident model.
 
-    Bounded by its shape: num_layers x tokens x (LENS_TOP + neurons) values,
-    with tokens at most the deployment's max_prompt_tokens and neurons at
-    most MAX_NEURONS.
+    Bounded by its shape: num_layers x tokens x (LENS_TOP + neurons + features)
+    values, with tokens at most the deployment's max_prompt_tokens, neurons
+    at most MAX_NEURONS, and features at most MAX_FEATURES.
     """
 
     model_config = VERBATIM
