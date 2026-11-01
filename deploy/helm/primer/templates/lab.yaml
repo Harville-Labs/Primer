@@ -70,7 +70,7 @@ spec:
       {{- end }}
       containers:
         - name: lab
-          image: {{ include "primer.image" (dict "root" . "component" "lab") }}{{ if $lab.gpu }}-cuda{{ end }}
+          image: {{ include "primer.labImage" . }}
           imagePullPolicy: {{ .Values.image.lab.pullPolicy }}
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
@@ -93,6 +93,13 @@ spec:
               value: {{ toJson ($lab.featureLabels | default dict) | quote }}
             - name: PRIMER_LAB_MAX_MODEL_BYTES
               value: {{ $lab.maxModelBytes | int64 | quote }}
+            {{- if $lab.graphs.enabled }}
+            {{- /* The builder's interpreter comes from the image, which has it. */}}
+            - name: PRIMER_LAB_TRANSCODERS
+              value: {{ toJson ($lab.graphs.transcoders | default dict) | quote }}
+            - name: PRIMER_LAB_MAX_TRANSCODER_BYTES
+              value: {{ $lab.graphs.maxTranscoderBytes | int64 | quote }}
+            {{- end }}
             {{- with $lab.hubEndpoint }}
             - name: PRIMER_LAB_HUB_ENDPOINT
               value: {{ . | quote }}

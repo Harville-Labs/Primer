@@ -99,3 +99,16 @@ def test_the_gpu_override_migrates_from_the_image_lab_runs() -> None:
     services = resolve(BASE, COMPOSE_DIR / "compose.gpu.yaml", env=LAB)["services"]
 
     assert services["migrate-lab"]["build"] == services["lab"]["build"]
+
+
+def test_the_graphs_override_builds_graphs_on_the_gpu_for_lab_and_its_migrations() -> None:
+    """Layered on the GPU file: a graph needs the device, and one image serves both."""
+    if shutil.which("docker") is None:
+        pytest.skip("docker is not installed")
+    files = (BASE, COMPOSE_DIR / "compose.gpu.yaml", COMPOSE_DIR / "compose.graphs.yaml")
+    services = resolve(*files, env=LAB)["services"]
+
+    assert services["lab"]["build"]["target"] == "graphs"
+    assert services["migrate-lab"]["build"] == services["lab"]["build"]
+    assert services["lab"]["deploy"]["resources"]["reservations"]["devices"]
+    assert "PRIMER_LAB_TRANSCODERS" in services["lab"]["environment"]
