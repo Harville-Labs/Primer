@@ -14,6 +14,7 @@ from primer_chat.config import Settings
 from primer_chat.generation import ChatGenerator, HaystackChatGenerator
 from primer_chat.routes import router
 from primer_chat.routes_admin import router as admin_router
+from primer_chat.routes_scoring import router as scoring_router
 from primer_chat.routes_tools import router as tool_router
 from primer_chat.secrets import SecretBox
 from primer_chat.streaming import Responder
@@ -85,4 +86,5 @@ def create_app(
     app.include_router(router)
     app.include_router(tool_router)
     app.include_router(admin_router)
+    app.include_router(scoring_router)
     return app

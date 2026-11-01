@@ -43,6 +43,19 @@ class Settings(BaseSettings):
     chat_model: str | None = Field(default=None)
     chat_api_key: SecretStr | None = Field(default=None)
     chat_timeout_seconds: float = Field(default=120.0, gt=0)
+    #: What the deployment's endpoint returns, as its operator declares it.
+    #: Never inferred from the model or the server: an endpoint that ignores
+    #: `logprobs` answers normally, so a probe that got an answer proves
+    #: nothing. Off unless said, which leaves anomaly scoring refused rather
+    #: than wrong.
+    chat_supports_logprobs: bool = Field(
+        default=False,
+        description="The endpoint returns logprobs and top_logprobs on a chat completion",
+    )
+    chat_supports_prompt_logprobs: bool = Field(
+        default=False,
+        description="The endpoint scores supplied text, through echo on /completions (vLLM)",
+    )
 
     retrieval_limit: int = Field(
         default=8,

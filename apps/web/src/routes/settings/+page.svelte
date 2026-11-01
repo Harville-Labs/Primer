@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import { Check, Plus, TriangleAlert, Trash2, X } from '@lucide/svelte';
-	import { Alert, Badge, Button, Input } from '@sivir-ui/svelte';
+	import { Alert, Badge, Button, Checkbox, Input } from '@sivir-ui/svelte';
 	import type { ActionData, PageData } from './$types';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
@@ -13,6 +13,15 @@
 		(data.providers ?? []).some((provider) => provider.api_key_set) ||
 			!(form?.error ?? '').includes('encryption key')
 	);
+
+	//: What a provider can be declared to return, for scoring. Named here so
+	//: the list and the add form cannot describe them differently.
+	const declarations = [
+		{ flag: 'supports_logprobs', label: 'Logprobs' },
+		{ flag: 'supports_prompt_logprobs', label: 'Prompt logprobs' },
+	] as const;
+
+	let declaring = $state({ supports_logprobs: false, supports_prompt_logprobs: false });
 </script>
 
 <div class="mx-auto w-full max-w-4xl">
@@ -159,6 +168,43 @@
 							{/if}
 						</span>
 
+						<!--
+						  Declared, never probed: a server without logprobs
+						  usually answers anyway with the field left out, which
+						  would score as a model that is never surprised.
+						-->
+						<span class="flex items-center gap-1">
+							{#each declarations as { flag, label } (flag)}
+								{#if provider.source === 'deployment'}
+									<Badge variant={provider[flag] ? 'secondary' : 'outline'}>
+										{label}{provider[flag] ? '' : ': not declared'}
+									</Badge>
+								{:else}
+									<form method="POST" action="?/declare" use:enhance>
+										<input type="hidden" name="id" value={provider.id} />
+										<input type="hidden" name="flag" value={flag} />
+										<input type="hidden" name="value" value={provider[flag] ? 'false' : 'true'} />
+										<Button
+											type="submit"
+											variant="ghost"
+											size="sm"
+											class="h-7 gap-1 text-xs {provider[flag] ? '' : 'text-muted-foreground'}"
+											title={provider[flag]
+												? `${label} declared. Click to withdraw the declaration.`
+												: `${label} not declared. Click to declare that this server returns them.`}
+										>
+											{#if provider[flag]}
+												<Check size={12} aria-hidden="true" />
+											{:else}
+												<X size={12} aria-hidden="true" />
+											{/if}
+											{label}
+										</Button>
+									</form>
+								{/if}
+							{/each}
+						</span>
+
 						{#if provider.source !== 'deployment'}
 							<span class="flex items-center gap-1">
 								<form method="POST" action="?/toggle" use:enhance>
@@ -233,6 +279,18 @@
 						<Plus size={15} aria-hidden="true" />
 						Add
 					</Button>
+				</div>
+				<div class="mt-2 flex flex-wrap items-center gap-4 text-xs">
+					{#each declarations as { flag, label } (flag)}
+						<!-- Sivir's checkbox names no input of its own, so the form reads this. -->
+						<Checkbox bind:checked={declaring[flag]} label="Returns {label.toLowerCase()}" />
+						<input type="hidden" name={flag} value={String(declaring[flag])} />
+					{/each}
+					<span class="text-muted-foreground">
+						For scoring on the Anomalies tab. Prompt logprobs need <span class="font-mono"
+							>echo</span
+						> on /completions, which vLLM supports.
+					</span>
 				</div>
 				{#if !canStoreKeys}
 					<p class="mt-2 flex items-center gap-1.5 text-xs text-warning">

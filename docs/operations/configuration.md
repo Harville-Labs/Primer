@@ -111,6 +111,8 @@ object.
 | `PRIMER_CHAT_MODEL` | unset | Optional. Which model a new chat starts on |
 | `PRIMER_CHAT_API_KEY` | unset | Many local servers ignore it |
 | `PRIMER_CHAT_TIMEOUT_SECONDS` | `120` | Per request to the model |
+| `PRIMER_CHAT_SUPPORTS_LOGPROBS` | `false` | Declares that the endpoint returns logprobs for what it writes |
+| `PRIMER_CHAT_SUPPORTS_PROMPT_LOGPROBS` | `false` | Declares that it scores supplied text, through `echo` on `/completions` |
 | `PRIMER_CONTROL_URL` | `http://control-api:8000` | Cluster-internal |
 | `PRIMER_RETRIEVAL_URL` | `http://retrieval:8000` | Cluster-internal |
 | `PRIMER_RETRIEVAL_LIMIT` | `8` | Passages per question; bounds prompt size |
@@ -143,6 +145,27 @@ lands on it is refused by the endpoint.
 
 Every model offered this way shares one endpoint, one API key, and one
 `PRIMER_RETRIEVAL_LIMIT`. They need not share a context window: see below.
+
+### Declaring logprobs
+
+The Anomalies tab scores how surprised a model was by each token, which
+needs the endpoint's logprobs. Primer does not try to detect whether a
+server returns them. A server that does not usually answers anyway with
+the field left out, and a score built from that would show a model that is
+never surprised. So each provider declares it: these two variables for the
+deployment's own endpoint, and checkboxes on the settings page for the
+others. Scoring a provider that has not declared it is refused, naming the
+flag to set.
+
+- **Logprobs** score an answer the model writes itself. Most servers that
+  speak the OpenAI API support them.
+- **Prompt logprobs** score text the model did not write, which is what an
+  evaluation usually wants. Primer asks for them with `echo` on the legacy
+  `/completions` route. vLLM supports this; most hosted APIs do not.
+
+An endpoint returns at most its top k alternatives per token: 20 in the
+OpenAI API and by default in vLLM (`--max-logprobs`). Entropy computed
+from them is a lower bound, and every score says so.
 
 
 ### Fitting the prompt into the context window

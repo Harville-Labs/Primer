@@ -58,6 +58,8 @@ export const actions: Actions = {
 				// key", which is not what leaving the field blank asks for.
 				api_key: String(form.get('api_key') ?? '') || null,
 				enabled: true,
+				supports_logprobs: form.get('supports_logprobs') === 'true',
+				supports_prompt_logprobs: form.get('supports_prompt_logprobs') === 'true',
 			});
 		} catch (cause) {
 			if (cause instanceof ApiError) return fail(cause.status, { error: cause.message });
@@ -71,6 +73,25 @@ export const actions: Actions = {
 		try {
 			await chatFor(request, fetch).updateProvider(String(form.get('id')), {
 				enabled: form.get('enabled') === 'true',
+			});
+		} catch (cause) {
+			if (cause instanceof ApiError) return fail(cause.status, { error: cause.message });
+			throw cause;
+		}
+		return { updated: true };
+	},
+
+	declare: async ({ request, fetch }) => {
+		const form = await request.formData();
+		const flag = String(form.get('flag'));
+		// Allow-listed: the field name is the browser's to send, and any other
+		// would be sent on to Chat as a change to something else.
+		if (flag !== 'supports_logprobs' && flag !== 'supports_prompt_logprobs') {
+			return fail(400, { error: `${flag} is not something a provider declares.` });
+		}
+		try {
+			await chatFor(request, fetch).updateProvider(String(form.get('id')), {
+				[flag]: form.get('value') === 'true',
 			});
 		} catch (cause) {
 			if (cause instanceof ApiError) return fail(cause.status, { error: cause.message });

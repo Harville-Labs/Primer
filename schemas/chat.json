@@ -252,6 +252,15 @@
         "title": "ConversationSummary",
         "type": "object"
       },
+      "EntropyEstimate": {
+        "description": "How much of each next-token distribution the score could see.",
+        "enum": [
+          "full",
+          "truncated"
+        ],
+        "title": "EntropyEstimate",
+        "type": "string"
+      },
       "FollowUpRequest": {
         "additionalProperties": false,
         "properties": {
@@ -490,6 +499,16 @@
             "minLength": 1,
             "title": "Name",
             "type": "string"
+          },
+          "supports_logprobs": {
+            "default": false,
+            "title": "Supports Logprobs",
+            "type": "boolean"
+          },
+          "supports_prompt_logprobs": {
+            "default": false,
+            "title": "Supports Prompt Logprobs",
+            "type": "boolean"
           }
         },
         "required": [
@@ -548,6 +567,16 @@
             ],
             "title": "Source",
             "type": "string"
+          },
+          "supports_logprobs": {
+            "default": false,
+            "title": "Supports Logprobs",
+            "type": "boolean"
+          },
+          "supports_prompt_logprobs": {
+            "default": false,
+            "title": "Supports Prompt Logprobs",
+            "type": "boolean"
           },
           "updated_at": {
             "anyOf": [
@@ -621,9 +650,170 @@
               }
             ],
             "title": "Name"
+          },
+          "supports_logprobs": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supports Logprobs"
+          },
+          "supports_prompt_logprobs": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supports Prompt Logprobs"
           }
         },
         "title": "ProviderUpdate",
+        "type": "object"
+      },
+      "ScoreRequest": {
+        "additionalProperties": false,
+        "description": "What to score, and against which model.\n\nNot a `WireModel`, which strips whitespace from every string: the text\nbeing scored is the text that was given, and a leading space is a token\nof its own.",
+        "properties": {
+          "max_tokens": {
+            "default": 256,
+            "maximum": 2048.0,
+            "minimum": 1.0,
+            "title": "Max Tokens",
+            "type": "integer"
+          },
+          "mode": {
+            "enum": [
+              "generate",
+              "text"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "model": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Model",
+            "type": "string"
+          },
+          "provider_id": {
+            "format": "uuid",
+            "title": "Provider Id",
+            "type": "string"
+          },
+          "text": {
+            "maxLength": 20000,
+            "minLength": 1,
+            "title": "Text",
+            "type": "string"
+          },
+          "top_k": {
+            "default": 20,
+            "maximum": 20.0,
+            "minimum": 1.0,
+            "title": "Top K",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "provider_id",
+          "model",
+          "mode",
+          "text"
+        ],
+        "title": "ScoreRequest",
+        "type": "object"
+      },
+      "ScoredText": {
+        "additionalProperties": false,
+        "properties": {
+          "mode": {
+            "enum": [
+              "generate",
+              "text"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "model": {
+            "title": "Model",
+            "type": "string"
+          },
+          "provider_id": {
+            "format": "uuid",
+            "title": "Provider Id",
+            "type": "string"
+          },
+          "score": {
+            "$ref": "#/components/schemas/SequenceScore"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "provider_id",
+          "model",
+          "mode",
+          "text",
+          "score"
+        ],
+        "title": "ScoredText",
+        "type": "object"
+      },
+      "SequenceScore": {
+        "additionalProperties": false,
+        "properties": {
+          "estimate": {
+            "$ref": "#/components/schemas/EntropyEstimate"
+          },
+          "perplexity": {
+            "minimum": 1.0,
+            "title": "Perplexity",
+            "type": "number"
+          },
+          "spans": {
+            "items": {
+              "$ref": "#/components/schemas/Span"
+            },
+            "title": "Spans",
+            "type": "array"
+          },
+          "tokens": {
+            "items": {
+              "$ref": "#/components/schemas/TokenScore"
+            },
+            "title": "Tokens",
+            "type": "array"
+          },
+          "top_k": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "How many logprobs each truncated entropy saw.",
+            "title": "Top K"
+          }
+        },
+        "required": [
+          "estimate",
+          "perplexity",
+          "tokens",
+          "spans"
+        ],
+        "title": "SequenceScore",
         "type": "object"
       },
       "SourceLocator": {
@@ -656,6 +846,109 @@
           }
         },
         "title": "SourceLocator",
+        "type": "object"
+      },
+      "Span": {
+        "additionalProperties": false,
+        "description": "Consecutive tokens that stand out, `start` inclusive, `end` exclusive.",
+        "properties": {
+          "end": {
+            "exclusiveMinimum": 0.0,
+            "title": "End",
+            "type": "integer"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/SpanKind"
+          },
+          "peak_index": {
+            "minimum": 0.0,
+            "title": "Peak Index",
+            "type": "integer"
+          },
+          "peak_z": {
+            "title": "Peak Z",
+            "type": "number"
+          },
+          "start": {
+            "minimum": 0.0,
+            "title": "Start",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "kind",
+          "start",
+          "end",
+          "peak_index",
+          "peak_z"
+        ],
+        "title": "Span",
+        "type": "object"
+      },
+      "SpanKind": {
+        "enum": [
+          "surprisal_spike",
+          "low_confidence"
+        ],
+        "title": "SpanKind",
+        "type": "string"
+      },
+      "TokenScore": {
+        "additionalProperties": false,
+        "properties": {
+          "entropy_bits": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Exact entropy over the full vocabulary.",
+            "title": "Entropy Bits"
+          },
+          "index": {
+            "minimum": 0.0,
+            "title": "Index",
+            "type": "integer"
+          },
+          "logprob": {
+            "maximum": 0.0,
+            "title": "Logprob",
+            "type": "number"
+          },
+          "surprisal_bits": {
+            "minimum": 0.0,
+            "title": "Surprisal Bits",
+            "type": "number"
+          },
+          "token": {
+            "title": "Token",
+            "type": "string"
+          },
+          "truncated_entropy_bits": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A lower bound on entropy, from only the top-k logprobs.",
+            "title": "Truncated Entropy Bits"
+          }
+        },
+        "required": [
+          "index",
+          "token",
+          "logprob",
+          "surprisal_bits"
+        ],
+        "title": "TokenScore",
         "type": "object"
       },
       "ToolCallSummary": {
@@ -1308,6 +1601,47 @@
         "summary": "Models this deployment offers",
         "tags": [
           "chat"
+        ]
+      }
+    },
+    "/api/v1/score": {
+      "post": {
+        "operationId": "score_api_v1_score_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScoreRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScoredText"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Score a model's surprise at each token",
+        "tags": [
+          "scoring"
         ]
       }
     },

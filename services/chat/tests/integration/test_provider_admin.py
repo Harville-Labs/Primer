@@ -13,7 +13,7 @@ import os
 from typing import Any
 
 import pytest
-from chat_support import ChatUser, deployment
+from chat_support import GroupedUser, deployment
 from httpx2 import AsyncClient
 from primer_chat.config import Settings
 
@@ -31,16 +31,6 @@ def settings() -> Settings:
         admin_group=ADMINS,
         settings_encryption_key=a_key(),
     )
-
-
-class GroupedUser(ChatUser):
-    """A subject the proxy also asserts groups for."""
-
-    def __init__(self, http: AsyncClient, subject: str, groups: str = "") -> None:
-        super().__init__(http, subject)
-        self._headers = {"X-Forwarded-User": subject}
-        if groups:
-            self._headers["X-Forwarded-Groups"] = groups
 
 
 @pytest.fixture
@@ -185,3 +175,29 @@ class TestNaming:
 
         assert clash.status_code == 409
         assert clash.json()["code"] == "conflict"
+
+
+class TestLogprobDeclarations:
+    """What the scoring route trusts instead of probing, so it must be kept exactly."""
+
+    async def test_neither_is_assumed(self, admin: GroupedUser) -> None:
+        created = (await add(admin)).json()
+
+        assert created["supports_logprobs"] is False
+        assert created["supports_prompt_logprobs"] is False
+
+    async def test_each_is_declared_and_changed_on_its_own(self, admin: GroupedUser) -> None:
+        """Generated logprobs are common and prompt logprobs are not, so they differ often."""
+        created = (await add(admin, supports_logprobs=True)).json()
+        assert created["supports_logprobs"] is True
+        assert created["supports_prompt_logprobs"] is False
+
+        await admin.patch(
+            f"/api/v1/admin/providers/{created['id']}", {"supports_prompt_logprobs": True}
+        )
+        await admin.patch(f"/api/v1/admin/providers/{created['id']}", {"name": "Renamed"})
+        listed = (await admin.get("/api/v1/admin/providers")).json()
+        stored = next(entry for entry in listed if entry["id"] == created["id"])
+
+        assert stored["supports_logprobs"] is True
+        assert stored["supports_prompt_logprobs"] is True

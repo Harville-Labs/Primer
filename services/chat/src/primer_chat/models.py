@@ -116,6 +116,11 @@ class Provider(Base):
     #: Disabled rather than deleted is the usual way to take an endpoint out
     #: of service: it keeps the URL and the key for when it comes back.
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
+    #: Declared by the administrator, never probed. See `ProviderSummary`.
+    supports_logprobs: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
+    supports_prompt_logprobs: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default="false"
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

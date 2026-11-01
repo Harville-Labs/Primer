@@ -57,6 +57,8 @@ class ResolvedProvider:
     api_key: str | None
     source: str
     enabled: bool = True
+    supports_logprobs: bool = False
+    supports_prompt_logprobs: bool = False
     #: Set when a stored key exists but could not be decrypted. The provider
     #: is still listed - hiding it would look like it had been deleted - but
     #: it will not authenticate, and this is what says so.
@@ -71,6 +73,8 @@ class ResolvedProvider:
             enabled=self.enabled,
             api_key_set=self.api_key is not None,
             source=self.source,  # ty: ignore[invalid-argument-type]
+            supports_logprobs=self.supports_logprobs,
+            supports_prompt_logprobs=self.supports_prompt_logprobs,
         )
 
 
@@ -89,6 +93,8 @@ def deployment_provider(settings: Settings) -> ResolvedProvider | None:
         base_url=settings.chat_base_url,
         api_key=settings.chat_api_key.get_secret_value() if settings.chat_api_key else None,
         source="deployment",
+        supports_logprobs=settings.chat_supports_logprobs,
+        supports_prompt_logprobs=settings.chat_supports_prompt_logprobs,
     )
 
 
@@ -130,6 +136,8 @@ class ProviderStore:
             api_key=api_key,
             source="configured",
             enabled=row.enabled,
+            supports_logprobs=row.supports_logprobs,
+            supports_prompt_logprobs=row.supports_prompt_logprobs,
             key_error=key_error,
         )
 
