@@ -1,7 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import type { DeploymentCapabilities } from '#lib/api/types.ts';
-import { canScore, entropyBasis, sourcesFrom, spanText, surprisalShares } from './anomalies';
-import { chatModel, RESIDENT, sequence } from './fixture';
+import {
+	canScore,
+	distanceShares,
+	entropyBasis,
+	pastThreshold,
+	sourcesFrom,
+	spanText,
+	stripRows,
+	surprisalShares,
+} from './anomalies';
+import { chatModel, PROBE, RESIDENT, sequence } from './fixture';
 
 function capabilities(lab: boolean, chat: boolean): DeploymentCapabilities {
 	return {
@@ -81,5 +90,42 @@ describe('naming the numbers', () => {
 		const span = { kind: 'surprisal_spike' as const, start: 1, end: 3, peak_index: 1, peak_z: 4 };
 
 		expect(spanText(score, span)).toBe(' t1 t2');
+	});
+});
+
+describe("Lab's detectors on the strip", () => {
+	const outliers = { layer: 3, distances: [5, 10, 30], threshold: 10, reference_tokens: 400 };
+
+	it('colours a distance against the threshold, which sits at half strength', () => {
+		/**
+		 * Against the threshold rather than the text's own peak: scaled to the
+		 * peak, a text with nothing unusual in it would still have one token
+		 * drawn as darkly as a true outlier.
+		 */
+		expect(distanceShares(outliers)).toEqual([0.25, 0.5, 1]);
+		expect(distanceShares({ ...outliers, distances: [5, 6] })).toEqual([0.25, 0.3]);
+	});
+
+	it('counts only the tokens strictly past the threshold', () => {
+		expect(pastThreshold(outliers)).toBe(1);
+	});
+
+	it('is the surprisal row alone when neither detector was read', () => {
+		const rows = stripRows(sequence([1, 2, 4]), null, null);
+
+		expect(rows.map((row) => row.name)).toEqual(['bits']);
+		expect(rows[0].labels).toEqual(['1.0', '2.0', '4.0']);
+	});
+
+	it('adds the distance and the probe above surprisal, a probe signed about one half', () => {
+		const probe = { probe: PROBE, probabilities: [0, 0.5, 0.75] };
+
+		const rows = stripRows(sequence([1, 2, 4]), outliers, probe);
+
+		expect(rows.map((row) => row.name)).toEqual(['bits', 'L3', 'probe']);
+		expect(rows[1].labels).toEqual(['0.5', '1.0', '3.0']);
+		expect(rows[2].values).toEqual([-1, 0, 0.5]);
+		expect(rows[2].labels).toEqual(['0.00', '0.50', '0.75']);
+		expect(rows.every((row) => row.values.length === 3)).toBe(true);
 	});
 });

@@ -1,11 +1,14 @@
 <script lang="ts">
 	import { Activity, PanelLeft, PanelRight } from '@lucide/svelte';
 	import { Button, Sheet } from '@sivir-ui/svelte';
+	import { onMount } from 'svelte';
 	import ActivationHeatmap from '#lib/components/lab/ActivationHeatmap.svelte';
+	import DetectorPicker from '#lib/components/lab/DetectorPicker.svelte';
+	import ProbeSheet from '#lib/components/lab/ProbeSheet.svelte';
 	import ScoreSourcePane from '#lib/components/lab/ScoreSourcePane.svelte';
 	import SurpriseDetail from '#lib/components/lab/SurpriseDetail.svelte';
-	import { entropyBasis, sourcesFrom, surprisalShares } from '#lib/lab/anomalies.ts';
-	import { Scorer } from '#lib/lab/scorer.svelte.ts';
+	import { entropyBasis, pastThreshold, sourcesFrom, stripRows } from '#lib/lab/anomalies.ts';
+	import { Probes, Scorer } from '#lib/lab/scorer.svelte.ts';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -17,8 +20,19 @@
 		labMaxNewTokens: data.status?.max_new_tokens,
 	});
 
+	const probes = new Probes();
+
 	let sourceOpen = $state(false);
 	let detailOpen = $state(false);
+	let probesOpen = $state(false);
+	// Which row of the strip the selection is on; the token is the scorer's.
+	let row = $state(0);
+
+	let numLayers = $derived(data.status?.model?.num_layers ?? 0);
+
+	onMount(() => {
+		if (data.status?.model) void probes.load();
+	});
 
 	let problems = $derived(
 		[data.chatProblem, data.labProblem].filter((problem) => problem !== null)
@@ -28,10 +42,8 @@
 	let tokens = $derived(
 		score?.tokens.map((token) => ({ id: token.index, text: token.token, special: false })) ?? []
 	);
-	let values = $derived(score ? [surprisalShares(score)] : []);
-	let labels = $derived(
-		score ? [score.tokens.map((token) => token.surprisal_bits.toFixed(1))] : undefined
-	);
+	let strip = $derived(scored ? stripRows(scored.score, scored.outliers, scored.probe) : []);
+	let past = $derived(scored?.outliers ? pastThreshold(scored.outliers) : null);
 </script>
 
 <svelte:head>
@@ -39,7 +51,13 @@
 </svelte:head>
 
 {#snippet sourcePane()}
-	<ScoreSourcePane {scorer} {problems} endpointModels={data.models.length} />
+	<ScoreSourcePane {scorer} {problems} endpointModels={data.models.length}>
+		{#snippet detectors()}
+			{#if scorer.source?.kind === 'lab' && numLayers > 0}
+				<DetectorPicker {scorer} {probes} {numLayers} ontrain={() => (probesOpen = true)} />
+			{/if}
+		{/snippet}
+	</ScoreSourcePane>
 {/snippet}
 
 {#snippet detailPane()}
@@ -80,6 +98,10 @@
 				<dl class="ml-auto flex items-baseline gap-2 font-mono text-[11px] text-muted-foreground">
 					<dt>Perplexity, over the scored tokens</dt>
 					<dd class="tabular-nums text-foreground">{score.perplexity.toFixed(2)}</dd>
+					{#if past !== null}
+						<dt class="ml-2">Past the distance threshold</dt>
+						<dd class="tabular-nums {past > 0 ? 'text-warning' : 'text-foreground'}">{past}</dd>
+					{/if}
 				</dl>
 				<!-- Drawn with the cells' own colour function, so it cannot disagree with them. -->
 				<div
@@ -112,15 +134,20 @@
 				<div class="flex flex-col gap-4 p-4 transition-opacity {scorer.running ? 'opacity-60' : ''}">
 					<ActivationHeatmap
 						{tokens}
-						{values}
-						{labels}
-						labelsAre="surprisal in bits"
+						values={strip.map((each) => each.values)}
+						labels={strip.map((each) => each.labels)}
+						labelsAre={strip.length > 1
+							? 'bits, distance as a multiple of the threshold, or probe probability'
+							: 'surprisal in bits'}
 						dense={tokens.length > 48}
-						rows={['bits']}
-						corner="surprisal"
-						selected={{ layer: 0, token: scorer.selected }}
-						label="Surprisal of each token, in bits, coloured relative to the most surprising one."
-						onselect={(cell) => scorer.select(cell.token)}
+						rows={strip.map((each) => each.name)}
+						corner={strip.length > 1 ? 'reading' : 'surprisal'}
+						selected={{ layer: Math.min(row, strip.length - 1), token: scorer.selected }}
+						label="Surprisal of each token in bits, coloured relative to the most surprising one, with any distance and probe readings above it."
+						onselect={(cell) => {
+							row = cell.layer;
+							scorer.select(cell.token);
+						}}
 						onkey={(key) => scorer.key(key)}
 					/>
 					<p class="text-[11px] text-muted-foreground">
@@ -158,6 +185,10 @@
 		{@render sourcePane()}
 	</Sheet.Content>
 </Sheet.Root>
+
+{#if numLayers > 0}
+	<ProbeSheet bind:open={probesOpen} {probes} {scorer} {numLayers} />
+{/if}
 
 <Sheet.Root bind:open={detailOpen}>
 	<Sheet.Content side="right" class="w-80 overflow-y-auto p-0">

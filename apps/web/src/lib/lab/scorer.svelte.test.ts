@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { sourcesFrom } from './anomalies';
-import { chatModel, RESIDENT, sequence } from './fixture';
-import { Scorer } from './scorer.svelte';
+import { chatModel, PROBE, RESIDENT, sequence } from './fixture';
+import { Probes, Scorer } from './scorer.svelte';
 
 /** The page's own endpoints, answering from a table and keeping every request. */
 function primer(answers: Record<string, () => Response>) {
@@ -120,6 +120,108 @@ describe('scoring', () => {
 		await scorer.run();
 
 		expect(asked).toEqual([]);
+	});
+});
+
+describe("Lab's detectors", () => {
+	const OUTLIERS = { layer: 1, distances: [3], threshold: 2, reference_tokens: 100 };
+
+	it('asks Lab for the picked layer and probe, and keeps what it read', async () => {
+		const { fetch, asked } = primer({
+			'/lab/score': () =>
+				Response.json({
+					text: 'hi',
+					score: sequence([1]),
+					outliers: OUTLIERS,
+					probe: { probe: PROBE, probabilities: [0.9] },
+				}),
+		});
+		const scorer = new Scorer(SOURCES, { fetch });
+		scorer.sourceKey = 'lab';
+		scorer.text = 'hi';
+		scorer.outlierLayer = 1;
+		scorer.probeId = PROBE.id;
+
+		await scorer.run();
+
+		expect(asked[0].body).toMatchObject({ outlier_layer: 1, probe_id: PROBE.id });
+		expect(scorer.scored?.outliers).toEqual(OUTLIERS);
+		expect(scorer.scored?.probe?.probabilities).toEqual([0.9]);
+	});
+
+	it('are never sent to an endpoint, which has no residual stream to read', async () => {
+		/**
+		 * Chat would refuse a field it does not know, so a detector picked
+		 * while Lab was the source must not follow the reader to an endpoint.
+		 */
+		const { fetch, asked } = primer({
+			'/chat/score': () => Response.json({ text: 'x', score: sequence([1]) }),
+		});
+		const scorer = new Scorer(SOURCES, { fetch });
+		scorer.outlierLayer = 1;
+		scorer.probeId = PROBE.id;
+		scorer.text = 'a';
+
+		await scorer.run();
+
+		expect(Object.keys(asked[0].body)).not.toContain('outlier_layer');
+		expect(Object.keys(asked[0].body)).not.toContain('probe_id');
+		expect(scorer.scored?.outliers).toBeNull();
+		expect(scorer.scored?.probe).toBeNull();
+	});
+});
+
+describe('probes', () => {
+	it('lists the probes again after training one, rather than appending', async () => {
+		const paths: string[] = [];
+		const fetch = (async (input: RequestInfo | URL, init: RequestInit = {}) => {
+			paths.push(`${init.method ?? 'GET'} ${String(input)}`);
+			return init.method === 'POST'
+				? Response.json(PROBE, { status: 201 })
+				: Response.json([PROBE]);
+		}) as typeof globalThis.fetch;
+		const probes = new Probes({ fetch });
+
+		const made = await probes.create({
+			label: 'formal',
+			layer: 1,
+			positive: ['a', 'b', 'c', 'd'],
+			negative: ['e', 'f', 'g', 'h'],
+			chat: false,
+		});
+
+		expect(made?.id).toBe(PROBE.id);
+		expect(paths).toEqual(['POST /lab/probes', 'GET /lab/probes']);
+		expect(probes.find(PROBE.id)?.accuracy).toBe(0.875);
+	});
+
+	it("says why training was refused, in Lab's words", async () => {
+		const fetch = (async () =>
+			Response.json(
+				{
+					code: 'x',
+					title: 'No such layer',
+					status: 422,
+					detail: "This model's layers are 0 to 1.",
+				},
+				{ status: 422 },
+			)) as unknown as typeof globalThis.fetch;
+		const probes = new Probes({ fetch });
+
+		const made = await probes.create({
+			label: 'l',
+			layer: 9,
+			positive: ['a'],
+			negative: ['b'],
+			chat: false,
+		});
+
+		expect(made).toBeNull();
+		expect(probes.failure).toEqual({
+			title: 'No such layer',
+			detail: "This model's layers are 0 to 1.",
+		});
+		expect(probes.creating).toBe(false);
 	});
 });
 

@@ -2,6 +2,8 @@ import type {
 	ChatModel,
 	DeploymentCapabilities,
 	LabModelStatus,
+	Outliers,
+	ProbeReading,
 	SequenceScore,
 	Span,
 	TokenScore,
@@ -133,4 +135,67 @@ export function spanText(score: SequenceScore, span: Span): string {
 		.slice(span.start, span.end)
 		.map((token) => token.token)
 		.join('');
+}
+
+/**
+ * Each token's distance as a share of twice the threshold, for colour.
+ *
+ * Against the threshold rather than this text's peak, as surprisal is not:
+ * the question a distance answers is whether the token is unlike ordinary
+ * text, and a scale relative to the text would draw an ordinary answer's
+ * most ordinary token as darkly as a strange one's. The threshold sits at
+ * half strength, so everything darker than that is past it.
+ */
+export function distanceShares(outliers: Outliers): number[] {
+	const full = 2 * outliers.threshold;
+	return outliers.distances.map((distance) => (full > 0 ? Math.min(1, distance / full) : 1));
+}
+
+/** How many tokens are further from ordinary text than the threshold. */
+export function pastThreshold(outliers: Outliers): number {
+	return outliers.distances.filter((distance) => distance > outliers.threshold).length;
+}
+
+/** One row of the strip: its name, each cell's colour in -1..1, and each cell's number. */
+export interface StripRow {
+	name: string;
+	values: number[];
+	labels: string[];
+}
+
+/**
+ * The strip's rows: surprisal, then whichever of Lab's detectors were read.
+ *
+ * Surprisal is the first row, drawn at the bottom, so the readings of the
+ * residual stream sit above the score as layers sit above the output.
+ * A probe is drawn signed: the negative ink is a token that reads like the
+ * second set, the positive ink one that reads like the first.
+ */
+export function stripRows(
+	score: SequenceScore,
+	outliers: Outliers | null,
+	probe: ProbeReading | null,
+): StripRow[] {
+	const rows: StripRow[] = [
+		{
+			name: 'bits',
+			values: surprisalShares(score),
+			labels: score.tokens.map((token) => token.surprisal_bits.toFixed(1)),
+		},
+	];
+	if (outliers) {
+		rows.push({
+			name: `L${outliers.layer}`,
+			values: distanceShares(outliers),
+			labels: outliers.distances.map((distance) => (distance / outliers.threshold).toFixed(1)),
+		});
+	}
+	if (probe) {
+		rows.push({
+			name: 'probe',
+			values: probe.probabilities.map((p) => 2 * p - 1),
+			labels: probe.probabilities.map((p) => p.toFixed(2)),
+		});
+	}
+	return rows;
 }

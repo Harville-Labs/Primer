@@ -1,4 +1,5 @@
 <script lang="ts">
+	import DetectorDetail from '#lib/components/lab/DetectorDetail.svelte';
 	import { entropyBasis, entropyOf, SPAN_KINDS, spanText } from '#lib/lab/anomalies.ts';
 	import { visibleToken } from '#lib/lab/heatmap.ts';
 	import type { Scorer } from '#lib/lab/scorer.svelte.ts';
@@ -38,6 +39,10 @@
 				<dd class="text-right font-mono tabular-nums">{entropy?.toFixed(2) ?? '—'}</dd>
 			</dl>
 		</section>
+
+		{#if scorer.scored}
+			<DetectorDetail scored={scorer.scored} selected={scorer.selected} />
+		{/if}
 
 		<section aria-labelledby="spans-heading" class="flex flex-col gap-2">
 			<h2

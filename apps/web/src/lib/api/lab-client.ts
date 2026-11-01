@@ -8,6 +8,8 @@ import type {
 	LabScored,
 	LabScoreRequest,
 	LabStatus,
+	Probe,
+	ProbeRequest,
 	ProblemDetail,
 	SteeringVector,
 	SteeringVectorRequest,
@@ -121,6 +123,14 @@ export class LabApi {
 
 	createVector(payload: SteeringVectorRequest): Promise<SteeringVector> {
 		return this.post('/api/v1/lab/vectors', payload);
+	}
+
+	probes(): Promise<Probe[]> {
+		return this.request('/api/v1/lab/probes');
+	}
+
+	trainProbe(payload: ProbeRequest): Promise<Probe> {
+		return this.post('/api/v1/lab/probes', payload);
 	}
 
 	private post<T>(path: string, payload: unknown): Promise<T> {

@@ -1,6 +1,17 @@
-import type { LabScoreRequest, ScoreRequest, SequenceScore } from '#lib/api/types.ts';
+import type {
+	LabScored,
+	LabScoreRequest,
+	Outliers,
+	Probe,
+	ProbeReading,
+	ProbeRequest,
+	ScoredText,
+	ScoreRequest,
+	SequenceScore,
+} from '#lib/api/types.ts';
 import { type ScoreMode, type Source, TOP_K } from './anomalies';
 import { asFailure, type Failure, problemOf } from './failure';
+import { OwnedList, type OwnedOptions } from './owned.svelte';
 
 /**
  * The Anomalies tab's state: which source, what to score, and the score.
@@ -23,6 +34,10 @@ export interface Scored {
 	/** The answer that was generated, or the text as given. */
 	text: string;
 	score: SequenceScore;
+	/** Each token's distance from ordinary text, when Lab was asked for it. */
+	outliers: Outliers | null;
+	/** A probe's reading at each token, when Lab was asked for one. */
+	probe: ProbeReading | null;
 }
 
 /** How long an answer to ask for. Short: the point is to read it token by token. */
@@ -33,6 +48,9 @@ export class Scorer {
 	sourceKey = $state('');
 	mode = $state<ScoreMode>('generate');
 	text = $state('');
+	/** Lab's detectors, sent only when Lab is the source: endpoints have no residual stream. */
+	outlierLayer = $state<number | null>(null);
+	probeId = $state<string | null>(null);
 
 	running = $state(false);
 	failure = $state<Failure | null>(null);
@@ -80,6 +98,8 @@ export class Scorer {
 							mode,
 							chat: true,
 							max_new_tokens: Math.min(ANSWER_TOKENS, this.labMaxNewTokens),
+							outlier_layer: this.outlierLayer ?? undefined,
+							probe_id: this.probeId ?? undefined,
 						} satisfies LabScoreRequest)
 					: request('/chat/score', {
 							provider_id: source.providerId,
@@ -91,8 +111,16 @@ export class Scorer {
 						} satisfies ScoreRequest)),
 			);
 			if (!response.ok) throw await problemOf(response);
-			const body = (await response.json()) as { text: string; score: SequenceScore };
-			this.scored = { source, mode, text: body.text, score: body.score };
+			const body = (await response.json()) as Pick<ScoredText, 'text' | 'score'> &
+				Pick<Partial<LabScored>, 'outliers' | 'probe'>;
+			this.scored = {
+				source,
+				mode,
+				text: body.text,
+				score: body.score,
+				outliers: body.outliers ?? null,
+				probe: body.probe ?? null,
+			};
 			this.selected = mostSurprising(body.score);
 		} catch (failure) {
 			this.failure = asFailure(failure);
@@ -117,6 +145,13 @@ export class Scorer {
 		if (!(key in moves)) return false;
 		this.select(moves[key]);
 		return true;
+	}
+}
+
+/** The caller's probes, which a Lab score can read at every token. */
+export class Probes extends OwnedList<Probe, ProbeRequest> {
+	constructor(options: OwnedOptions = {}) {
+		super('/lab/probes', options);
 	}
 }
 
