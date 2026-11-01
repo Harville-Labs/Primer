@@ -1,4 +1,5 @@
 import type {
+	BuiltGraph,
 	ChatModel,
 	InspectResponse,
 	LabModelStatus,
@@ -160,4 +161,50 @@ export function passage(id: string, page: number | null = 1): Passage {
 		content: `passage ${id}`,
 		locator: page === null ? null : { page, section: null },
 	};
+}
+
+/**
+ * A graph over a two-token prompt on a two-layer model: one feature at
+ * each layer over the second token, an error node, and two predictions.
+ *
+ * Influence rises from the most to the least important node, as the
+ * builder's cumulative share does, so 0.5 keeps exactly the layer-1 feature.
+ */
+export function builtGraph(): BuiltGraph {
+	return {
+		tokens: ['<|endoftext|>', ' Paris'],
+		nodes: [
+			{ id: 't0', kind: 'token', position: 0, influence: 1, token: '<|endoftext|>' },
+			{ id: 't1', kind: 'token', position: 1, influence: 0.9, token: ' Paris' },
+			{
+				id: 'f0',
+				kind: 'feature',
+				layer: 0,
+				position: 1,
+				feature: 7,
+				activation: 2,
+				influence: 0.6,
+			},
+			{
+				id: 'f1',
+				kind: 'feature',
+				layer: 1,
+				position: 1,
+				feature: 3,
+				activation: 1.5,
+				influence: 0.4,
+			},
+			{ id: 'e1', kind: 'error', layer: 1, position: 1, influence: 0.7 },
+			{ id: 'l1', kind: 'logit', position: 1, influence: 0, token: ' is', probability: 0.6 },
+			{ id: 'l2', kind: 'logit', position: 1, influence: 0, token: ',', probability: 0.2 },
+		],
+		edges: [
+			{ source: 't1', target: 'f0', weight: 2 },
+			{ source: 'f0', target: 'f1', weight: 1 },
+			{ source: 'f1', target: 'l1', weight: 3 },
+			{ source: 'e1', target: 'l1', weight: -0.5 },
+			{ source: 'f1', target: 'l2', weight: 0.25 },
+		],
+		dropped_edges: 0,
+	} as BuiltGraph;
 }

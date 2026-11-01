@@ -6,12 +6,14 @@
 	import ComparePane from '#lib/components/lab/ComparePane.svelte';
 	import EditsPanel from '#lib/components/lab/EditsPanel.svelte';
 	import ExperimentsSheet from '#lib/components/lab/ExperimentsSheet.svelte';
+	import GraphPane from '#lib/components/lab/GraphPane.svelte';
 	import LabPromptPane from '#lib/components/lab/LabPromptPane.svelte';
 	import NeuronInspector from '#lib/components/lab/NeuronInspector.svelte';
 	import SteerSheet from '#lib/components/lab/SteerSheet.svelte';
 	import type { Experiment, NeuronsRun } from '#lib/api/types.ts';
 	import { Edits, Generator, Steering } from '#lib/lab/edits.svelte.ts';
 	import { Experiments } from '#lib/lab/experiments.svelte.ts';
+	import { Grapher } from '#lib/lab/grapher.svelte.ts';
 	import {
 		type Cell,
 		cellValues,
@@ -31,10 +33,11 @@
 	const generator = new Generator();
 	const steering = new Steering();
 	const experiments = new Experiments('neurons');
+	const grapher = new Grapher();
 
 	let steerOpen = $state(false);
 	let savedOpen = $state(false);
-	let pane = $state<'grid' | 'compare'>('grid');
+	let pane = $state<'grid' | 'compare' | 'graph'>('grid');
 
 	let promptOpen = $state(false);
 	let detailOpen = $state(false);
@@ -52,6 +55,8 @@
 	let signed = $derived(inspector.signal === 'neuron');
 	let model = $derived(reading?.model ?? data.status?.model ?? null);
 	let saes = $derived(model?.saes?.state === 'ready' ? model.saes : null);
+	// Null when this Lab has no graph builder, and the Graph pane is not offered.
+	let graphTokens = $derived(data.status?.graph_max_prompt_tokens ?? null);
 
 	// Null when Lab has no database, and saving is not offered at all.
 	let retentionDays = $derived(data.status?.experiment_retention_days ?? null);
@@ -161,10 +166,18 @@
 				value={pane}
 				onValueChange={(value) => {
 					if (value === 'grid' || value === 'compare') pane = value;
+					if (value === 'graph') {
+						// Start from the prompt being read, which is usually the one to trace.
+						if (!grapher.prompt) grapher.prompt = inspector.prompt;
+						pane = value;
+					}
 				}}
 			>
 				<ToggleGroup.Item value="grid" class="text-xs">Grid</ToggleGroup.Item>
 				<ToggleGroup.Item value="compare" class="text-xs">Compare</ToggleGroup.Item>
+				{#if graphTokens !== null && model}
+					<ToggleGroup.Item value="graph" class="text-xs">Graph</ToggleGroup.Item>
+				{/if}
 			</ToggleGroup.Root>
 
 			{#if pane === 'grid'}
@@ -243,6 +256,15 @@
 		{#if pane === 'compare'}
 			<div class="min-h-0 flex-1 bg-card">
 				<ComparePane {generator} />
+			</div>
+		{:else if pane === 'graph' && graphTokens !== null && model}
+			<div class="min-h-0 flex-1 bg-card">
+				<GraphPane
+					{grapher}
+					numLayers={model.num_layers}
+					maxPromptTokens={graphTokens}
+					transcoders={model.transcoders ?? null}
+				/>
 			</div>
 		{:else}
 		<div class="relative min-h-0 flex-1 overflow-auto overscroll-contain bg-card">
