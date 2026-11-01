@@ -23,9 +23,12 @@ from primer_contracts.lab import (
     LocalModel,
     ModelSwitch,
     Probe,
+    SaeStatus,
     SteeringVector,
+    TranscoderStatus,
 )
 
+from primer_lab.attachment import Attachment
 from primer_lab.config import Settings
 from primer_lab.labels import FeatureLabels
 from primer_lab.loader import (
@@ -39,8 +42,9 @@ from primer_lab.loader import (
 from primer_lab.owned import Owned
 from primer_lab.queue import RunQueue, RunTimedOut
 from primer_lab.reference import References
-from primer_lab.saes import Attachment, SaeSet, fetch_saes
+from primer_lab.saes import SaeSet, fetch_saes
 from primer_lab.sources import Hub, ModelUnavailable, check_allowed, resolve
+from primer_lab.transcoders import TranscoderSet, fetch_transcoders
 
 if TYPE_CHECKING:
     # Probes are trained by routes that need the resident, so the import is one way at runtime.
@@ -63,7 +67,8 @@ class SwitchInProgress(RuntimeError):
 class Resident:
     reference: HubModel | LocalModel
     loaded: LoadedModel
-    saes: Attachment | None = None
+    saes: Attachment[SaeSet, SaeStatus] | None = None
+    transcoders: Attachment[TranscoderSet, TranscoderStatus] | None = None
     #: Made on this model and meaningless on any other, so they go with it.
     vectors: Owned[SteeringVector, torch.Tensor] = field(default_factory=Owned)
     probes: Owned[Probe, Fitted] = field(default_factory=Owned)
@@ -72,6 +77,10 @@ class Resident:
     @property
     def ready_saes(self) -> SaeSet | None:
         return self.saes.ready if self.saes else None
+
+    @property
+    def ready_transcoders(self) -> TranscoderSet | None:
+        return self.transcoders.ready if self.transcoders else None
 
     def status(self) -> LabModelStatus:
         plan = self.loaded.plan
@@ -83,6 +92,7 @@ class Resident:
             dtype=plan.dtype,
             num_layers=self.loaded.num_layers,
             saes=self.saes.status if self.saes else None,
+            transcoders=self.transcoders.status if self.transcoders else None,
         )
 
 
@@ -156,20 +166,42 @@ class ModelHost:
             )
         else:
             self.switch = None
-            if self.resident is not None and self.resident.saes is not None:
-                await self._attach_saes(self.resident, self.resident.saes)
+            resident = self.resident
+            if resident is not None and resident.saes is not None:
+                await self._attach(
+                    resident,
+                    resident.saes,
+                    fetch_saes,
+                    lambda saes: saes.labelled(self._labels.get(saes.repository)),
+                    "The SAEs passed Lab's checks but could not be opened.",
+                )
+            if resident is not None and resident.transcoders is not None:
+                await self._attach(
+                    resident,
+                    resident.transcoders,
+                    fetch_transcoders,
+                    lambda transcoders: transcoders,
+                    "The transcoders passed Lab's checks but could not be read.",
+                )
 
-    async def _attach_saes(self, resident: Resident, attachment: Attachment) -> None:
-        """Fetch the resident's SAEs beside whatever runs, and say how it went.
+    async def _attach[Ready: SaeSet | TranscoderSet, Status: (SaeStatus, TranscoderStatus)](
+        self,
+        resident: Resident,
+        attachment: Attachment[Ready, Status],
+        fetch: Callable[..., Ready],
+        finish: Callable[[Ready], Ready],
+        unexpected: str,
+    ) -> None:
+        """Fetch something for the resident beside whatever runs, and say how it went.
 
         Part of the switch's task, so waiting for a switch waits for these
         too, but after the switch is reported done: the model answers runs
-        while the SAEs download. A failure here leaves the model as it is.
+        while they download. A failure here leaves the model as it is.
         """
         config = resident.loaded.model.config
         try:
-            saes = await asyncio.to_thread(
-                fetch_saes,
+            ready = await asyncio.to_thread(
+                fetch,
                 self._settings,
                 attachment.status.repository,
                 self._hub,
@@ -179,18 +211,29 @@ class ModelHost:
         except ModelUnavailable as error:
             attachment.failed(str(error))
         except Exception:
-            logger.exception("attaching SAEs failed")
-            attachment.failed("The SAEs passed Lab's checks but could not be opened.")
+            logger.exception("attaching %s failed", attachment.status.repository)
+            attachment.failed(unexpected)
         else:
-            attachment.attached(saes.labelled(self._labels.get(saes.repository)))
+            attachment.attached(finish(ready))
 
-    def _saes_for(self, reference: HubModel | LocalModel) -> Attachment | None:
-        # By repository alone: an operator maps a model to the SAEs trained
-        # for it, and a revision of the same model is still that model.
+    # Both by repository alone: an operator maps a model to what was
+    # trained for it, and a revision of the same model is still that model.
+
+    def _saes_for(self, reference: HubModel | LocalModel) -> Attachment[SaeSet, SaeStatus] | None:
         if isinstance(reference, LocalModel):
             return None
         repository = self._settings.lab_saes.get(reference.repository)
-        return Attachment(repository) if repository else None
+        return Attachment(repository, SaeStatus) if repository else None
+
+    def _transcoders_for(
+        self, reference: HubModel | LocalModel
+    ) -> Attachment[TranscoderSet, TranscoderStatus] | None:
+        # Without a builder there is nothing to build a graph with, and no
+        # reason to fetch 60 GB for it.
+        if isinstance(reference, LocalModel) or self._settings.lab_graph_python is None:
+            return None
+        repository = self._settings.lab_transcoders.get(reference.repository)
+        return Attachment(repository, TranscoderStatus) if repository else None
 
     def _replace(self, reference: HubModel | LocalModel, plan: LoadPlan) -> None:
         """Swap the resident model, on the queue's thread.
@@ -203,19 +246,23 @@ class ModelHost:
         """
         # Only what is needed to load it again: holding the old Resident
         # here would hold its weights, and the release would free nothing.
-        # Its SAEs are kept: they are memory-mapped files, not the weights.
+        # Its SAEs and transcoders are kept: they are files, not the weights.
         old = self.resident
-        restore = (old.reference, old.loaded.plan, old.saes) if old else None
+        restore = (old.reference, old.loaded.plan, old.saes, old.transcoders) if old else None
         old = self.resident = None
         _release()
         try:
             loaded = load_model(plan, self._factory)
-            self.resident = Resident(reference, loaded, self._saes_for(reference))
+            self.resident = Resident(
+                reference, loaded, self._saes_for(reference), self._transcoders_for(reference)
+            )
         except BaseException:
             _release()
             if restore is not None:
-                reference, plan, saes = restore
-                self.resident = Resident(reference, load_model(plan, self._factory), saes)
+                reference, plan, saes, transcoders = restore
+                self.resident = Resident(
+                    reference, load_model(plan, self._factory), saes, transcoders
+                )
             raise
 
     def _failed(self, reference: HubModel | LocalModel, message: str) -> None:

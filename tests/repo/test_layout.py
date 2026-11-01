@@ -105,7 +105,16 @@ def test_every_locked_image_copies_every_workspace_member() -> None:
     and refuses to build. Each new service has to be added to every image,
     and this is where forgetting that fails, rather than in CI's image job.
     """
-    members = sorted(path.parent for path in REPO_ROOT.glob("services/*/pyproject.toml"))
+    # Read from the workspace rather than the directory: the graph builder
+    # sits under services/ with a lock of its own (ADR 0009), and is no
+    # member for an image to carry.
+    workspace = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text())["tool"]["uv"]["workspace"]
+    excluded = {REPO_ROOT / path for path in workspace.get("exclude", [])}
+    members = sorted(
+        path.parent
+        for path in REPO_ROOT.glob("services/*/pyproject.toml")
+        if path.parent not in excluded
+    )
     images = [
         path
         for path in sorted((REPO_ROOT / "deploy/images").glob("Dockerfile.*"))

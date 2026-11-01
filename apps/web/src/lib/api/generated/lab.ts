@@ -101,6 +101,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/lab/graph": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Build an attribution graph for a prompt
+         * @description Traces which transcoder features carried the prompt to the token it names, or to the tokens the model found likeliest, and returns the graph pruned to the nodes and edges with the most influence. The prompt is read as plain text, without a chat template. A build holds the model while it runs, and takes seconds on a GPU and far longer on a CPU.
+         */
+        post: operations["graph_api_v1_lab_graph_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/lab/inspect": {
         parameters: {
             query?: never;
@@ -338,6 +358,26 @@ export interface components {
             request: components["schemas"]["LabScoreRequest"];
             result?: components["schemas"]["LabScored"] | null;
         };
+        /** AttributionGraph */
+        AttributionGraph: {
+            graph: components["schemas"]["BuiltGraph"];
+            model: components["schemas"]["LabModelStatus"];
+            transcoders: components["schemas"]["TranscoderStatus"];
+        };
+        /**
+         * BuiltGraph
+         * @description A pruned graph, as the builder returns it.
+         */
+        BuiltGraph: {
+            /** Dropped Edges */
+            dropped_edges: number;
+            /** Edges */
+            edges: components["schemas"]["GraphEdge"][];
+            /** Nodes */
+            nodes: components["schemas"]["GraphNode"][];
+            /** Tokens */
+            tokens: string[];
+        };
         /**
          * EntropyEstimate
          * @description How much of each next-token distribution the score could see.
@@ -508,6 +548,56 @@ export interface components {
              */
             type: "queued";
         };
+        /** GraphEdge */
+        GraphEdge: {
+            /** Source */
+            source: string;
+            /** Target */
+            target: string;
+            /** Weight */
+            weight: number;
+        };
+        /** GraphNode */
+        GraphNode: {
+            /** Activation */
+            activation?: number | null;
+            /** Feature */
+            feature?: number | null;
+            /** Id */
+            id: string;
+            /** Influence */
+            influence: number;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "feature" | "error" | "token" | "logit";
+            /** Layer */
+            layer?: number | null;
+            /** Position */
+            position: number;
+            /** Probability */
+            probability?: number | null;
+            /** Token */
+            token?: string | null;
+        };
+        /** GraphRequest */
+        GraphRequest: {
+            /**
+             * Edge Threshold
+             * @default 0.98
+             */
+            edge_threshold: number;
+            /**
+             * Node Threshold
+             * @default 0.8
+             */
+            node_threshold: number;
+            /** Prompt */
+            prompt: string;
+            /** Target */
+            target?: string | null;
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -650,6 +740,7 @@ export interface components {
             /** Reference */
             reference: components["schemas"]["HubModel"] | components["schemas"]["LocalModel"];
             saes?: components["schemas"]["SaeStatus"] | null;
+            transcoders?: components["schemas"]["TranscoderStatus"] | null;
         };
         /** LabScanRequest */
         LabScanRequest: {
@@ -709,6 +800,8 @@ export interface components {
             can_choose_model: boolean;
             /** Experiment Retention Days */
             experiment_retention_days?: number | null;
+            /** Graph Max Prompt Tokens */
+            graph_max_prompt_tokens?: number | null;
             /** Max Model Bytes */
             max_model_bytes: number;
             /** Max New Tokens */
@@ -1137,6 +1230,28 @@ export interface components {
              */
             truncated_entropy_bits?: number | null;
         };
+        /**
+         * TranscoderStatus
+         * @description The transcoders an attribution graph is built from, if any.
+         *
+         *     Fetched after the model loads, like SAEs, and much larger: a set for
+         *     Qwen3-4B is about 60 GB. A graph cannot be built until they are ready.
+         */
+        TranscoderStatus: {
+            /** Commit */
+            commit?: string | null;
+            /** Error */
+            error?: string | null;
+            /** Repository */
+            repository: string;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "fetching" | "ready" | "failed";
+            /** Width */
+            width?: number | null;
+        };
         /** ValidationError */
         ValidationError: {
             /** Context */
@@ -1391,6 +1506,39 @@ export interface operations {
                 };
                 content: {
                     "text/event-stream": string & (components["schemas"]["GenerationQueued"] | components["schemas"]["GeneratedToken"] | components["schemas"]["GenerationCompleted"] | components["schemas"]["GenerationFailed"]);
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    graph_api_v1_lab_graph_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GraphRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AttributionGraph"];
                 };
             };
             /** @description Validation Error */

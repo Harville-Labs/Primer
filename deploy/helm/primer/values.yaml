@@ -487,6 +487,20 @@ lab:
   # Lines file, as a path inside the weights volume. Read at startup, and
   # a malformed file stops Lab starting. Nothing is fetched to label them.
   featureLabels: {}
+  # Attribution graphs: the Graph view in Neurons, which traces which
+  # transcoder features carried a prompt to a prediction (ADR 0009). Needs
+  # lab.gpu, uses the `-graphs` image, and fetches a model's transcoders
+  # once it loads - about 60GB for Qwen3-4B, so size persistence for that
+  # beside the models. A build loads a second copy of the model while it
+  # runs, so the GPU needs room for two.
+  graphs:
+    enabled: false
+    # The transcoders for each model, by repository. A model with none
+    # loads as usual and offers no graphs.
+    transcoders:
+      Qwen/Qwen3-4B: mwhanna/qwen3-4b-transcoders
+    # The largest transcoder set fetched, in bytes, checked before download.
+    maxTranscoderBytes: 70000000000
   # A hub mirror, for a cluster that cannot reach huggingface.co.
   hubEndpoint: ""
   device: auto     # auto, cpu, or cuda

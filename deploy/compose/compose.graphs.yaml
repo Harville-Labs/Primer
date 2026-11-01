@@ -1,0 +1,16 @@
+# Lab with attribution graphs (ADR 0009). Add this file after the GPU one,
+# whose device reservation it relies on:
+#
+#   COMPOSE_PROFILES=lab docker compose -f compose.yaml \
+#     -f deploy/compose/compose.gpu.yaml -f deploy/compose/compose.graphs.yaml up --wait
+#
+# It builds the CUDA image with the graph builder installed beside Lab, and
+# Lab then fetches each model's transcoders once that model loads - about
+# 60GB for Qwen3-4B, into the same lab-models volume as the weights.
+services:
+  migrate-lab:
+    build:
+      target: graphs
+  lab:
+    build:
+      target: graphs

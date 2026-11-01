@@ -97,9 +97,11 @@ jobs:
             dockerfile: deploy/images/Dockerfile.worker
           - name: primer-web
             dockerfile: deploy/images/Dockerfile.gui
-          # Lab twice, from one Dockerfile: the CPU build under the plain
-          # tags and the CUDA build under the same tags with `-cuda`, which
-          # is what the chart's lab.gpu switches to.
+          # Lab three times, from one Dockerfile: the CPU build under the
+          # plain tags, the CUDA build under the same tags with `-cuda`,
+          # which is what the chart's lab.gpu switches to, and the CUDA
+          # build with the graph builder beside it under `-graphs`, which
+          # lab.graphs.enabled switches to.
           - name: primer-lab
             dockerfile: deploy/images/Dockerfile.lab
             target: cpu
@@ -107,6 +109,10 @@ jobs:
             dockerfile: deploy/images/Dockerfile.lab
             target: cuda
             suffix: -cuda
+          - name: primer-lab
+            dockerfile: deploy/images/Dockerfile.lab
+            target: graphs
+            suffix: -graphs
     steps:
       # The tag, explicitly. A release event's ref is already the tag, but a
       # manual re-run's is not, and building the wrong commit under a release

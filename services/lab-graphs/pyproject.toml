@@ -1,0 +1,55 @@
+[project]
+name = "primer-lab-graphs"
+version = "0.1.14"
+description = "Builds attribution graphs for Primer Lab, as a program Lab runs"
+requires-python = ">=3.13"
+dependencies = [
+    # 0.5.0 is the release whose transcoder loader reads the published
+    # Qwen3 sets; later ones changed its arguments. It pins transformer-lens
+    # 3.2, which needs transformers 4.x, and that is why this is not part
+    # of Primer's workspace.
+    "circuit-tracer==0.5.0",
+    # circuit-tracer 0.5 imports nnsight.intervention.tracing, which 0.8 removed.
+    "nnsight>=0.7,<0.8",
+    "primer-contracts",
+    "torch",
+]
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "ruff",
+    "ty",
+]
+
+[build-system]
+requires = ["uv_build>=0.12,<0.13"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "primer_graphs"
+
+[tool.uv.sources]
+primer-contracts = { path = "../../packages/contracts" }
+torch = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]
+
+#: As in Primer's own lock: the default Linux torch wheels carry a CUDA
+#: runtime. Lab's image reinstalls torch for CUDA where it needs it.
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.ruff]
+extend = "../../pyproject.toml"
+
+[tool.ruff.lint.extend-per-file-ignores]
+# A tokenizer's `unk_token` and `eos_token` are vocabulary entries, not passwords.
+"tests/**" = ["S101", "S106"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+
+[tool.ty.environment]
+python-version = "3.13"

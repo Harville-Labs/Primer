@@ -130,6 +130,34 @@ jobs:
         id: deploy
         uses: actions/deploy-pages@v4
 
+  lab-graphs:
+    # The graph builder has its own lock (ADR 0009), so the workspace job
+    # neither installs it nor runs its tests. Without this they would never run.
+    name: Lab graph builder (lint, types, tests)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/lab-graphs
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-dependency-glob: services/lab-graphs/uv.lock
+
+      - name: Install Python
+        run: uv python install 3.13
+
+      - name: Sync the builder
+        run: uv sync --locked
+
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      - run: uv run ty check
+      - run: uv run pytest tests -q
+
   chart:
     name: Chart (lint, render, package)
     runs-on: ubuntu-latest
@@ -184,9 +212,11 @@ jobs:
             dockerfile: deploy/images/Dockerfile.worker
           - name: primer-web
             dockerfile: deploy/images/Dockerfile.gui
-          # Lab twice, from one Dockerfile: the CPU build under the plain
-          # tags and the CUDA build under the same tags with `-cuda`, which
-          # is what the chart's lab.gpu switches to.
+          # Lab three times, from one Dockerfile: the CPU build under the
+          # plain tags, the CUDA build under the same tags with `-cuda`,
+          # which is what the chart's lab.gpu switches to, and the CUDA
+          # build with the graph builder beside it under `-graphs`, which
+          # lab.graphs.enabled switches to.
           - name: primer-lab
             dockerfile: deploy/images/Dockerfile.lab
             target: cpu
@@ -194,6 +224,10 @@ jobs:
             dockerfile: deploy/images/Dockerfile.lab
             target: cuda
             suffix: -cuda
+          - name: primer-lab
+            dockerfile: deploy/images/Dockerfile.lab
+            target: graphs
+            suffix: -graphs
     steps:
       - uses: actions/checkout@v5
 
