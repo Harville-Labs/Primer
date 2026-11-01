@@ -109,6 +109,9 @@ class LabStatus(WireModel):
     queue_depth: int = Field(ge=0)
     max_prompt_tokens: int = Field(ge=1)
     max_new_tokens: int = Field(ge=1)
+    #: How long a saved experiment is kept. None when this Lab has no
+    #: database, and so cannot save experiments at all.
+    experiment_retention_days: int | None = Field(default=None, ge=1)
 
 
 #: How many tokens the logit lens reports at each layer and position.

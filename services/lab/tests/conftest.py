@@ -20,7 +20,14 @@ from huggingface_hub.errors import RepositoryNotFoundError
 from huggingface_hub.utils import filter_repo_objects
 from lab_support import MODEL, SAES, TINY, build_saes, build_tiny_model, lab, lab_with_saes, settle
 from nnterp import StandardizedTransformer
+from primer_lab.migrations import upgrade_to_head
 from primer_lab.sources import Listing
+from primer_lab.tables import LAB_SCHEMA, Base
+from primer_service.db import Database, as_sync_url
+from sqlalchemy import create_engine, text
+from testcontainers.community.postgres import PostgresContainer
+
+POSTGRES_IMAGE = "postgres:17"
 
 
 @pytest.fixture(scope="session")
@@ -141,5 +148,63 @@ def with_saes(weights_dir, hub, factory, published, tmp_path) -> Iterator[TestCl
 def shared(weights_dir, hub, factory) -> Iterator[TestClient]:
     """Lab behind the proxy, so requests can come from different people."""
     with lab(weights_dir, hub, factory, auth_mode="oidc") as client:
+        settle(client)
+        yield client
+
+
+@pytest.fixture(scope="session")
+def postgres_url() -> Iterator[str]:
+    with PostgresContainer(POSTGRES_IMAGE, driver="asyncpg") as container:
+        yield container.get_connection_url()
+
+
+@pytest.fixture(scope="session")
+def migrated_url(postgres_url: str) -> str:
+    upgrade_to_head(postgres_url)
+    return postgres_url
+
+
+@pytest.fixture
+def scratch_db_url(postgres_url: str) -> Iterator[str]:
+    """A throwaway database in the same container, for destructive tests."""
+    admin = create_engine(as_sync_url(postgres_url), isolation_level="AUTOCOMMIT")
+    name = "primer_lab_scratch"
+    try:
+        with admin.connect() as connection:
+            connection.execute(text(f'DROP DATABASE IF EXISTS "{name}" WITH (FORCE)'))
+            connection.execute(text(f'CREATE DATABASE "{name}"'))
+        yield postgres_url.rsplit("/", 1)[0] + f"/{name}"
+        with admin.connect() as connection:
+            connection.execute(text(f'DROP DATABASE IF EXISTS "{name}" WITH (FORCE)'))
+    finally:
+        admin.dispose()
+
+
+@pytest.fixture
+def empty_tables(migrated_url: str) -> str:
+    """The migrated database with every Lab table emptied, taken from the metadata.
+
+    Synchronously, because the app under test runs its own event loop in
+    the test client, and an async engine's connections belong to one loop.
+    """
+    tables = ", ".join(f"{LAB_SCHEMA}.{table.name}" for table in Base.metadata.sorted_tables)
+    engine = create_engine(as_sync_url(migrated_url))
+    try:
+        with engine.begin() as connection:
+            connection.execute(text(f"TRUNCATE {tables}"))
+    finally:
+        engine.dispose()
+    return migrated_url
+
+
+@pytest.fixture
+def saving(weights_dir, hub, factory, empty_tables) -> Iterator[TestClient]:
+    """Lab behind the proxy with a database, so experiments can be saved.
+
+    A database per client: the app disposes it at shutdown, and its pooled
+    connections belong to the client's event loop.
+    """
+    database = Database(empty_tables)
+    with lab(weights_dir, hub, factory, database=database, auth_mode="oidc") as client:
         settle(client)
         yield client

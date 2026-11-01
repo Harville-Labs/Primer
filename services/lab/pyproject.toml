@@ -4,6 +4,8 @@ version = "0.1.14"
 description = "Primer Lab: look inside a small open model and edit how it runs"
 requires-python = ">=3.13"
 dependencies = [
+    "alembic",
+    "asyncpg",
     "fastapi",
     "huggingface-hub",
     # nnterp 1.3 imports nnsight.intervention.tracing, which 0.8 removed.
@@ -13,14 +15,20 @@ dependencies = [
     "primer-contracts",
     "primer-observability",
     "primer-service",
+    "psycopg[binary]",
     "pydantic-settings",
     "safetensors",
     "scikit-learn",
+    "scipy",
+    "sqlalchemy[asyncio]",
     "torch",
     "transformers",
 ]
 
 [dependency-groups]
+dev = [
+    "testcontainers[postgres]",
+]
 server = [
     "uvicorn[standard]",
 ]

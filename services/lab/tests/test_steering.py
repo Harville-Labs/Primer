@@ -9,21 +9,14 @@ import pytest
 import torch
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from lab_owned import VECTOR_NEGATIVE as NEGATIVE
+from lab_owned import VECTOR_POSITIVE as POSITIVE
+from lab_owned import make
 from lab_streams import completed, generate
 from lab_support import as_user
 from primer_lab.owned import MAX_PER_OWNER, Owned
 from primer_lab.steering import difference_of_means, made_vector
 from primer_service.identity import LOCAL_SUBJECT, user_id_for_subject
-
-POSITIVE = ["hello world", "w1 w2 w3"]
-NEGATIVE = ["w9 w8", "w4 w5 w6 w7"]
-
-
-def make(client: TestClient, *, headers: dict[str, str] | None = None, **body: Any) -> Any:
-    request = {"label": "test", "layer": 1, "positive": POSITIVE, "negative": NEGATIVE}
-    return client.post(
-        "/api/v1/lab/vectors", json=request | {"chat": False} | body, headers=headers
-    )
 
 
 def last_residual(client: TestClient, prompt: str, layer: int) -> torch.Tensor:

@@ -88,6 +88,36 @@
         "title": "ActivationVector",
         "type": "object"
       },
+      "AnomaliesRun": {
+        "additionalProperties": false,
+        "description": "A score with Lab's detectors, from the Anomalies tab.",
+        "properties": {
+          "kind": {
+            "const": "anomalies",
+            "default": "anomalies",
+            "title": "Kind",
+            "type": "string"
+          },
+          "request": {
+            "$ref": "#/components/schemas/LabScoreRequest"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LabScored"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "request"
+        ],
+        "title": "AnomaliesRun",
+        "type": "object"
+      },
       "EntropyEstimate": {
         "description": "How much of each next-token distribution the score could see.",
         "enum": [
@@ -112,6 +142,182 @@
         ],
         "title": "ErrorCode",
         "type": "string"
+      },
+      "Experiment": {
+        "additionalProperties": false,
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "title": "Expires At",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "neurons",
+              "anomalies"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "model": {
+            "$ref": "#/components/schemas/LabModelStatus"
+          },
+          "probes": {
+            "items": {
+              "$ref": "#/components/schemas/Probe"
+            },
+            "title": "Probes",
+            "type": "array"
+          },
+          "run": {
+            "discriminator": {
+              "mapping": {
+                "anomalies": "#/components/schemas/AnomaliesRun",
+                "neurons": "#/components/schemas/NeuronsRun"
+              },
+              "propertyName": "kind"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/NeuronsRun"
+              },
+              {
+                "$ref": "#/components/schemas/AnomaliesRun"
+              }
+            ],
+            "title": "Run"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "vectors": {
+            "items": {
+              "$ref": "#/components/schemas/SteeringVector"
+            },
+            "title": "Vectors",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "title",
+          "model",
+          "created_at",
+          "expires_at",
+          "run",
+          "vectors",
+          "probes"
+        ],
+        "title": "Experiment",
+        "type": "object"
+      },
+      "ExperimentCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "run": {
+            "discriminator": {
+              "mapping": {
+                "anomalies": "#/components/schemas/AnomaliesRun",
+                "neurons": "#/components/schemas/NeuronsRun"
+              },
+              "propertyName": "kind"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/NeuronsRun"
+              },
+              {
+                "$ref": "#/components/schemas/AnomaliesRun"
+              }
+            ],
+            "title": "Run"
+          },
+          "title": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "title",
+          "run"
+        ],
+        "title": "ExperimentCreate",
+        "type": "object"
+      },
+      "ExperimentRename": {
+        "additionalProperties": false,
+        "properties": {
+          "title": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "title"
+        ],
+        "title": "ExperimentRename",
+        "type": "object"
+      },
+      "ExperimentSummary": {
+        "additionalProperties": false,
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "title": "Expires At",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "neurons",
+              "anomalies"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "model": {
+            "$ref": "#/components/schemas/LabModelStatus"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "title",
+          "model",
+          "created_at",
+          "expires_at"
+        ],
+        "title": "ExperimentSummary",
+        "type": "object"
       },
       "GenerateRequest": {
         "additionalProperties": false,
@@ -784,6 +990,18 @@
             "title": "Can Choose Model",
             "type": "boolean"
           },
+          "experiment_retention_days": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Experiment Retention Days"
+          },
           "max_model_bytes": {
             "minimum": 1.0,
             "title": "Max Model Bytes",
@@ -1042,6 +1260,36 @@
           "state"
         ],
         "title": "ModelSwitch",
+        "type": "object"
+      },
+      "NeuronsRun": {
+        "additionalProperties": false,
+        "description": "A generation with edits, from the Neurons tab.",
+        "properties": {
+          "kind": {
+            "const": "neurons",
+            "default": "neurons",
+            "title": "Kind",
+            "type": "string"
+          },
+          "request": {
+            "$ref": "#/components/schemas/GenerateRequest"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GenerationCompleted"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "request"
+        ],
+        "title": "NeuronsRun",
         "type": "object"
       },
       "Outliers": {
@@ -1713,6 +1961,242 @@
         ]
       }
     },
+    "/api/v1/lab/experiments": {
+      "get": {
+        "operationId": "list_experiments_api_v1_lab_experiments_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ExperimentSummary"
+                  },
+                  "title": "Response List Experiments Api V1 Lab Experiments Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Your saved experiments, newest first",
+        "tags": [
+          "lab"
+        ]
+      },
+      "post": {
+        "operationId": "save_experiment_api_v1_lab_experiments_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExperimentCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Experiment"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Save an experiment",
+        "tags": [
+          "lab"
+        ]
+      }
+    },
+    "/api/v1/lab/experiments/{experiment_id}": {
+      "delete": {
+        "operationId": "delete_experiment_api_v1_lab_experiments__experiment_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "experiment_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Experiment Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete one of your saved experiments",
+        "tags": [
+          "lab"
+        ]
+      },
+      "get": {
+        "operationId": "get_experiment_api_v1_lab_experiments__experiment_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "experiment_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Experiment Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Experiment"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "One of your saved experiments",
+        "tags": [
+          "lab"
+        ]
+      },
+      "patch": {
+        "operationId": "rename_experiment_api_v1_lab_experiments__experiment_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "experiment_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Experiment Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExperimentRename"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExperimentSummary"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Rename one of your saved experiments",
+        "tags": [
+          "lab"
+        ]
+      }
+    },
+    "/api/v1/lab/experiments/{experiment_id}/restore": {
+      "post": {
+        "description": "Holds the experiment's steering vectors and probes for you again, under the ids its run names, so the run can be repeated as it was saved. Only onto the model and commit it was saved on: a vector is a direction in one model's residual stream.",
+        "operationId": "restore_experiment_api_v1_lab_experiments__experiment_id__restore_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "experiment_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Experiment Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Experiment"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Put a saved experiment's vectors and probes back on the model",
+        "tags": [
+          "lab"
+        ]
+      }
+    },
     "/api/v1/lab/generate": {
       "post": {
         "description": "Generates greedily from the prompt twice, first as the model is and then with the interventions applied at every step, and streams both answers token by token as server-sent events. A request that cannot run is refused before the stream opens; one that fails once it has started ends the stream with an `error` event.",
@@ -2080,7 +2564,7 @@
     },
     "/health/ready": {
       "get": {
-        "description": "Ready to answer, whether or not a model is resident yet.\n\nGating this on the model looks right and is a trap: an unready pod\nis taken out of its Service, so after a failed load nobody could\nreach Lab to choose a model that works. Whether runs can be made is\nthe status route's `ready`, which the web app reads.",
+        "description": "Ready to answer, whether or not a model is resident yet.\n\nGating this on the model looks right and is a trap: an unready pod\nis taken out of its Service, so after a failed load nobody could\nreach Lab to choose a model that works. Whether runs can be made is\nthe status route's `ready`, which the web app reads. The database is\nleft out for the same reason: without it only saving fails, and the\nsaving routes say so.",
         "operationId": "ready_health_ready_get",
         "responses": {
           "200": {

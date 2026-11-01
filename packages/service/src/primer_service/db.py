@@ -14,7 +14,7 @@ own their own connections without fighting over process state.
 
 from __future__ import annotations
 
-from collections.abc import AsyncGenerator, AsyncIterator
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
 from fastapi import Request
@@ -94,7 +94,7 @@ class Database:
         await self.engine.dispose()
 
 
-async def get_session(request: Request) -> AsyncIterator[AsyncSession]:
+async def get_session(request: Request) -> AsyncGenerator[AsyncSession]:
     """FastAPI dependency yielding a per-request transactional session."""
     database: Database = request.app.state.database
     async with database.session() as session:

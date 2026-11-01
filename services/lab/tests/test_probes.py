@@ -2,21 +2,13 @@
 
 from __future__ import annotations
 
-from typing import Any
-
 import numpy as np
 import pytest
-from fastapi.testclient import TestClient
+from lab_owned import PROBE_POSITIVE as POSITIVE
+from lab_owned import train
 from lab_support import as_user
-from primer_lab.probes import fit_probe
-
-POSITIVE = ["hello world", "w1 w2 w3", "w1 w3", "w2 w1 w3"]
-NEGATIVE = ["w9 w8", "w4 w5 w6 w7", "w5 w4", "w8 w9 w7"]
-
-
-def train(client: TestClient, *, headers: dict[str, str] | None = None, **body: Any) -> Any:
-    request = {"label": "test", "layer": 1, "positive": POSITIVE, "negative": NEGATIVE}
-    return client.post("/api/v1/lab/probes", json=request | {"chat": False} | body, headers=headers)
+from primer_lab.probes import fit_probe, probability
+from sklearn.linear_model import LogisticRegression
 
 
 def synthetic(shuffled: bool) -> tuple[np.ndarray, np.ndarray]:
@@ -48,9 +40,19 @@ def test_a_probe_on_shuffled_labels_is_near_chance_and_says_so():
     rows, labels = synthetic(shuffled=True)
     fitted = fit_probe(rows, labels)
 
-    assert fitted.regression.score(rows, labels) > 0.9
+    training = np.mean((np.array(probability(fitted, rows)) > 0.5) == labels)
+    assert training > 0.9
     assert abs(fitted.accuracy - 0.5) < 0.2
     assert not fitted.beats_chance
+
+
+def test_a_probe_reads_rows_as_the_regression_it_was_fitted_as():
+    """Kept as weights so it can be saved; it must still answer as scikit-learn would."""
+    rows, labels = synthetic(shuffled=False)
+    fitted = fit_probe(rows, labels)
+
+    expected = LogisticRegression(max_iter=1000).fit(rows, labels).predict_proba(rows)[:, 1]
+    assert probability(fitted, rows) == pytest.approx(expected.tolist(), abs=1e-9)
 
 
 def test_chance_is_the_larger_set_s_share():
