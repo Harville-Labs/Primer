@@ -18,6 +18,7 @@ from primer_service.errors import ProblemError, problem_response, rendered, vali
 from primer_lab import __version__, editing, experiments, probes, saved, scan, scoring
 from primer_lab.config import Settings
 from primer_lab.host import ModelHost
+from primer_lab.labels import read_labels
 from primer_lab.loader import ModelFactory, resolve_device
 from primer_lab.queue import RunQueue
 from primer_lab.routes import router
@@ -67,7 +68,12 @@ def create_app(
     settings = settings or Settings()
     queue = RunQueue(max_waiting=settings.lab_max_waiting_runs)
     host = ModelHost(
-        settings, queue, hub or HuggingFaceHub(settings), factory, cuda_available=cuda_available
+        settings,
+        queue,
+        hub or HuggingFaceHub(settings),
+        factory,
+        cuda_available=cuda_available,
+        labels=read_labels(settings),
     )
     if database is None and settings.database_url:
         database = Database(settings.database_url)

@@ -66,6 +66,11 @@ class SaeStatus(WireModel):
     k: int | None = Field(default=None, ge=1)
     #: The layers an SAE was trained for. Every other layer has none.
     layers: list[int] = Field(default_factory=list)
+    #: Features the operator's labels file names. Zero without one.
+    labelled: int = Field(default=0, ge=0)
+    #: Why the operator's labels were not used: they were written for
+    #: other SAEs. The features still read, by index.
+    labels_error: str | None = Field(default=None, max_length=2000)
 
 
 class LabModelStatus(WireModel):
@@ -176,6 +181,10 @@ class LayerReadings(WireModel):
     #: which is not the same as no feature firing.
     feature_indices: list[list[int]] | None = None
     feature_activations: list[list[float]] | None = None
+    #: The operator's label for each feature in `feature_indices` that has
+    #: one, once per feature rather than once per position. None without
+    #: labels; a feature missing from it has none and is shown by index.
+    feature_labels: dict[int, str] | None = None
 
 
 class InspectResponse(WireModel):

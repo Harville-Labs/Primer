@@ -108,18 +108,24 @@ class Resolved:
     commit: str | None
 
 
-def local_directory(settings: Settings, model: LocalModel) -> Resolved:
-    """The operator's directory, confined to the weights volume.
+def in_volume(settings: Settings, relative: str | Path) -> Path | None:
+    """Where `relative` leads in the weights volume, or None if it leads out.
 
     Resolved before the comparison, so `..` and a symlink pointing out of
     the volume are both caught: what is checked is where the path actually
-    leads, not how it was spelled.
+    leads, not how it was spelled. The volume itself is not inside it.
     """
     root = settings.lab_weights_dir.resolve()
-    directory = (root / model.path).resolve()
-    if directory == root or not directory.is_relative_to(root):
+    target = (root / relative).resolve()
+    return target if target != root and target.is_relative_to(root) else None
+
+
+def local_directory(settings: Settings, model: LocalModel) -> Resolved:
+    """The operator's directory, confined to the weights volume."""
+    directory = in_volume(settings, model.path)
+    if directory is None:
         raise ModelUnavailable(f"{model.path!r} is not a directory inside the weights volume.")
-    if directory.is_relative_to(root / HUB_CACHE):
+    if directory.is_relative_to(settings.lab_weights_dir.resolve() / HUB_CACHE):
         raise ModelUnavailable(
             f"{model.path!r} is inside Lab's download cache. Name the repository instead."
         )

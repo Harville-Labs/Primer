@@ -91,6 +91,53 @@ are downloading, ready, or refused.
 To turn the feature view off, set `lab.saes: null` in the chart or
 `PRIMER_LAB_SAES={}` in Compose.
 
+### Feature labels
+
+A feature is shown by its index unless you give Lab a name for it.
+`lab.featureLabels` (`PRIMER_LAB_FEATURE_LABELS`) maps an SAE repository to
+a labels file in the weights volume:
+
+```yaml
+lab:
+  featureLabels:
+    Qwen/SAE-Res-Qwen3-1.7B-Base-W32K-L0_50: labels/qwen-scope.jsonl
+```
+
+The file is JSON Lines. The first line names the SAE repository it
+describes and, optionally, the commit the labels were written for. Every
+line after that labels one feature, at most 120 characters:
+
+```json
+{"sae": "Qwen/SAE-Res-Qwen3-1.7B-Base-W32K-L0_50", "commit": "..."}
+{"layer": 12, "index": 412, "label": "French words"}
+{"layer": 12, "index": 901, "label": "dates written as numbers"}
+```
+
+The Neurons tab shows a label under each feature that has one, and the
+edit list names a feature edit by its label. A feature with no line in the
+file is shown by its index.
+
+Lab reads the file once, when it starts, and calls nothing to label
+features: no feature a user looks at is sent anywhere. Two kinds of
+mistake are handled differently:
+
+- **A file Lab cannot read stops it starting.** The message names the file
+  and the line: a line that is not JSON, a negative index, a feature
+  labelled twice, a label that is too long, a path outside the weights
+  volume, or a first line naming a different SAE repository than the one
+  it is mapped to.
+- **Labels that do not fit the SAEs are not used.** That is known only
+  once the SAEs are fetched: a commit other than the one Lab fetched, a
+  layer the SAEs do not cover, or an index past their width. The features
+  still read, by index, and the Neurons tab says why there are no labels.
+  A label on the wrong feature would be worse than none.
+
+Published explanations, such as Neuronpedia's, can be converted into this
+format with a short script: one line per feature, keeping the layer, the
+index, and a short form of the explanation. Check the export's own layer
+and index numbering against the SAE repository's, and set `commit` if the
+explanations were made for a particular revision.
+
 ## Editing a run
 
 A generation runs the prompt twice, greedily: once as the model is, and

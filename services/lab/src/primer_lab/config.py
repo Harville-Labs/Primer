@@ -51,6 +51,11 @@ class Settings(BaseSettings):
         Annotated[str, Field(pattern=REPOSITORY_PATTERN)],
         Annotated[str, Field(pattern=REPOSITORY_PATTERN)],
     ] = Field(default_factory=lambda: dict.fromkeys(QWEN_SCOPE_MODELS, QWEN_SCOPE_SAES))
+    #: Labels for SAE features, by the SAE repository they describe: a JSON
+    #: Lines file in the weights volume, read at startup. See `labels`.
+    lab_feature_labels: dict[Annotated[str, Field(pattern=REPOSITORY_PATTERN)], Path] = Field(
+        default_factory=dict
+    )
     #: A mirror, for a deployment that cannot reach the public hub.
     lab_hub_endpoint: str | None = None
     lab_weights_dir: Path = Field(
