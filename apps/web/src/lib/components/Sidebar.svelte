@@ -22,6 +22,7 @@
 	import AuthModeWarning from '#lib/components/AuthModeWarning.svelte';
 	import ConversationList from '#lib/components/ConversationList.svelte';
 	import ThemeToggle from '#lib/components/ThemeToggle.svelte';
+	import { canScore } from '#lib/lab/anomalies.ts';
 
 	interface Props {
 		libraries: LibrarySummary[];
@@ -92,10 +93,14 @@
 		untrack(() => (expanded = sectionsFor(path)));
 	});
 
-	const LAB = [
-		{ href: '/lab/neurons', label: 'Neurons', icon: ScanLine },
-		{ href: '/lab/anomalies', label: 'Anomalies', icon: Activity },
-	];
+	// Neurons reads Lab's resident model; Anomalies can score a chat
+	// endpoint too, so it is offered wherever there is one.
+	let lab = $derived(
+		[
+			{ href: '/lab/neurons', label: 'Neurons', icon: ScanLine, show: capabilities.lab_available },
+			{ href: '/lab/anomalies', label: 'Anomalies', icon: Activity, show: true },
+		].filter((tab) => tab.show)
+	);
 
 	let sections = $derived(
 		[
@@ -119,7 +124,7 @@
 				label: 'Lab',
 				icon: FlaskConical,
 				count: 0,
-				show: capabilities.lab_available,
+				show: canScore(capabilities),
 			},
 		].filter((section) => section.show)
 	);
@@ -280,7 +285,7 @@
 							<ConversationList {conversations} {libraries} />
 						{:else}
 							<ul class="space-y-0.5">
-								{#each LAB as tab (tab.href)}
+								{#each lab as tab (tab.href)}
 									{@const current = inSection(tab.href)}
 									<li>
 										<a

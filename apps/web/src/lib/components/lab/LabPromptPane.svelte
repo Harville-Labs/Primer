@@ -4,6 +4,7 @@
 	import type { Snippet } from 'svelte';
 	import type { LabModelStatus, LabStatus } from '#lib/api/types.ts';
 	import type { Inspector } from '#lib/lab/inspector.svelte.ts';
+	import { modelName } from '#lib/lab/model.ts';
 
 	/** The prompt, the model it runs on, and what happened when it last ran. */
 	interface Props {
@@ -20,13 +21,7 @@
 	// The reading's own model over the status's: the status was read when the
 	// page loaded, and the grid beside this belongs to whatever ran it.
 	let model = $derived<LabModelStatus | null>(inspector.reading?.model ?? status?.model ?? null);
-	let name = $derived(
-		!model
-			? null
-			: model.reference.source === 'hub'
-				? model.reference.repository
-				: model.reference.path
-	);
+	let name = $derived(model ? modelName(model) : null);
 	let pinned = $derived(
 		model?.reference.source === 'hub' ? (model.commit ?? model.reference.revision) : null
 	);
