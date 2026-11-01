@@ -76,6 +76,15 @@
 	--radius-xl: 12px;
 
 	--tracking-header: -0.02em;
+
+	/* Lab's activation scale: the one place this theme spends colour on
+	   magnitude, because there the colour is the reading. Indigo ink for
+	   positive and vermilion for negative, so a neuron's sign is visible
+	   without reading a number. Mixed against the card, never layered over
+	   it, so a cell is the same colour wherever it sits. */
+	--color-lab-positive: hsl(236 52% 32%);
+	--color-lab-negative: hsl(12 78% 46%);
+	--color-on-lab: hsl(40 33% 99%);
 }
 
 /*
@@ -101,6 +110,10 @@
 	--color-accent-tint: hsl(232 14% 18%);
 	--elevation-float: 0 8px 24px -8px hsl(0 0% 0% / 0.45);
 	--elevation-modal: 0 16px 40px -16px hsl(0 0% 0% / 0.6);
+	/* Brighter ends against a dark card: deep ink would vanish into it. */
+	--color-lab-positive: hsl(228 92% 76%);
+	--color-lab-negative: hsl(14 92% 66%);
+	--color-on-lab: hsl(232 20% 10%);
 }
 
 /*

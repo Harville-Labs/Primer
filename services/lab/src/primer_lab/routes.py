@@ -168,11 +168,12 @@ async def _run[T](request: Request, resident: Resident, work: Callable[[], T]) -
 
 @router.post(
     "/inspect",
-    summary="Read the logit lens and top MLP neurons for a prompt",
+    summary="Read the logit lens, top MLP neurons and SAE features for a prompt",
     description=(
         "Runs the prompt through the resident model once and returns, for every layer and "
         "position, the residual stream's norm, the logit lens's likeliest tokens, and the "
-        "MLP neurons with the largest activations. Summaries, not raw activations: read "
+        "MLP neurons with the largest activations, and the strongest SAE features at layers "
+        "this deployment has SAEs for. Summaries, not raw activations: read "
         "one whole vector with the activation route."
     ),
 )
@@ -183,7 +184,11 @@ async def inspect(
     prompt = _prompt(request, resident, body)
     model = resident.loaded.model
     reading = await _run(
-        request, resident, lambda: inspect_prompt(model, prompt, neurons=body.neurons)
+        request,
+        resident,
+        lambda: inspect_prompt(
+            model, prompt, neurons=body.neurons, features=body.features, saes=resident.ready_saes
+        ),
     )
     return InspectResponse(
         model=resident.status(),

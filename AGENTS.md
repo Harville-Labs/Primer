@@ -239,7 +239,10 @@ difference is the whole content of the message someone reads.
   Assume operators may also run a web search MCP server.
 - Use Haystack, Docling, and other established libraries rather than
   hand-rolling parsing, chunking, embeddings, retrieval adapters, or tool
-  protocols.
+  protocols. One deliberate exception: Lab encodes SAE features itself, in
+  `services/lab/src/primer_lab/saes.py`, rather than through sae-lens,
+  which would add about thirty packages to the Lab image for an affine map
+  and a top-k.
 - **Tools are operator-controlled, user-approved, and isolated** through
   ephemeral MCP sandbox providers. Never expose the host shell.
 - The vector store is chosen per deployment and stays behind Haystack's

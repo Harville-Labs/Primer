@@ -61,6 +61,36 @@ itself. Lab never runs code that ships with a model, and refuses a directory
 that also holds pickled weights (`.bin`, `.pt`, `.ckpt`), because unpickling
 can run code: remove them.
 
+### SAE features
+
+The Neurons tab can show which sparse-autoencoder features fire at each
+token, for a model someone has trained SAEs for. You choose the SAEs, not
+your users. `lab.saes` (`PRIMER_LAB_SAES`) maps a model repository to the
+SAE repository Lab reads with it. By default it maps Qwen3-1.7B and
+Qwen3-1.7B-Base to Qwen's
+[Qwen-Scope](https://huggingface.co/Qwen/SAE-Res-Qwen3-1.7B-Base-W32K-L0_50)
+set: 32,768 features on the residual stream after each of the 28 layers.
+
+Before you keep that default, know three things about it:
+
+- **It is about 15GB**, on top of the model, in the same volume. It
+  downloads after the model has loaded, so the model is usable in the
+  meantime, and `lab.maxModelBytes` applies to it too.
+- **Its licence permits scientific research only.** Read the repository's
+  terms before you offer it to anyone.
+- **Its files are pickles.** Lab opens them with torch's weights-only
+  loader, which rebuilds tensors and refuses anything else, and it
+  downloads only `config.json` and the layer files the config names.
+  [ADR 0007](../adr/0007-lab-saes-as-weights-only-pickles.md) records why.
+
+Lab reads TopK SAEs on the residual stream laid out as Qwen-Scope's are,
+and refuses any other kind with the reason, rather than show features it
+has computed wrongly. The status in the Neurons tab says whether the SAEs
+are downloading, ready, or refused.
+
+To turn the feature view off, set `lab.saes: null` in the chart or
+`PRIMER_LAB_SAES={}` in Compose.
+
 ## Docker Compose
 
 Turn on the `lab` profile, and tell Control where Lab is so the web app

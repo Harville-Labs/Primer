@@ -7,11 +7,14 @@ reaches. See ADR 0005.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Literal
+from typing import Annotated, Literal
 
-from primer_contracts.lab import HubModel, LocalModel
+from primer_contracts.lab import REPOSITORY_PATTERN, HubModel, LocalModel
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+QWEN_SCOPE_SAES = "Qwen/SAE-Res-Qwen3-1.7B-Base-W32K-L0_50"
+QWEN_SCOPE_MODELS = ("Qwen/Qwen3-1.7B", "Qwen/Qwen3-1.7B-Base")
 
 
 class Settings(BaseSettings):
@@ -40,6 +43,14 @@ class Settings(BaseSettings):
     #: file list before a byte is downloaded. It is also the operator's way
     #: of keeping a model off this hardware that the hardware cannot hold.
     lab_max_model_bytes: int = Field(default=20_000_000_000, ge=1)
+    #: Sparse autoencoders to attach to a hub model, by the model's
+    #: repository, fetched once the model has loaded. Set as JSON. The
+    #: default is Qwen-Scope's for Qwen3-1.7B: trained on the base model,
+    #: and published as working on its post-trained checkpoint too.
+    lab_saes: dict[
+        Annotated[str, Field(pattern=REPOSITORY_PATTERN)],
+        Annotated[str, Field(pattern=REPOSITORY_PATTERN)],
+    ] = Field(default_factory=lambda: dict.fromkeys(QWEN_SCOPE_MODELS, QWEN_SCOPE_SAES))
     #: A mirror, for a deployment that cannot reach the public hub.
     lab_hub_endpoint: str | None = None
     lab_weights_dir: Path = Field(

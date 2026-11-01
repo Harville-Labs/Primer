@@ -1,6 +1,6 @@
 # 0005. Let Lab load a small open model of its own
 
-- Status: Accepted
+- Status: Accepted; superseded in part by [0007](0007-lab-saes-as-weights-only-pickles.md)
 - Date: 2026-10-31
 
 ## Context

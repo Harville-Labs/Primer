@@ -88,6 +88,7 @@ nav:
           - Qdrant only: adr/0004-qdrant-only.md
           - Lab local research model: adr/0005-lab-local-research-model.md
           - Library-wide questions: adr/0006-library-wide-questions-from-passages.md
+          - Lab SAEs as weights-only pickles: adr/0007-lab-saes-as-weights-only-pickles.md
   - Operations:
       - Configuration: operations/configuration.md
       - Connecting model providers: operations/providers.md
