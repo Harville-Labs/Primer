@@ -34,7 +34,7 @@ from primer_lab.identity import CurrentPrincipal
 from primer_lab.inspection import describe, special_ids
 from primer_lab.interventions import Comparison, InterventionRefused, compare, first_divergence
 from primer_lab.interventions import resolve as resolve_edits
-from primer_lab.routes import current_resident, read_prompt, refused, run_queued
+from primer_lab.routes import check_new_tokens, current_resident, read_prompt, refused, run_queued
 from primer_lab.steering import difference_of_means, last_token_residuals
 
 logger = logging.getLogger(__name__)
@@ -87,12 +87,7 @@ async def generate(
     resident = current_resident(request)
     prompt = read_prompt(request, resident, body)
     model = resident.loaded.model
-    if body.max_new_tokens > settings.lab_max_new_tokens:
-        raise refused(
-            "Too many new tokens",
-            f"This Lab generates at most {settings.lab_max_new_tokens} "
-            "(PRIMER_LAB_MAX_NEW_TOKENS).",
-        )
+    check_new_tokens(settings, body.max_new_tokens)
     if len(body.interventions) > settings.lab_max_interventions:
         raise refused(
             "Too many edits",

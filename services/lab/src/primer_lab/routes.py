@@ -132,6 +132,15 @@ def read_prompt(request: Request, resident: Resident, body: PromptInput) -> Prom
     return prompt
 
 
+def check_new_tokens(settings: Settings, wanted: int) -> None:
+    if wanted > settings.lab_max_new_tokens:
+        raise refused(
+            "Too many new tokens",
+            f"This Lab generates at most {settings.lab_max_new_tokens} "
+            "(PRIMER_LAB_MAX_NEW_TOKENS).",
+        )
+
+
 def refused(title: str, detail: str) -> ProblemError:
     return ProblemError(
         code=ErrorCode.VALIDATION_FAILED,

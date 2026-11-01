@@ -88,6 +88,15 @@
         "title": "ActivationVector",
         "type": "object"
       },
+      "EntropyEstimate": {
+        "description": "How much of each next-token distribution the score could see.",
+        "enum": [
+          "full",
+          "truncated"
+        ],
+        "title": "EntropyEstimate",
+        "type": "string"
+      },
       "ErrorCode": {
         "description": "Error codes clients may branch on. Values are part of the contract.",
         "enum": [
@@ -656,6 +665,74 @@
         "title": "LabModelStatus",
         "type": "object"
       },
+      "LabScoreRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "chat": {
+            "default": true,
+            "title": "Chat",
+            "type": "boolean"
+          },
+          "max_new_tokens": {
+            "default": 64,
+            "maximum": 2048.0,
+            "minimum": 1.0,
+            "title": "Max New Tokens",
+            "type": "integer"
+          },
+          "mode": {
+            "enum": [
+              "generate",
+              "text"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "prompt": {
+            "maxLength": 100000,
+            "minLength": 1,
+            "title": "Prompt",
+            "type": "string"
+          }
+        },
+        "required": [
+          "prompt",
+          "mode"
+        ],
+        "title": "LabScoreRequest",
+        "type": "object"
+      },
+      "LabScored": {
+        "additionalProperties": false,
+        "properties": {
+          "mode": {
+            "enum": [
+              "generate",
+              "text"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "model": {
+            "$ref": "#/components/schemas/LabModelStatus"
+          },
+          "score": {
+            "$ref": "#/components/schemas/SequenceScore"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "model",
+          "mode",
+          "text",
+          "score"
+        ],
+        "title": "LabScored",
+        "type": "object"
+      },
       "LabStatus": {
         "additionalProperties": false,
         "properties": {
@@ -1055,6 +1132,99 @@
         "title": "SaeStatus",
         "type": "object"
       },
+      "SequenceScore": {
+        "additionalProperties": false,
+        "properties": {
+          "estimate": {
+            "$ref": "#/components/schemas/EntropyEstimate"
+          },
+          "perplexity": {
+            "minimum": 1.0,
+            "title": "Perplexity",
+            "type": "number"
+          },
+          "spans": {
+            "items": {
+              "$ref": "#/components/schemas/Span"
+            },
+            "title": "Spans",
+            "type": "array"
+          },
+          "tokens": {
+            "items": {
+              "$ref": "#/components/schemas/TokenScore"
+            },
+            "title": "Tokens",
+            "type": "array"
+          },
+          "top_k": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "How many logprobs each truncated entropy saw.",
+            "title": "Top K"
+          }
+        },
+        "required": [
+          "estimate",
+          "perplexity",
+          "tokens",
+          "spans"
+        ],
+        "title": "SequenceScore",
+        "type": "object"
+      },
+      "Span": {
+        "additionalProperties": false,
+        "description": "Consecutive tokens that stand out, `start` inclusive, `end` exclusive.",
+        "properties": {
+          "end": {
+            "exclusiveMinimum": 0.0,
+            "title": "End",
+            "type": "integer"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/SpanKind"
+          },
+          "peak_index": {
+            "minimum": 0.0,
+            "title": "Peak Index",
+            "type": "integer"
+          },
+          "peak_z": {
+            "title": "Peak Z",
+            "type": "number"
+          },
+          "start": {
+            "minimum": 0.0,
+            "title": "Start",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "kind",
+          "start",
+          "end",
+          "peak_index",
+          "peak_z"
+        ],
+        "title": "Span",
+        "type": "object"
+      },
+      "SpanKind": {
+        "enum": [
+          "surprisal_spike",
+          "low_confidence"
+        ],
+        "title": "SpanKind",
+        "type": "string"
+      },
       "SteeringVector": {
         "additionalProperties": false,
         "description": "A steering vector Lab holds for its owner until the model changes.",
@@ -1181,6 +1351,64 @@
           "edited_probability"
         ],
         "title": "TargetChange",
+        "type": "object"
+      },
+      "TokenScore": {
+        "additionalProperties": false,
+        "properties": {
+          "entropy_bits": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Exact entropy over the full vocabulary.",
+            "title": "Entropy Bits"
+          },
+          "index": {
+            "minimum": 0.0,
+            "title": "Index",
+            "type": "integer"
+          },
+          "logprob": {
+            "maximum": 0.0,
+            "title": "Logprob",
+            "type": "number"
+          },
+          "surprisal_bits": {
+            "minimum": 0.0,
+            "title": "Surprisal Bits",
+            "type": "number"
+          },
+          "token": {
+            "title": "Token",
+            "type": "string"
+          },
+          "truncated_entropy_bits": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A lower bound on entropy, from only the top-k logprobs.",
+            "title": "Truncated Entropy Bits"
+          }
+        },
+        "required": [
+          "index",
+          "token",
+          "logprob",
+          "surprisal_bits"
+        ],
+        "title": "TokenScore",
         "type": "object"
       },
       "ValidationError": {
@@ -1419,6 +1647,48 @@
           }
         },
         "summary": "Switch the resident model",
+        "tags": [
+          "lab"
+        ]
+      }
+    },
+    "/api/v1/lab/score": {
+      "post": {
+        "description": "Either generates a greedy answer to the prompt and scores it, or scores the prompt itself as plain text, without the chat template. Entropy is over the whole vocabulary. The first token of a text is not scored: nothing came before it.",
+        "operationId": "score_api_v1_lab_score_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LabScoreRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LabScored"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Score the resident model's surprise at each token",
         "tags": [
           "lab"
         ]
