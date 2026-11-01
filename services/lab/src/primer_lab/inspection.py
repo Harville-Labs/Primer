@@ -102,6 +102,12 @@ def inspect_prompt(
         for layer, residual in residuals.items()
         if saes is not None
     }
+
+    def labels(layer: int) -> dict[int, str] | None:
+        if saes is None or layer not in encoded:
+            return None
+        return saes.names(layer, sorted(set(encoded[layer].indices.flatten().tolist())))
+
     layers = [
         LayerReadings(
             residual_norm=norm.float().tolist(),
@@ -111,6 +117,7 @@ def inspect_prompt(
             neuron_activations=values.float().tolist(),
             feature_indices=encoded[layer].indices.tolist() if layer in encoded else None,
             feature_activations=encoded[layer].values.tolist() if layer in encoded else None,
+            feature_labels=labels(layer),
         )
         for layer, (norm, read, (indices, values)) in enumerate(zip(norms, lens, top, strict=True))
     ]

@@ -23,7 +23,7 @@ from __future__ import annotations
 
 import logging
 import pickle
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Literal
 
@@ -32,6 +32,7 @@ from primer_contracts.lab import SaeStatus
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from primer_lab.config import Settings
+from primer_lab.labels import FeatureLabels, LabelsRefused
 from primer_lab.sources import Hub, check_size, hub_errors
 from primer_lab.weights import WeightsRefused
 
@@ -79,6 +80,10 @@ class SaeSet:
     commit: str
     config: SaeConfig
     layers: dict[int, SaeLayer]
+    #: The operator's labels, once checked against these SAEs.
+    labels: FeatureLabels | None = None
+    #: Why the operator's labels were not used, when they were not.
+    labels_error: str | None = None
 
     def status(self) -> SaeStatus:
         return SaeStatus(
@@ -88,7 +93,28 @@ class SaeSet:
             width=self.config.d_sae,
             k=self.config.k,
             layers=sorted(self.layers),
+            labelled=len(self.labels.labels) if self.labels else 0,
+            labels_error=self.labels_error,
         )
+
+    def labelled(self, labels: FeatureLabels | None) -> SaeSet:
+        """These SAEs with `labels`, or without them and saying why.
+
+        Labels that do not fit leave the SAEs as usable as they were: a
+        feature shown by its index is less helpful than one with a name,
+        and a feature shown with another feature's name is worse than both.
+        """
+        if labels is None:
+            return self
+        try:
+            labels.check(self.commit, self.config.d_sae, sorted(self.layers))
+        except LabelsRefused as error:
+            return replace(self, labels_error=f"Feature labels were not used: {error}")
+        return replace(self, labels=labels)
+
+    def names(self, layer: int, indices: list[int]) -> dict[int, str] | None:
+        """Labels for those of `indices` at `layer` that have one, or None without labels."""
+        return self.labels.named(layer, indices) if self.labels else None
 
     def encode(self, layer: int, residual: torch.Tensor, top: int) -> torch.return_types.topk:
         """The `top` strongest features at each position, for a layer this set covers."""

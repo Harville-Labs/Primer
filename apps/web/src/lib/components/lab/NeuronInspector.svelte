@@ -215,7 +215,16 @@
 					Of {saes.width?.toLocaleString()} in
 					<span class="font-mono" title={saes.commit ?? undefined}>{saes.repository}</span>,
 					the strongest of the {saes.k} that fire.
+					{#if saes.labelled}
+						{saes.labelled.toLocaleString()} have labels from the operator.
+					{/if}
 				</p>
+				{#if saes.labels_error}
+					<p role="alert" class="text-xs">
+						<span class="font-medium text-error">Shown without labels.</span>
+						{saes.labels_error}
+					</p>
+				{/if}
 				<SignedBars
 					rows={features}
 					prefix="f"

@@ -1170,6 +1170,20 @@
             ],
             "title": "Feature Indices"
           },
+          "feature_labels": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Feature Labels"
+          },
           "lens_probabilities": {
             "items": {
               "items": {
@@ -1668,6 +1682,24 @@
               }
             ],
             "title": "K"
+          },
+          "labelled": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Labelled",
+            "type": "integer"
+          },
+          "labels_error": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Labels Error"
           },
           "layers": {
             "items": {

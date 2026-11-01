@@ -483,6 +483,10 @@ lab:
   saes:
     Qwen/Qwen3-1.7B: Qwen/SAE-Res-Qwen3-1.7B-Base-W32K-L0_50
     Qwen/Qwen3-1.7B-Base: Qwen/SAE-Res-Qwen3-1.7B-Base-W32K-L0_50
+  # Labels for SAE features, by the SAE repository they describe: a JSON
+  # Lines file, as a path inside the weights volume. Read at startup, and
+  # a malformed file stops Lab starting. Nothing is fetched to label them.
+  featureLabels: {}
   # A hub mirror, for a cluster that cannot reach huggingface.co.
   hubEndpoint: ""
   device: auto     # auto, cpu, or cuda

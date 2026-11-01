@@ -736,6 +736,10 @@ export interface components {
             feature_activations?: number[][] | null;
             /** Feature Indices */
             feature_indices?: number[][] | null;
+            /** Feature Labels */
+            feature_labels?: {
+                [key: string]: string;
+            } | null;
             /** Lens Probabilities */
             lens_probabilities: number[][];
             /** Lens Tokens */
@@ -914,6 +918,13 @@ export interface components {
             error?: string | null;
             /** K */
             k?: number | null;
+            /**
+             * Labelled
+             * @default 0
+             */
+            labelled: number;
+            /** Labels Error */
+            labels_error?: string | null;
             /** Layers */
             layers?: number[];
             /** Repository */
