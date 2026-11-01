@@ -17,6 +17,8 @@ dependencies = [
     "primer-service",
     "psycopg[binary]",
     "pydantic-settings",
+    # Published transcoder sets describe themselves in config.yaml.
+    "pyyaml",
     "safetensors",
     "scikit-learn",
     "scipy",

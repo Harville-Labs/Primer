@@ -118,6 +118,67 @@
         "title": "AnomaliesRun",
         "type": "object"
       },
+      "AttributionGraph": {
+        "additionalProperties": false,
+        "properties": {
+          "graph": {
+            "$ref": "#/components/schemas/BuiltGraph"
+          },
+          "model": {
+            "$ref": "#/components/schemas/LabModelStatus"
+          },
+          "transcoders": {
+            "$ref": "#/components/schemas/TranscoderStatus"
+          }
+        },
+        "required": [
+          "model",
+          "transcoders",
+          "graph"
+        ],
+        "title": "AttributionGraph",
+        "type": "object"
+      },
+      "BuiltGraph": {
+        "additionalProperties": false,
+        "description": "A pruned graph, as the builder returns it.",
+        "properties": {
+          "dropped_edges": {
+            "minimum": 0.0,
+            "title": "Dropped Edges",
+            "type": "integer"
+          },
+          "edges": {
+            "items": {
+              "$ref": "#/components/schemas/GraphEdge"
+            },
+            "title": "Edges",
+            "type": "array"
+          },
+          "nodes": {
+            "items": {
+              "$ref": "#/components/schemas/GraphNode"
+            },
+            "title": "Nodes",
+            "type": "array"
+          },
+          "tokens": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Tokens",
+            "type": "array"
+          }
+        },
+        "required": [
+          "tokens",
+          "nodes",
+          "edges",
+          "dropped_edges"
+        ],
+        "title": "BuiltGraph",
+        "type": "object"
+      },
       "EntropyEstimate": {
         "description": "How much of each next-token distribution the score could see.",
         "enum": [
@@ -543,6 +604,170 @@
         "title": "GenerationQueued",
         "type": "object"
       },
+      "GraphEdge": {
+        "additionalProperties": false,
+        "properties": {
+          "source": {
+            "title": "Source",
+            "type": "string"
+          },
+          "target": {
+            "title": "Target",
+            "type": "string"
+          },
+          "weight": {
+            "title": "Weight",
+            "type": "number"
+          }
+        },
+        "required": [
+          "source",
+          "target",
+          "weight"
+        ],
+        "title": "GraphEdge",
+        "type": "object"
+      },
+      "GraphNode": {
+        "additionalProperties": false,
+        "properties": {
+          "activation": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Activation"
+          },
+          "feature": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Feature"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "influence": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Influence",
+            "type": "number"
+          },
+          "kind": {
+            "enum": [
+              "feature",
+              "error",
+              "token",
+              "logit"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "layer": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Layer"
+          },
+          "position": {
+            "minimum": 0.0,
+            "title": "Position",
+            "type": "integer"
+          },
+          "probability": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Probability"
+          },
+          "token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Token"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "position",
+          "influence"
+        ],
+        "title": "GraphNode",
+        "type": "object"
+      },
+      "GraphRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "edge_threshold": {
+            "default": 0.98,
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Edge Threshold",
+            "type": "number"
+          },
+          "node_threshold": {
+            "default": 0.8,
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Node Threshold",
+            "type": "number"
+          },
+          "prompt": {
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Prompt",
+            "type": "string"
+          },
+          "target": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target"
+          }
+        },
+        "required": [
+          "prompt"
+        ],
+        "title": "GraphRequest",
+        "type": "object"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -869,6 +1094,16 @@
                 "type": "null"
               }
             ]
+          },
+          "transcoders": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TranscoderStatus"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -1073,6 +1308,18 @@
               }
             ],
             "title": "Experiment Retention Days"
+          },
+          "graph_max_prompt_tokens": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Graph Max Prompt Tokens"
           },
           "max_model_bytes": {
             "minimum": 1.0,
@@ -2262,6 +2509,67 @@
         "title": "TokenScore",
         "type": "object"
       },
+      "TranscoderStatus": {
+        "additionalProperties": false,
+        "description": "The transcoders an attribution graph is built from, if any.\n\nFetched after the model loads, like SAEs, and much larger: a set for\nQwen3-4B is about 60 GB. A graph cannot be built until they are ready.",
+        "properties": {
+          "commit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Commit"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "repository": {
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,95}/[A-Za-z0-9][A-Za-z0-9._-]{0,95}$",
+            "title": "Repository",
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "fetching",
+              "ready",
+              "failed"
+            ],
+            "title": "State",
+            "type": "string"
+          },
+          "width": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Width"
+          }
+        },
+        "required": [
+          "repository",
+          "state"
+        ],
+        "title": "TranscoderStatus",
+        "type": "object"
+      },
       "ValidationError": {
         "properties": {
           "ctx": {
@@ -2650,6 +2958,48 @@
           }
         },
         "summary": "Generate with and without edits to the forward pass",
+        "tags": [
+          "lab"
+        ]
+      }
+    },
+    "/api/v1/lab/graph": {
+      "post": {
+        "description": "Traces which transcoder features carried the prompt to the token it names, or to the tokens the model found likeliest, and returns the graph pruned to the nodes and edges with the most influence. The prompt is read as plain text, without a chat template. A build takes minutes on a CPU and holds the model while it runs.",
+        "operationId": "graph_api_v1_lab_graph_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GraphRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AttributionGraph"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Build an attribution graph for a prompt",
         "tags": [
           "lab"
         ]

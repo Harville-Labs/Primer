@@ -49,6 +49,9 @@ def _status(request: Request, allowed: bool) -> LabStatus:
         queue_depth=queue.depth,
         max_prompt_tokens=settings.lab_max_prompt_tokens,
         max_new_tokens=settings.lab_max_new_tokens,
+        graph_max_prompt_tokens=(
+            settings.lab_graph_max_prompt_tokens if settings.lab_graph_python else None
+        ),
         experiment_retention_days=(
             settings.lab_experiment_retention_days
             if request.app.state.database is not None
@@ -178,8 +181,15 @@ async def run_queued[T](
     work: Callable[[], T],
     *,
     on_position: PositionCallback | None = None,
+    limit_seconds: float | None = None,
+    limit_setting: str = "PRIMER_LAB_RUN_TIMEOUT_SECONDS",
 ) -> T:
-    """Run `work` on the queue against `resident`, with every failure named."""
+    """Run `work` on the queue against `resident`, with every failure named.
+
+    A run is held to `lab_run_timeout_seconds` unless it names its own
+    limit, and the setting that limit comes from, so a timeout tells the
+    operator which one to raise.
+    """
     settings: Settings = request.app.state.settings
     host: ModelHost = request.app.state.host
     queue: RunQueue = request.app.state.queue
@@ -194,7 +204,9 @@ async def run_queued[T](
 
     try:
         return await queue.run(
-            guarded, limit_seconds=settings.lab_run_timeout_seconds, on_position=on_position
+            guarded,
+            limit_seconds=limit_seconds or settings.lab_run_timeout_seconds,
+            on_position=on_position,
         )
     except ModelChanged:
         raise ProblemError(
@@ -216,8 +228,8 @@ async def run_queued[T](
             code=ErrorCode.QUOTA_EXCEEDED,
             title="The run took too long",
             status_code=status.HTTP_504_GATEWAY_TIMEOUT,
-            detail=f"It ran past {error.seconds:.0f}s (PRIMER_LAB_RUN_TIMEOUT_SECONDS) and was "
-            "abandoned. A shorter prompt runs faster; trying again will not.",
+            detail=f"It ran past {error.seconds:.0f}s ({limit_setting}) and was abandoned. A "
+            "shorter prompt runs faster; trying again will not.",
         ) from None
 
 
