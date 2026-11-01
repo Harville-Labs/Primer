@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { Cpu, TriangleAlert } from '@lucide/svelte';
 	import { Composer, Spinner, Switch } from '@sivir-ui/svelte';
+	import type { Snippet } from 'svelte';
 	import type { LabModelStatus, LabStatus } from '#lib/api/types.ts';
 	import type { Inspector } from '#lib/lab/inspector.svelte.ts';
 
@@ -10,9 +11,11 @@
 		//: Null when Lab did not answer for the page; `problem` then says why.
 		status: LabStatus | null;
 		problem: { title: string; detail: string } | null;
+		//: What else runs on this prompt, under it and above the limits.
+		children?: Snippet;
 	}
 
-	let { inspector, status, problem }: Props = $props();
+	let { inspector, status, problem, children }: Props = $props();
 
 	// The reading's own model over the status's: the status was read when the
 	// page loaded, and the grid beside this belongs to whatever ran it.
@@ -122,6 +125,8 @@
 			{/if}
 		</div>
 	{/if}
+
+	{@render children?.()}
 
 	{#if status}
 		<p class="mt-auto text-[11px] leading-relaxed text-muted-foreground">

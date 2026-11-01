@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { ScanLine } from '@lucide/svelte';
 	import { Button, Spinner, ToggleGroup } from '@sivir-ui/svelte';
-	import type { ActivationSite } from '#lib/api/types.ts';
+	import type { ActivationSite, InterventionSite } from '#lib/api/types.ts';
 	import {
 		cellColour,
 		featuresAt,
@@ -17,9 +17,11 @@
 	/** What the selected cell holds: the lens's guesses, its neurons, its whole vector. */
 	interface Props {
 		inspector: Inspector;
+		//: Given, a neuron or feature row can be added as an edit at the selected layer.
+		onedit?: (edit: { site: InterventionSite; layer: number; index: number }) => void;
 	}
 
-	let { inspector }: Props = $props();
+	let { inspector, onedit }: Props = $props();
 
 	const SITES: { value: ActivationSite; label: string }[] = [
 		{ value: 'resid_post', label: 'Residual' },
@@ -181,7 +183,12 @@
 			<p class="text-xs text-muted-foreground">
 				Of {reading.mlp_width.toLocaleString()} at this layer, by magnitude.
 			</p>
-<SignedBars rows={neurons} prefix="n" />
+			<SignedBars
+				rows={neurons}
+				prefix="n"
+				noun="neuron"
+				onadd={onedit && ((index) => onedit({ site: 'mlp_neuron', layer: at.layer, index }))}
+			/>
 		</section>
 
 		<section aria-labelledby="features-heading" class="flex flex-col gap-2">
@@ -209,7 +216,12 @@
 					<span class="font-mono" title={saes.commit ?? undefined}>{saes.repository}</span>,
 					the strongest of the {saes.k} that fire.
 				</p>
-				<SignedBars rows={features} prefix="f" />
+				<SignedBars
+					rows={features}
+					prefix="f"
+					noun="feature"
+					onadd={onedit && ((index) => onedit({ site: 'sae_feature', layer: at.layer, index }))}
+				/>
 			{:else}
 				<p class="text-xs text-muted-foreground">
 					{saes.repository} has no SAE for layer {at.layer}. It reads
