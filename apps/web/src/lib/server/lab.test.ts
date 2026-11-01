@@ -7,7 +7,7 @@ vi.mock('$app/env/private', () => ({
 	PRIMER_LAB_URL: 'http://lab.test',
 }));
 
-const { relay } = await import('./lab');
+const { relay, relayStream } = await import('./lab');
 
 function capabilities(lab: boolean): DeploymentCapabilities {
 	return {
@@ -83,5 +83,49 @@ describe('Lab relay', () => {
 			title: 'Lab is busy',
 			detail: 'Too many runs are queued.',
 		});
+	});
+});
+
+describe('Lab stream relay', () => {
+	const ask = { prompt: 'hi', chat: false, max_new_tokens: 4 };
+
+	it('passes the stream on unread, labelled so nothing between buffers it', async () => {
+		const frames = 'id: 0\nevent: token\ndata: {"id":0}\n\n';
+		const { event: streaming } = event(
+			true,
+			async () => new Response(frames, { headers: { 'Content-Type': 'text/event-stream' } }),
+		);
+
+		const response = await relayStream(streaming, (lab) => lab.generate(ask));
+
+		expect(response.headers.get('content-type')).toBe('text/event-stream');
+		expect(response.headers.get('x-accel-buffering')).toBe('no');
+		expect(await response.text()).toBe(frames);
+	});
+
+	it('answers a refusal before the stream as a problem, not as a stream', async () => {
+		// Labelled as a stream, a refusal would leave the browser waiting for
+		// events that are never coming.
+		const { event: refused } = event(true, async () =>
+			Response.json(
+				{ code: 'validation_error', title: 'Edit refused', status: 422, detail: 'No layer 9.' },
+				{ status: 422 },
+			),
+		);
+
+		const response = await relayStream(refused, (lab) => lab.generate(ask));
+
+		expect(response.status).toBe(422);
+		expect(response.headers.get('content-type')).toContain('application/json');
+		expect(await response.json()).toMatchObject({ title: 'Edit refused', detail: 'No layer 9.' });
+	});
+
+	it('refuses with a 404 on a deployment without Lab', async () => {
+		const { asked, event: without } = event(false, async () => new Response(''));
+
+		await expect(relayStream(without, (lab) => lab.generate(ask))).rejects.toMatchObject({
+			status: 404,
+		});
+		expect(asked.some((url) => url.startsWith('http://lab.test'))).toBe(false);
 	});
 });

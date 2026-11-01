@@ -51,6 +51,17 @@ export type InspectedToken = LabSchemas['InspectedToken'];
 export type LayerReadings = LabSchemas['LayerReadings'];
 export type ActivationRequest = LabSchemas['ActivationRequest'];
 export type ActivationVector = LabSchemas['ActivationVector'];
+export type Intervention = LabSchemas['Intervention'];
+export type InterventionOp = Intervention['op'];
+export type InterventionSite = Intervention['site'];
+export type GenerateRequest = LabSchemas['GenerateRequest'];
+export type GeneratedToken = LabSchemas['GeneratedToken'];
+export type GenerationCompleted = LabSchemas['GenerationCompleted'];
+export type GenerationFailed = LabSchemas['GenerationFailed'];
+export type GenerationQueued = LabSchemas['GenerationQueued'];
+export type TargetChange = LabSchemas['TargetChange'];
+export type SteeringVector = LabSchemas['SteeringVector'];
+export type SteeringVectorRequest = LabSchemas['SteeringVectorRequest'];
 export type ActivationSite = ActivationRequest['site'];
 
 /** States where nothing further will happen without the user acting. */

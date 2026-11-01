@@ -34,9 +34,41 @@ export async function relay(
 	event: RequestEvent,
 	call: (lab: LabApi) => Promise<unknown>,
 ): Promise<Response> {
+	return answered(event, async (lab) => json(await call(lab)));
+}
+
+/**
+ * Pass Lab's event stream to the browser as it arrives.
+ *
+ * Piped rather than read here: a stream collected on the server would reach
+ * the browser all at once, when the generation was over. A refusal comes
+ * before the stream does, and is answered as a problem like any other.
+ */
+export function relayStream(
+	event: RequestEvent,
+	call: (lab: LabApi) => Promise<Response>,
+): Promise<Response> {
+	return answered(event, async (lab) => {
+		const upstream = await call(lab);
+		return new Response(upstream.body, {
+			headers: {
+				'Content-Type': 'text/event-stream',
+				'Cache-Control': 'no-cache',
+				// Several proxies buffer by default, which would hold every
+				// token until the generation finished.
+				'X-Accel-Buffering': 'no',
+			},
+		});
+	});
+}
+
+async function answered(
+	event: RequestEvent,
+	respond: (lab: LabApi) => Promise<Response>,
+): Promise<Response> {
 	requireLab(await apiFor(event.request, event.fetch).capabilities());
 	try {
-		return json(await call(labFor(event.request, event.fetch)));
+		return await respond(labFor(event.request, event.fetch));
 	} catch (failure) {
 		if (!(failure instanceof ApiError)) throw failure;
 		const problem: ProblemDetail = {

@@ -1,10 +1,10 @@
-import { asProblem } from '#lib/api/client.ts';
 import type {
 	ActivationSite,
 	ActivationVector,
 	InspectResponse,
 	LabStatus,
 } from '#lib/api/types.ts';
+import { asFailure, type Failure, problemOf } from './failure';
 import { type Cell, moveSelection, type Signal } from './heatmap';
 
 /**
@@ -14,12 +14,6 @@ import { type Cell, moveSelection, type Signal } from './heatmap';
  * Here rather than in the page so it can be asserted against: the page only
  * renders what this says and calls what it offers.
  */
-
-/** Why the last thing asked of Lab did not happen, in Lab's own words. */
-export interface Failure {
-	title: string;
-	detail: string;
-}
 
 export interface InspectorOptions {
 	/** The browser's fetch in the page; a recording one in tests. */
@@ -192,34 +186,4 @@ export class Inspector {
 			clearInterval(timer);
 		};
 	}
-}
-
-class ProblemFailure extends Error {
-	constructor(readonly failure: Failure) {
-		super(failure.detail);
-	}
-}
-
-async function problemOf(response: Response): Promise<ProblemFailure> {
-	let body: unknown = null;
-	try {
-		body = await response.json();
-	} catch {
-		// Not JSON: asProblem below still says what the status was.
-	}
-	const problem = asProblem(body, response.status);
-	return new ProblemFailure({
-		title: problem.title,
-		detail: problem.detail ?? problem.title,
-	});
-}
-
-function asFailure(failure: unknown): Failure {
-	if (failure instanceof ProblemFailure) return failure.failure;
-	// The fetch itself failing means this page's own server did not answer,
-	// which is a different thing from Lab not answering, and is said so.
-	return {
-		title: 'Primer did not answer',
-		detail: 'The request did not reach Primer. Check your connection and try again.',
-	};
 }

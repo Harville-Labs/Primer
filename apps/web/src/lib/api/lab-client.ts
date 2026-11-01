@@ -2,10 +2,13 @@ import { ApiError, asProblem } from './client';
 import type {
 	ActivationRequest,
 	ActivationVector,
+	GenerateRequest,
 	InspectRequest,
 	InspectResponse,
 	LabStatus,
 	ProblemDetail,
+	SteeringVector,
+	SteeringVectorRequest,
 } from './types';
 
 /**
@@ -49,6 +52,11 @@ export class LabApi {
 	}
 
 	private async request<T>(path: string, init: RequestInit = {}): Promise<T> {
+		return (await (await this.send(path, init)).json()) as T;
+	}
+
+	/** Lab's answer when it is a success, and an ApiError in Lab's words when not. */
+	private async send(path: string, init: RequestInit): Promise<Response> {
 		let response: Response;
 		try {
 			response = await this.fetch(`${this.baseUrl}${path}`, init);
@@ -72,7 +80,7 @@ export class LabApi {
 			}
 			throw new ApiError(problem);
 		}
-		return (await response.json()) as T;
+		return response;
 	}
 
 	/** The resident model, any switch in progress, and how many runs are waiting. */
@@ -88,11 +96,35 @@ export class LabApi {
 		return this.post('/api/v1/lab/activation', payload);
 	}
 
-	private post<T>(path: string, payload: unknown): Promise<T> {
-		return this.request(path, {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify(payload),
-		});
+	/**
+	 * Lab's event stream for a generation, unread.
+	 *
+	 * Returned as the response rather than collected, so the caller can pass
+	 * it on as it arrives. A refusal - an edit naming a layer the model does
+	 * not have, a queue that is full - comes before the stream starts, as an
+	 * ordinary problem, and is thrown like any other.
+	 */
+	generate(payload: GenerateRequest): Promise<Response> {
+		return this.send('/api/v1/lab/generate', jsonPost(payload));
 	}
+
+	vectors(): Promise<SteeringVector[]> {
+		return this.request('/api/v1/lab/vectors');
+	}
+
+	createVector(payload: SteeringVectorRequest): Promise<SteeringVector> {
+		return this.post('/api/v1/lab/vectors', payload);
+	}
+
+	private post<T>(path: string, payload: unknown): Promise<T> {
+		return this.request(path, jsonPost(payload));
+	}
+}
+
+function jsonPost(payload: unknown): RequestInit {
+	return {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify(payload),
+	};
 }
