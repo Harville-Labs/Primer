@@ -3,6 +3,7 @@ import { reading } from './fixture';
 import {
 	cellColour,
 	cellValues,
+	featureLabel,
 	featuresAt,
 	lensAt,
 	moveSelection,
@@ -103,6 +104,27 @@ describe('reading a cell', () => {
 			{ index: 7, activation: 0.25 },
 		]);
 		expect(featuresAt(withSaes, { layer: 0, token: 1 })).toBeNull();
+	});
+
+	it('names a feature by the operator’s label, and one without a label by its index alone', () => {
+		const layers = reading().layers.map((layer, index) =>
+			index === 1
+				? {
+						...layer,
+						feature_indices: [[9], [40, 7]],
+						feature_activations: [[3], [-0.5, 0.25]],
+						feature_labels: { 40: 'French words' },
+					}
+				: layer,
+		);
+		const labelled = reading({ layers });
+		const [named, unnamed] = featuresAt(labelled, { layer: 1, token: 1 }) ?? [];
+		expect(named).toEqual({ index: 40, activation: -0.5, label: 'French words' });
+		expect(unnamed?.label).toBeUndefined();
+		expect(featureLabel(labelled, 1, 40)).toBe('French words');
+		expect(featureLabel(labelled, 1, 7)).toBeUndefined();
+		// The same index at a layer the labels are not for is another feature.
+		expect(featureLabel(labelled, 0, 40)).toBeUndefined();
 	});
 
 	it('follows one token up through every layer', () => {
