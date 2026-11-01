@@ -1,6 +1,16 @@
 <script lang="ts">
 	import { page } from '$app/state';
-	import { ChevronRight, Library, MessageSquare, Search, Settings, SquarePen } from '@lucide/svelte';
+	import {
+		Activity,
+		ChevronRight,
+		FlaskConical,
+		Library,
+		MessageSquare,
+		ScanLine,
+		Search,
+		Settings,
+		SquarePen,
+	} from '@lucide/svelte';
 	import { Shortcut } from '@sivir-ui/svelte';
 	import { untrack } from 'svelte';
 	import type {
@@ -68,6 +78,7 @@
 		return {
 			'/libraries': path === '/libraries' || path.startsWith('/libraries/'),
 			'/chat': path === '/chat' || path.startsWith('/chat/'),
+			'/lab': path === '/lab' || path.startsWith('/lab/'),
 		};
 	}
 
@@ -80,6 +91,11 @@
 		const path = page.url.pathname;
 		untrack(() => (expanded = sectionsFor(path)));
 	});
+
+	const LAB = [
+		{ href: '/lab/neurons', label: 'Neurons', icon: ScanLine },
+		{ href: '/lab/anomalies', label: 'Anomalies', icon: Activity },
+	];
 
 	let sections = $derived(
 		[
@@ -96,6 +112,14 @@
 				icon: MessageSquare,
 				count: conversations.length,
 				show: capabilities.chat_available,
+			},
+			{
+				// No count: Lab's screens are tools, not a list of things.
+				href: '/lab',
+				label: 'Lab',
+				icon: FlaskConical,
+				count: 0,
+				show: capabilities.lab_available,
 			},
 		].filter((section) => section.show)
 	);
@@ -146,7 +170,7 @@
 	>
 		{#each sections as section (section.href)}
 			{@const active = inSection(section.href)}
-			{@const open = expanded[section.href as '/libraries' | '/chat']}
+			{@const open = expanded[section.href as keyof typeof expanded]}
 			<div class="flex min-h-0 flex-col">
 				<div class="flex items-center gap-0.5">
 					<!--
@@ -252,8 +276,30 @@
 									</li>
 								{/each}
 							</ul>
-						{:else}
+						{:else if section.href === '/chat'}
 							<ConversationList {conversations} {libraries} />
+						{:else}
+							<ul class="space-y-0.5">
+								{#each LAB as tab (tab.href)}
+									{@const current = inSection(tab.href)}
+									<li>
+										<a
+											href={tab.href}
+											onclick={onnavigate}
+											aria-current={current ? 'page' : undefined}
+											class="flex items-center gap-2 rounded-md px-2.5 py-1.5 text-sm
+												transition-colors focus-visible:outline-none
+												focus-visible:shadow-[var(--focus-ring)]
+												{current
+												? 'bg-secondary font-medium text-foreground'
+												: 'text-muted-foreground hover:bg-muted hover:text-foreground'}"
+										>
+											<tab.icon size={13} aria-hidden="true" class="shrink-0" />
+											{tab.label}
+										</a>
+									</li>
+								{/each}
+							</ul>
 						{/if}
 					</div>
 				{/if}
