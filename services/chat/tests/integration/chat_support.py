@@ -21,7 +21,14 @@ from primer_chat.generation import Endpoint
 from primer_chat.rag import HistoryTurn
 from primer_chat.reasoning import Channel, Fragment
 from primer_contracts.identity import Principal
-from primer_contracts.indexing import LibraryScope, SearchRequest, SearchResult
+from primer_contracts.indexing import (
+    LibraryScope,
+    Passage,
+    PassagesRequest,
+    PassagesResult,
+    SearchRequest,
+    SearchResult,
+)
 from primer_contracts.retrieval import RetrievedChunk, SourceLocator
 
 LIBRARY_ID = uuid.uuid5(uuid.NAMESPACE_URL, "chat-library")
@@ -51,6 +58,7 @@ class FakeRetrieval:
         self.contents = contents if contents is not None else ["The conclusion is well supported."]
         self.failure = failure
         self.searches: list[SearchRequest] = []
+        self.listings: list[PassagesRequest] = []
 
     async def search(self, request: SearchRequest) -> SearchResult:
         self.searches.append(request)
@@ -70,6 +78,25 @@ class FakeRetrieval:
                 )
                 for index, content in enumerate(self.contents)
             )
+        )
+
+    async def passages(self, request: PassagesRequest) -> PassagesResult:
+        self.listings.append(request)
+        if self.failure is not None:
+            raise self.failure
+        return PassagesResult(
+            passages=tuple(
+                Passage(
+                    chunk_id=uuid.uuid5(uuid.NAMESPACE_URL, f"chunk-{index}-{content}"),
+                    document_id=uuid.uuid5(uuid.NAMESPACE_URL, "document"),
+                    filename="paper.pdf",
+                    ordinal=index,
+                    content=content,
+                    locator=SourceLocator(page=index + 1, section="Findings"),
+                )
+                for index, content in enumerate(self.contents[: request.limit])
+            ),
+            total=len(self.contents),
         )
 
 
