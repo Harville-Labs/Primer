@@ -3195,6 +3195,8 @@ name = "primer-lab"
 version = "0.1.14"
 source = { editable = "services/lab" }
 dependencies = [
+    { name = "alembic" },
+    { name = "asyncpg" },
     { name = "fastapi" },
     { name = "huggingface-hub" },
     { name = "nnsight" },
@@ -3203,21 +3205,29 @@ dependencies = [
     { name = "primer-contracts" },
     { name = "primer-observability" },
     { name = "primer-service" },
+    { name = "psycopg", extra = ["binary"] },
     { name = "pydantic-settings" },
     { name = "safetensors" },
     { name = "scikit-learn" },
+    { name = "scipy" },
+    { name = "sqlalchemy", extra = ["asyncio"] },
     { name = "torch", version = "2.15.0", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform != 'linux'" },
     { name = "torch", version = "2.15.0+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform == 'linux'" },
     { name = "transformers" },
 ]
 
 [package.dev-dependencies]
+dev = [
+    { name = "testcontainers" },
+]
 server = [
     { name = "uvicorn", extra = ["standard"] },
 ]
 
 [package.metadata]
 requires-dist = [
+    { name = "alembic" },
+    { name = "asyncpg" },
     { name = "fastapi" },
     { name = "huggingface-hub" },
     { name = "nnsight", specifier = ">=0.7,<0.8" },
@@ -3226,15 +3236,19 @@ requires-dist = [
     { name = "primer-contracts", editable = "packages/contracts" },
     { name = "primer-observability", editable = "packages/observability" },
     { name = "primer-service", editable = "packages/service" },
+    { name = "psycopg", extras = ["binary"] },
     { name = "pydantic-settings" },
     { name = "safetensors" },
     { name = "scikit-learn" },
+    { name = "scipy" },
+    { name = "sqlalchemy", extras = ["asyncio"] },
     { name = "torch", marker = "sys_platform != 'linux'" },
     { name = "torch", marker = "sys_platform == 'linux'", index = "https://download.pytorch.org/whl/cpu" },
     { name = "transformers" },
 ]
 
 [package.metadata.requires-dev]
+dev = [{ name = "testcontainers", extras = ["postgres"] }]
 server = [{ name = "uvicorn", extras = ["standard"] }]
 
 [[package]]

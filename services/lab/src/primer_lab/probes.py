@@ -17,6 +17,7 @@ import numpy as np
 import torch
 from fastapi import APIRouter, Request, status
 from primer_contracts.lab import Probe, ProbeRequest
+from scipy.special import expit
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import StratifiedKFold, cross_val_score
 
@@ -39,7 +40,16 @@ FOLDS = 5
 
 @dataclass(frozen=True, slots=True)
 class Fitted:
-    regression: LogisticRegression
+    """A trained probe: its weights, and how it measured on held-out prompts.
+
+    The weights rather than the fitted `LogisticRegression`, so a saved
+    experiment can put a probe back exactly. scikit-learn has no supported
+    way to build an estimator from coefficients, and pickling one to keep
+    it is a pickle Lab would later have to open.
+    """
+
+    weights: np.ndarray
+    bias: float
     accuracy: float
     folds: int
     chance: float
@@ -65,12 +75,22 @@ def fit_probe(rows: np.ndarray, labels: np.ndarray) -> Fitted:
     chance = max(positive, len(labels) - positive) / len(labels)
     # Two standard errors of a coin weighted to `chance` over this many prompts.
     margin = 2 * math.sqrt(chance * (1 - chance) / len(labels))
-    return Fitted(regression, accuracy, folds, chance, accuracy > chance + margin)
+    return Fitted(
+        weights=regression.coef_[0],
+        bias=float(regression.intercept_[0]),
+        accuracy=accuracy,
+        folds=folds,
+        chance=chance,
+        beats_chance=accuracy > chance + margin,
+    )
 
 
 def probability(fitted: Fitted, rows: np.ndarray) -> list[float]:
-    """The probe's probability that each row reads like the positive set."""
-    return fitted.regression.predict_proba(rows)[:, 1].tolist()
+    """The probe's probability that each row reads like the positive set.
+
+    What `predict_proba` computes for a two-class logistic regression.
+    """
+    return expit(rows @ fitted.weights + fitted.bias).tolist()
 
 
 @router.post(

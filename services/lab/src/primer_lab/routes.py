@@ -49,6 +49,11 @@ def _status(request: Request, allowed: bool) -> LabStatus:
         queue_depth=queue.depth,
         max_prompt_tokens=settings.lab_max_prompt_tokens,
         max_new_tokens=settings.lab_max_new_tokens,
+        experiment_retention_days=(
+            settings.lab_experiment_retention_days
+            if request.app.state.database is not None
+            else None
+        ),
     )
 
 

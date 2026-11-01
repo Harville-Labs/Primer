@@ -1,8 +1,9 @@
 """Policy checks on Lab, the optional service that runs a model of its own.
 
 Lab is the one part of Primer that loads code shaped by a user's choice of
-model, so what these guard is how little it is given: no shared secrets,
-nothing writable beyond its weights, and nobody but the web app to talk to.
+model, so what these guard is how little it is given: no shared secret but
+the database, nothing writable beyond its weights, and nobody but the web
+app to talk to.
 """
 
 from __future__ import annotations
@@ -65,14 +66,33 @@ def test_lab_writes_only_its_weights_and_scratch() -> None:
     assert named(rendered, "PersistentVolumeClaim", "-lab-models")["metadata"]["name"] == claim
 
 
-def test_lab_is_given_none_of_the_shared_secrets() -> None:
-    """A compromise of Lab should reach nothing beyond its own volume."""
+def test_lab_is_given_the_database_and_no_other_shared_secret() -> None:
+    """It keeps saved experiments (ADR 0008); a token it never uses is only exposure."""
     container = containers(lab(render(*ENABLED)))[0]
 
     assert "envFrom" not in container
-    for entry in container["env"]:
-        assert "valueFrom" not in entry, entry["name"]
-        assert not entry["name"].startswith(("PRIMER_DATABASE", "PRIMER_INTERNAL")), entry["name"]
+    secrets = {entry["name"] for entry in container["env"] if "valueFrom" in entry}
+    assert secrets == {"PRIMER_DATABASE_URL"}
+    names = {entry["name"] for entry in container["env"]}
+    assert not any(name.startswith(("PRIMER_INTERNAL", "PRIMER_SETTINGS")) for name in names)
+
+
+def test_lab_migrates_its_own_schema_in_its_own_image() -> None:
+    """Only Lab's image holds Lab's migrations; any other would fail the hook."""
+    rendered = render(*ENABLED, "lab.gpu=1")
+    job = named(rendered, "Job", "-migrate-lab")
+    (container,) = containers(job)
+
+    assert container["workingDir"] == "/app/services/lab"
+    assert container["command"] == ["alembic", "upgrade", "head"]
+    assert container["image"] == containers(lab(rendered))[0]["image"]
+    assert job["metadata"]["annotations"]["helm.sh/hook"] == "pre-install,pre-upgrade"
+
+
+def test_how_long_experiments_are_kept_reaches_lab() -> None:
+    assert env_of(lab(render(*ENABLED)))["PRIMER_LAB_EXPERIMENT_RETENTION_DAYS"] == "90"
+    changed = lab(render(*ENABLED, "lab.experimentRetentionDays=14"))
+    assert env_of(changed)["PRIMER_LAB_EXPERIMENT_RETENTION_DAYS"] == "14"
 
 
 def test_who_may_choose_a_model_reaches_lab() -> None:

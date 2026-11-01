@@ -89,6 +89,7 @@ nav:
           - Lab local research model: adr/0005-lab-local-research-model.md
           - Library-wide questions: adr/0006-library-wide-questions-from-passages.md
           - Lab SAEs as weights-only pickles: adr/0007-lab-saes-as-weights-only-pickles.md
+          - Lab saved experiments: adr/0008-lab-saves-experiments-in-postgresql.md
   - Operations:
       - Configuration: operations/configuration.md
       - Connecting model providers: operations/providers.md

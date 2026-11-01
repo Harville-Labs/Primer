@@ -5,8 +5,12 @@
 #
 # It needs the NVIDIA Container Toolkit on the host and a driver that
 # supports CUDA 13.2. It changes Lab alone: no other Primer service uses a
-# GPU, and the bundled model servers are CPU builds.
+# GPU, and the bundled model servers are CPU builds. Lab's migrations run
+# from the same image, so the host builds one Lab image rather than two.
 services:
+  migrate-lab:
+    build:
+      target: cuda
   lab:
     build:
       target: cuda

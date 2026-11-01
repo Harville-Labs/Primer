@@ -19,6 +19,10 @@ done
 Retrieval has none. Its vectors are in Qdrant, which creates the collection
 the first time something is indexed.
 
+Lab, when it is on, has another, in `services/lab`, for its saved
+experiments. It runs from Lab's image, the only one that holds it: Compose's
+`migrate-lab` and the chart's `migrate-lab` hook.
+
 The Compose profile and the Helm chart both run them for you: Compose as
 one-shot `migrate-*` services, the chart as pre-install and pre-upgrade hooks.
 

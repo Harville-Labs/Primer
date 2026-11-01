@@ -311,6 +311,13 @@ spec:
 {{- if .Values.migrations.enabled }}
 {{- $migrations = list "migrate-control" "migrate-chat" }}
 {{- end }}
+{{- $lab := list }}
+{{- if .Values.lab.enabled }}
+{{- $lab = list "lab" }}
+{{- if .Values.migrations.enabled }}
+{{- $lab = append $lab "migrate-lab" }}
+{{- end }}
+{{- end }}
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -332,7 +339,7 @@ spec:
         - port: 5432
           protocol: TCP
       from:
-        {{- range $component := concat (list "control" "chat") $workers $migrations }}
+        {{- range $component := concat (list "control" "chat") $workers $migrations $lab }}
         - podSelector:
             matchLabels:
               {{- include "primer.selectorLabels" $ | nindent 14 }}

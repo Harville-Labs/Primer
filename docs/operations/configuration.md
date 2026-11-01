@@ -253,6 +253,8 @@ Compose passes one.
 | `PRIMER_LAB_HUB_ENDPOINT` | `lab.hubEndpoint` | the public hub | A mirror |
 | `PRIMER_LAB_DEVICE` | `lab.device` | `auto` | `auto` uses CUDA when torch can see a GPU |
 | `PRIMER_LAB_DTYPE` | `lab.dtype` | `auto` | `auto` is `bfloat16` on CUDA and `float32` on CPU |
+| `PRIMER_LAB_EXPERIMENT_RETENTION_DAYS` | `lab.experimentRetentionDays` | `90` | Days a saved experiment is kept. See [Saved experiments](lab.md#saved-experiments) |
+| `PRIMER_DATABASE_URL` | the shared database | unset | Where saved experiments are kept. Unset, Lab runs and cannot save |
 | `PRIMER_LAB_WEIGHTS_DIR` | | `/models` | Where the volume is mounted; fetched weights go under `hub/` |
 | `PRIMER_LAB_MAX_PROMPT_TOKENS` | | `512` | Longest prompt a run reads, counted with the chat template |
 | `PRIMER_LAB_MAX_NEW_TOKENS` | | `128` | Most tokens a generation writes, for each of its two runs |

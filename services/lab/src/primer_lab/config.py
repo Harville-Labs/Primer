@@ -74,6 +74,18 @@ class Settings(BaseSettings):
     #: refused at once, which is kinder than a wait nobody will sit through.
     lab_max_waiting_runs: int = Field(default=32, ge=0)
 
+    #: Where saved experiments are kept. Without it Lab still runs, and
+    #: refuses to save rather than keeping anything in memory that a user
+    #: would believe was saved.
+    database_url: str | None = Field(
+        default=None,
+        description="PostgreSQL URL; migrations are applied out of band, never at startup",
+    )
+    #: How long a saved experiment is kept, counted from when it was saved.
+    #: An experiment holds the prompts it was made from, which may be private,
+    #: so it is not kept indefinitely by default.
+    lab_experiment_retention_days: int = Field(default=90, ge=1, le=3650)
+
     subject_header: str = Field(default="X-Forwarded-User")
     email_header: str = Field(default="X-Forwarded-Email")
     groups_header: str = Field(default="X-Forwarded-Groups")

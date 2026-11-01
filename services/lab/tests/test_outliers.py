@@ -16,8 +16,10 @@ import pytest
 import torch
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from lab_owned import train
 from lab_support import TINY, as_user, build_tiny_model, settle
 from primer_lab import reference
+from primer_lab.probes import probability
 from primer_service.identity import LOCAL_SUBJECT, user_id_for_subject
 from sklearn.covariance import LedoitWolf
 from transformers import Qwen3ForCausalLM
@@ -129,21 +131,8 @@ def test_outliers_at_a_layer_the_model_does_not_have_are_refused(client):
     assert "0 to 1" in answer.json()["detail"]
 
 
-def train(client: TestClient, *, headers: dict[str, str] | None = None) -> str:
-    body = {
-        "label": "test",
-        "layer": 0,
-        "positive": ["hello world", "w1 w2 w3", "w1 w3", "w2 w1 w3"],
-        "negative": ["w9 w8", "w4 w5 w6 w7", "w5 w4", "w8 w9 w7"],
-        "chat": False,
-    }
-    answer = client.post("/api/v1/lab/probes", json=body, headers=headers)
-    assert answer.status_code == 201, answer.text
-    return answer.json()["id"]
-
-
 def test_a_probe_is_applied_to_each_scored_token(client, weights_dir):
-    probe = train(client)
+    probe = train(client, layer=0).json()["id"]
 
     body = score(client, probe_id=probe).json()
 
@@ -152,15 +141,13 @@ def test_a_probe_is_applied_to_each_scored_token(client, weights_dir):
     fitted = resident.probes.owned_by(local)[probe]
     rows = residuals(Qwen3ForCausalLM.from_pretrained(weights_dir / TINY), PROMPT_IDS, 0)
     assert body["probe"]["probe"]["id"] == probe
-    assert body["probe"]["probabilities"] == pytest.approx(
-        fitted.regression.predict_proba(rows)[:, 1].tolist(), abs=1e-4
-    )
+    assert body["probe"]["probabilities"] == pytest.approx(probability(fitted, rows), abs=1e-4)
     assert body["outliers"] is None
 
 
 def test_someone_elses_probe_cannot_be_applied_even_knowing_its_id(shared):
     """A probe is computed from its maker's prompts, which may be private."""
-    probe = train(shared, headers=as_user("ada"))
+    probe = train(shared, headers=as_user("ada"), layer=0).json()["id"]
 
     answer = score(shared, probe_id=probe, headers=as_user("bo"))
 

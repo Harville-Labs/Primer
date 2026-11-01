@@ -9,10 +9,13 @@ the volume or holds a second copy of the model beside the first - on a GPU
 node, usually more memory than there is. A restart costs the queue of runs
 waiting on it, which the web app reports as Lab being unavailable.
 
-Lab is given none of the shared secrets: no database, no internal token, no
-settings key. It reads the identity headers Web forwards and nothing else,
-so a compromise of the one process that runs code shaped by a user's choice
-of model reaches nothing beyond its own volume.
+Lab is given the database and none of the other shared secrets: no internal
+token, no settings key. It keeps saved experiments in a schema of its own,
+and it reads the identity headers Web forwards rather than calling anything
+that would take a token. The database is a deliberate exception (ADR 0008):
+a compromise of the process that runs code shaped by a user's choice of
+model can reach what that URL's role can, so an operator who wants less
+gives Lab a URL for a role granted only the `lab` schema.
 */}}
 {{- $full := include "primer.fullname" . }}
 {{- $lab := .Values.lab }}
@@ -96,6 +99,9 @@ spec:
               value: {{ $lab.device | quote }}
             - name: PRIMER_LAB_DTYPE
               value: {{ $lab.dtype | quote }}
+            - name: PRIMER_LAB_EXPERIMENT_RETENTION_DAYS
+              value: {{ $lab.experimentRetentionDays | int | quote }}
+            {{- include "primer.databaseEnv" . | nindent 12 }}
           ports:
             - name: http
               containerPort: 8000

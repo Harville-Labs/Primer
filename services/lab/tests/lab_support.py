@@ -18,6 +18,7 @@ from fastapi.testclient import TestClient
 from primer_contracts.lab import HubModel, LocalModel
 from primer_lab.app import create_app
 from primer_lab.config import Settings
+from primer_service.db import Database
 from tokenizers import Tokenizer, models, pre_tokenizers
 from transformers import PreTrainedTokenizerFast, Qwen3Config, Qwen3ForCausalLM
 
@@ -103,7 +104,9 @@ def build_saes(
     return directory
 
 
-def lab(weights_dir: Path, hub, factory, **overrides: Any) -> TestClient:
+def lab(
+    weights_dir: Path, hub, factory, *, database: Database | None = None, **overrides: Any
+) -> TestClient:
     """Lab on CPU, starting on the tiny model in `weights_dir`."""
     defaults: dict[str, Any] = {
         "lab_weights_dir": weights_dir,
@@ -111,7 +114,11 @@ def lab(weights_dir: Path, hub, factory, **overrides: Any) -> TestClient:
         "lab_device": "cpu",
     }
     settings = Settings(**defaults | overrides)
-    return TestClient(create_app(settings, hub=hub, factory=factory, cuda_available=lambda: False))
+    return TestClient(
+        create_app(
+            settings, hub=hub, factory=factory, cuda_available=lambda: False, database=database
+        )
+    )
 
 
 def lab_with_saes(weights_dir: Path, hub, factory, **overrides: Any) -> TestClient:

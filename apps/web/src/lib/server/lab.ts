@@ -24,12 +24,18 @@ export function requireLab(capabilities: DeploymentCapabilities): void {
 
 /**
  * Answer the browser with what Lab answered, problems included.
+ *
+ * A call that returns nothing is answered with no content, as Lab answered
+ * it: `json(undefined)` would be a 200 with an empty body that is not JSON.
  */
 export async function relay(
 	event: RequestEvent,
 	call: (lab: LabApi) => Promise<unknown>,
 ): Promise<Response> {
-	return answered(event, async (lab) => json(await call(lab)));
+	return answered(event, async (lab) => {
+		const answer = await call(lab);
+		return answer === undefined ? new Response(null, { status: 204 }) : json(answer);
+	});
 }
 
 /**

@@ -1,13 +1,16 @@
 <script lang="ts">
-	import { Activity, PanelLeft, PanelRight } from '@lucide/svelte';
+	import { Activity, Bookmark, PanelLeft, PanelRight } from '@lucide/svelte';
 	import { Button, Sheet } from '@sivir-ui/svelte';
 	import { onMount } from 'svelte';
 	import ActivationHeatmap from '#lib/components/lab/ActivationHeatmap.svelte';
 	import DetectorPicker from '#lib/components/lab/DetectorPicker.svelte';
+	import ExperimentsSheet from '#lib/components/lab/ExperimentsSheet.svelte';
 	import ProbeSheet from '#lib/components/lab/ProbeSheet.svelte';
 	import ScoreSourcePane from '#lib/components/lab/ScoreSourcePane.svelte';
 	import SurpriseDetail from '#lib/components/lab/SurpriseDetail.svelte';
+	import type { AnomaliesRun, Experiment } from '#lib/api/types.ts';
 	import { entropyBasis, pastThreshold, sourcesFrom, stripRows } from '#lib/lab/anomalies.ts';
+	import { Experiments } from '#lib/lab/experiments.svelte.ts';
 	import { Probes, Scorer } from '#lib/lab/scorer.svelte.ts';
 	import type { PageData } from './$types';
 
@@ -21,18 +24,35 @@
 	});
 
 	const probes = new Probes();
+	const experiments = new Experiments('anomalies');
 
 	let sourceOpen = $state(false);
 	let detailOpen = $state(false);
 	let probesOpen = $state(false);
+	let savedOpen = $state(false);
 	// Which row of the strip the selection is on; the token is the scorer's.
 	let row = $state(0);
 
 	let numLayers = $derived(data.status?.model?.num_layers ?? 0);
 
+	// Null when Lab has no database, and saving is not offered at all.
+	let retentionDays = $derived(data.status?.experiment_retention_days ?? null);
+	let saveable = $derived<AnomaliesRun | null>(
+		scorer.scored?.lab ? { kind: 'anomalies', ...scorer.scored.lab } : null
+	);
+
 	onMount(() => {
 		if (data.status?.model) void probes.load();
+		if (data.status?.model && retentionDays !== null) void experiments.load();
 	});
+
+	function reopen(experiment: Experiment) {
+		if (experiment.run.kind !== 'anomalies' || !experiment.run.result) return;
+		if (scorer.show(experiment.run.request, experiment.run.result)) {
+			// Read again: the restore put the run's probe back under its id.
+			void probes.load();
+		}
+	}
 
 	let problems = $derived(
 		[data.chatProblem, data.labProblem].filter((problem) => problem !== null)
@@ -118,10 +138,23 @@
 				</div>
 			{/if}
 
+			{#if retentionDays !== null && data.status?.model}
+				<Button
+					variant="ghost"
+					size="icon"
+					class={score ? '' : 'ml-auto'}
+					onclick={() => (savedOpen = true)}
+					title="Save this score, or open one saved before"
+				>
+					<Bookmark size={15} aria-hidden="true" />
+					<span class="sr-only">Saved experiments</span>
+				</Button>
+			{/if}
+
 			<Button
 				variant="ghost"
 				size="icon"
-				class="lg:hidden {score ? '' : 'ml-auto'}"
+				class="lg:hidden {score || (retentionDays !== null && data.status?.model) ? '' : 'ml-auto'}"
 				onclick={() => (detailOpen = true)}
 			>
 				<PanelRight size={15} aria-hidden="true" />
@@ -188,6 +221,18 @@
 
 {#if numLayers > 0}
 	<ProbeSheet bind:open={probesOpen} {probes} {scorer} {numLayers} />
+{/if}
+
+{#if retentionDays !== null}
+	<ExperimentsSheet
+		bind:open={savedOpen}
+		{experiments}
+		{retentionDays}
+		run={saveable}
+		unsaved="Score with Lab first. A score from a chat endpoint cannot be saved here: Lab keeps only what its own model made."
+		suggested={scorer.scored?.lab?.request.prompt ?? ''}
+		onopen={reopen}
+	/>
 {/if}
 
 <Sheet.Root bind:open={detailOpen}>

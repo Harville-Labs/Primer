@@ -237,14 +237,23 @@ services:
   # Every variable falls back to empty for the same reason the graph's do,
   # and Lab reads an empty one as unset. No port is published: the web app
   # is what reaches it, as it is for Chat.
+  #
+  # Saved experiments are kept in the shared database, in a schema of Lab's
+  # own that migrate-lab creates; PRIMER_LAB_EXPERIMENT_RETENTION_DAYS says
+  # for how long.
   lab:
-    build:
+    build: &lab-build
       context: ../..
       dockerfile: deploy/images/Dockerfile.lab
       target: cpu
     <<: *hardening
     profiles: [lab]
+    depends_on:
+      migrate-lab:
+        condition: service_completed_successfully
     environment:
+      PRIMER_DATABASE_URL: *database-url
+      PRIMER_LAB_EXPERIMENT_RETENTION_DAYS: ${PRIMER_LAB_EXPERIMENT_RETENTION_DAYS:-}
       # Fixed, not configurable: see the note at the top of this file.
       PRIMER_AUTH_MODE: disabled
       PRIMER_LAB_MODEL: ${PRIMER_LAB_MODEL:-}
@@ -265,6 +274,21 @@ services:
       retries: 12
       start_period: 30s
     restart: unless-stopped
+
+  # Lab's image, because only it holds Lab's migrations.
+  migrate-lab:
+    build: *lab-build
+    <<: *hardening
+    profiles: [lab]
+    depends_on:
+      postgres:
+        condition: service_healthy
+        required: false
+    environment:
+      PRIMER_DATABASE_URL: *database-url
+    working_dir: /app/services/lab
+    command: ["alembic", "upgrade", "head"]
+    restart: "no"
 
   # Stopped when PRIMER_EMBEDDING_BASE_URL names your own server.
   embeddings:

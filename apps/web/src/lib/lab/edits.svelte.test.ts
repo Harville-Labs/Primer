@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { Edits, Generator, Steering } from './edits.svelte';
+import { RESIDENT } from './fixture';
 
 const neuron = { site: 'mlp_neuron' as const, layer: 1, index: 4, op: 'zero' as const };
 
@@ -95,6 +96,20 @@ describe('the list of edits', () => {
 
 		expect(Object.keys(edits.interventions[0])).not.toContain('key');
 	});
+
+	it('starts again from a saved run’s edits, with none open', () => {
+		const edits = new Edits();
+		edits.add(neuron);
+
+		edits.replace([
+			{ ...neuron, value: 0, positions: 'all' },
+			{ ...neuron, op: 'scale', value: 2, positions: 'prompt' },
+		]);
+
+		expect(edits.interventions.map((edit) => edit.op)).toEqual(['zero', 'scale']);
+		expect(new Set(edits.items.map((edit) => edit.key)).size).toBe(2);
+		expect(edits.active).toBeNull();
+	});
 });
 
 function frames(...events: Record<string, unknown>[]): string {
@@ -166,6 +181,50 @@ describe('generating', () => {
 			title: 'Edit refused',
 			detail: 'Edit 1: there is no layer 9.',
 		});
+	});
+
+	it('keeps what it was asked, which is what a save stores beside the answers', async () => {
+		const { fetch } = recording(
+			() => new Response('', { headers: { 'Content-Type': 'text/event-stream' } }),
+		);
+		const generator = new Generator({ fetch });
+
+		await generator.run({ ...ask, target: ' Paris' });
+
+		expect(generator.asked).toEqual({
+			prompt: 'hi',
+			chat: false,
+			interventions: [],
+			max_new_tokens: 4,
+			target: ' Paris',
+		});
+	});
+
+	it('shows a saved run as finished, without asking Lab for anything', () => {
+		const { fetch, asked } = recording(() => {
+			throw new Error('a saved run is not generated again');
+		});
+		const generator = new Generator({ fetch });
+		const x = { id: 5, text: 'x', special: false };
+		const y = { id: 6, text: 'y', special: false };
+		const request = { prompt: 'hi', chat: false, interventions: [], max_new_tokens: 1 };
+
+		generator.show(request, {
+			type: 'completed',
+			id: 3,
+			model: RESIDENT,
+			prompt: [],
+			baseline: [x],
+			edited: [y],
+			diverged_at: 0,
+		});
+
+		expect(asked).toEqual([]);
+		expect(generator.asked).toEqual(request);
+		expect(generator.view.baseline).toEqual([x]);
+		expect(generator.view.edited).toEqual([y]);
+		expect(generator.view.completed?.diverged_at).toBe(0);
+		expect(generator.running).toBe(false);
 	});
 });
 

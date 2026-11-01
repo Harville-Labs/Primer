@@ -24,6 +24,63 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/lab/experiments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Your saved experiments, newest first */
+        get: operations["list_experiments_api_v1_lab_experiments_get"];
+        put?: never;
+        /** Save an experiment */
+        post: operations["save_experiment_api_v1_lab_experiments_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lab/experiments/{experiment_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One of your saved experiments */
+        get: operations["get_experiment_api_v1_lab_experiments__experiment_id__get"];
+        put?: never;
+        post?: never;
+        /** Delete one of your saved experiments */
+        delete: operations["delete_experiment_api_v1_lab_experiments__experiment_id__delete"];
+        options?: never;
+        head?: never;
+        /** Rename one of your saved experiments */
+        patch: operations["rename_experiment_api_v1_lab_experiments__experiment_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/lab/experiments/{experiment_id}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Put a saved experiment's vectors and probes back on the model
+         * @description Holds the experiment's steering vectors and probes for you again, under the ids its run names, so the run can be repeated as it was saved. Only onto the model and commit it was saved on: a vector is a direction in one model's residual stream.
+         */
+        post: operations["restore_experiment_api_v1_lab_experiments__experiment_id__restore_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/lab/generate": {
         parameters: {
             query?: never;
@@ -194,7 +251,9 @@ export interface paths {
          *     Gating this on the model looks right and is a trap: an unready pod
          *     is taken out of its Service, so after a failed load nobody could
          *     reach Lab to choose a model that works. Whether runs can be made is
-         *     the status route's `ready`, which the web app reads.
+         *     the status route's `ready`, which the web app reads. The database is
+         *     left out for the same reason: without it only saving fails, and the
+         *     saving routes say so.
          */
         get: operations["ready_health_ready_get"];
         put?: never;
@@ -247,6 +306,19 @@ export interface components {
             values: number[];
         };
         /**
+         * AnomaliesRun
+         * @description A score with Lab's detectors, from the Anomalies tab.
+         */
+        AnomaliesRun: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "anomalies";
+            request: components["schemas"]["LabScoreRequest"];
+            result?: components["schemas"]["LabScored"] | null;
+        };
+        /**
          * EntropyEstimate
          * @description How much of each next-token distribution the score could see.
          * @enum {string}
@@ -258,6 +330,76 @@ export interface components {
          * @enum {string}
          */
         ErrorCode: "identity_missing" | "identity_invalid" | "not_found" | "conflict" | "validation_failed" | "unsupported_content" | "quota_exceeded" | "dependency_unavailable" | "internal_error";
+        /** Experiment */
+        Experiment: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "neurons" | "anomalies";
+            model: components["schemas"]["LabModelStatus"];
+            /** Probes */
+            probes: components["schemas"]["Probe"][];
+            /** Run */
+            run: components["schemas"]["NeuronsRun"] | components["schemas"]["AnomaliesRun"];
+            /** Title */
+            title: string;
+            /** Vectors */
+            vectors: components["schemas"]["SteeringVector"][];
+        };
+        /** ExperimentCreate */
+        ExperimentCreate: {
+            /** Run */
+            run: components["schemas"]["NeuronsRun"] | components["schemas"]["AnomaliesRun"];
+            /** Title */
+            title: string;
+        };
+        /** ExperimentRename */
+        ExperimentRename: {
+            /** Title */
+            title: string;
+        };
+        /** ExperimentSummary */
+        ExperimentSummary: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "neurons" | "anomalies";
+            model: components["schemas"]["LabModelStatus"];
+            /** Title */
+            title: string;
+        };
         /** GenerateRequest */
         GenerateRequest: {
             /**
@@ -531,6 +673,8 @@ export interface components {
         LabStatus: {
             /** Can Choose Model */
             can_choose_model: boolean;
+            /** Experiment Retention Days */
+            experiment_retention_days?: number | null;
             /** Max Model Bytes */
             max_model_bytes: number;
             /** Max New Tokens */
@@ -605,6 +749,19 @@ export interface components {
              * @enum {string}
              */
             state: "fetching" | "loading" | "failed";
+        };
+        /**
+         * NeuronsRun
+         * @description A generation with edits, from the Neurons tab.
+         */
+        NeuronsRun: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "neurons";
+            request: components["schemas"]["GenerateRequest"];
+            result?: components["schemas"]["GenerationCompleted"] | null;
         };
         /** Outliers */
         Outliers: {
@@ -867,6 +1024,185 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ActivationVector"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_experiments_api_v1_lab_experiments_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExperimentSummary"][];
+                };
+            };
+        };
+    };
+    save_experiment_api_v1_lab_experiments_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExperimentCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Experiment"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_experiment_api_v1_lab_experiments__experiment_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                experiment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Experiment"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_experiment_api_v1_lab_experiments__experiment_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                experiment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    rename_experiment_api_v1_lab_experiments__experiment_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                experiment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExperimentRename"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExperimentSummary"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    restore_experiment_api_v1_lab_experiments__experiment_id__restore_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                experiment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Experiment"];
                 };
             };
             /** @description Validation Error */
