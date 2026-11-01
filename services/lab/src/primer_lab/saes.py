@@ -148,26 +148,6 @@ def pre_activations(sae: SaeLayer, residual: torch.Tensor) -> torch.Tensor:
     return residual.float() @ sae.encoder.to(device).T + sae.bias.to(device)
 
 
-class Attachment:
-    """The SAEs for one resident model, as they are fetched.
-
-    Held by the resident rather than the host, so a model replaced while
-    its SAEs were downloading takes them with it, and they can never be
-    applied to the model that came after.
-    """
-
-    def __init__(self, repository: str) -> None:
-        self.status = SaeStatus(repository=repository, state="fetching")
-        self.ready: SaeSet | None = None
-
-    def attached(self, saes: SaeSet) -> None:
-        self.ready = saes
-        self.status = saes.status()
-
-    def failed(self, message: str) -> None:
-        self.status = SaeStatus(repository=self.status.repository, state="failed", error=message)
-
-
 def fetch_saes(
     settings: Settings, repository: str, hub: Hub, *, hidden_size: int, num_layers: int
 ) -> SaeSet:
@@ -189,7 +169,7 @@ def fetch_saes(
         missing = [name for name in files if name not in listing.files]
         if missing:
             raise WeightsRefused(f"its config names layers it does not publish: {missing[0]}.")
-        check_size(settings, repository, listing, files)
+        check_size(repository, listing, files, limit=settings.lab_max_model_bytes)
         directory = hub.download(repository, listing.commit, files)
         layers = {
             layer: load_layer(directory / layer_file(layer), config) for layer in config.layers
