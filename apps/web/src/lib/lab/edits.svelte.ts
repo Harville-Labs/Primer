@@ -1,7 +1,8 @@
 import { parseEvents } from '#lib/api/sse.ts';
 import type { Intervention, SteeringVector, SteeringVectorRequest } from '#lib/api/types.ts';
-import { asFailure, type Failure, problemOf } from './failure';
+import { asFailure, problemOf } from './failure';
 import { emptyGeneration, foldGeneration, type GenerationView, OP_DEFAULTS } from './generation';
+import { OwnedList, type OwnedOptions } from './owned.svelte';
 
 /**
  * The Neurons tab's experiments: the edits to make, the generation that
@@ -169,53 +170,13 @@ export class Generator {
 	}
 }
 
-export class Steering {
-	vectors = $state.raw<SteeringVector[]>([]);
-	creating = $state(false);
-	failure = $state<Failure | null>(null);
-
-	private readonly fetch: typeof globalThis.fetch;
-
-	constructor(options: GeneratorOptions = {}) {
-		this.fetch = options.fetch ?? globalThis.fetch.bind(globalThis);
-	}
-
-	/** The caller's vectors. Lab keeps them until its model changes. */
-	async load(): Promise<void> {
-		try {
-			const response = await this.fetch('/lab/vectors');
-			if (!response.ok) throw await problemOf(response);
-			this.vectors = (await response.json()) as SteeringVector[];
-		} catch (failure) {
-			this.failure = asFailure(failure);
-		}
-	}
-
-	async create(request: SteeringVectorRequest): Promise<SteeringVector | null> {
-		if (this.creating) return null;
-		this.creating = true;
-		this.failure = null;
-		try {
-			const response = await this.fetch('/lab/vectors', {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify(request),
-			});
-			if (!response.ok) throw await problemOf(response);
-			const vector = (await response.json()) as SteeringVector;
-			// Lab evicts the oldest past its cap, so the list is read again
-			// rather than appended to and left to disagree with it.
-			await this.load();
-			return vector;
-		} catch (failure) {
-			this.failure = asFailure(failure);
-			return null;
-		} finally {
-			this.creating = false;
-		}
+/** The caller's steering vectors, which an edit adds by id. */
+export class Steering extends OwnedList<SteeringVector, SteeringVectorRequest> {
+	constructor(options: OwnedOptions = {}) {
+		super('/lab/vectors', options);
 	}
 
 	label(id: string): string | undefined {
-		return this.vectors.find((vector) => vector.id === id)?.label;
+		return this.find(id)?.label;
 	}
 }
