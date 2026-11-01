@@ -4,6 +4,7 @@
 	import type { ActivationSite } from '#lib/api/types.ts';
 	import {
 		cellColour,
+		featuresAt,
 		lensAt,
 		neuronsAt,
 		normByLayer,
@@ -11,6 +12,7 @@
 		visibleToken,
 	} from '#lib/lab/heatmap.ts';
 	import type { Inspector } from '#lib/lab/inspector.svelte.ts';
+	import SignedBars from './SignedBars.svelte';
 
 	/** What the selected cell holds: the lens's guesses, its neurons, its whole vector. */
 	interface Props {
@@ -31,7 +33,10 @@
 	let token = $derived(reading?.tokens[at.token]);
 	let lens = $derived(reading ? lensAt(reading, at) : []);
 	let neurons = $derived(reading ? neuronsAt(reading, at) : []);
-	let peak = $derived(Math.max(1e-9, ...neurons.map((neuron) => Math.abs(neuron.activation))));
+	let features = $derived(reading ? featuresAt(reading, at) : null);
+	// The reading's own status, which is the one its features were read with.
+	let saes = $derived(reading?.model.saes ?? null);
+	let covered = $derived(saes?.layers ?? []);
 	let norms = $derived(reading ? normByLayer(reading, at.token) : []);
 	let vector = $derived(inspector.vector ? summariseVector(inspector.vector.values) : null);
 
@@ -176,31 +181,42 @@
 			<p class="text-xs text-muted-foreground">
 				Of {reading.mlp_width.toLocaleString()} at this layer, by magnitude.
 			</p>
-			<ol class="flex flex-col gap-px">
-				{#each neurons as neuron (neuron.index)}
-					{@const share = (Math.abs(neuron.activation) / peak) * 50}
-					<li class="grid grid-cols-[3.5rem_1fr_3.5rem] items-center gap-2 py-0.5">
-						<span class="font-mono text-[11px] tabular-nums text-muted-foreground">
-							n{neuron.index}
-						</span>
-						<!-- Drawn out from a centre line, so the sign is where the bar goes. -->
-						<span class="relative h-2.5 rounded-[2px] bg-secondary">
-							<span aria-hidden="true" class="absolute inset-y-0 left-1/2 w-px bg-border-strong"
-							></span>
-							<span
-								aria-hidden="true"
-								class="absolute inset-y-0 rounded-[2px]"
-								style:left={neuron.activation < 0 ? `${50 - share}%` : '50%'}
-								style:width="{share}%"
-								style:background-color={cellColour(neuron.activation < 0 ? -0.9 : 0.9)}
-							></span>
-						</span>
-						<span class="text-right font-mono text-[11px] tabular-nums">
-							{number.format(neuron.activation)}
-						</span>
-					</li>
-				{/each}
-			</ol>
+<SignedBars rows={neurons} prefix="n" />
+		</section>
+
+		<section aria-labelledby="features-heading" class="flex flex-col gap-2">
+			<h3 id="features-heading" class="text-xs font-semibold uppercase tracking-[0.08em]">
+				Strongest SAE features
+			</h3>
+			{#if !saes}
+				<p class="text-xs text-muted-foreground">
+					No sparse autoencoders are mapped to this model. An operator maps them with
+					<code class="font-mono">PRIMER_LAB_SAES</code>.
+				</p>
+			{:else if saes.state === 'fetching'}
+				<p role="status" class="flex items-center gap-2 text-xs text-muted-foreground">
+					<Spinner size={12} aria-hidden="true" />
+					Downloading {saes.repository}. Run the prompt again once it is ready.
+				</p>
+			{:else if saes.state === 'failed'}
+				<p role="alert" class="text-xs">
+					<span class="font-medium text-error">Lab would not open {saes.repository}:</span>
+					{saes.error}
+				</p>
+			{:else if features}
+				<p class="text-xs text-muted-foreground">
+					Of {saes.width?.toLocaleString()} in
+					<span class="font-mono" title={saes.commit ?? undefined}>{saes.repository}</span>,
+					the strongest of the {saes.k} that fire.
+				</p>
+				<SignedBars rows={features} prefix="f" />
+			{:else}
+				<p class="text-xs text-muted-foreground">
+					{saes.repository} has no SAE for layer {at.layer}. It reads
+					{covered.length === 1 ? 'layer' : 'layers'}
+					{covered.join(', ')}.
+				</p>
+			{/if}
 		</section>
 
 		<section aria-labelledby="vector-heading" class="flex flex-col gap-3">

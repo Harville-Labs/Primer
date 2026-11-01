@@ -172,6 +172,18 @@ export function neuronsAt(reading: InspectResponse, at: Cell): NeuronReading[] {
 	return indices.map((index, rank) => ({ index, activation: activations[rank] ?? 0 }));
 }
 
+/**
+ * The strongest SAE features at a cell, or null where no SAE reads that
+ * layer - which is not the same as an SAE that read it and found nothing.
+ */
+export function featuresAt(reading: InspectResponse, at: Cell): NeuronReading[] | null {
+	const layer = reading.layers[at.layer];
+	if (!layer?.feature_indices) return null;
+	const indices = layer.feature_indices[at.token] ?? [];
+	const activations = layer.feature_activations?.[at.token] ?? [];
+	return indices.map((index, rank) => ({ index, activation: activations[rank] ?? 0 }));
+}
+
 /** The residual norm at every layer for one token, bottom layer first. */
 export function normByLayer(reading: InspectResponse, token: number): number[] {
 	return reading.layers.map((layer) => layer.residual_norm[token] ?? 0);
