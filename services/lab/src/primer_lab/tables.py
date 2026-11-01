@@ -27,7 +27,7 @@ NAMING_CONVENTION = {
     "pk": "pk_%(table_name)s",
 }
 
-KINDS = ("neurons", "anomalies")
+KINDS = ("neurons", "anomalies", "scan")
 
 
 class Base(DeclarativeBase):

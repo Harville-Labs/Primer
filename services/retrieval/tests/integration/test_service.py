@@ -251,3 +251,56 @@ def test_readiness_does_not_count_the_collection(unreadable: TestClient) -> None
     two_generations(unreadable)
 
     assert unreadable.get("/health/ready").status_code == 200
+
+
+def passages(client: TestClient, library: uuid.UUID, generations, limit: int = 500):
+    return client.post(
+        "/internal/v1/passages",
+        json={
+            "principal": principal(),
+            "library_id": str(library),
+            "generation_ids": [str(g) for g in generations],
+            "limit": limit,
+        },
+        headers=TOKEN_HEADER,
+    )
+
+
+def test_passages_are_listed_in_reading_order_from_one_library_and_generation(
+    client: TestClient,
+) -> None:
+    """Written backwards, beside another library and a pending build of this one.
+
+    Eight, because Qdrant hands back a filter's matches in id order, and the
+    ids are hashes: two passages come back in reading order half the time
+    with no sorting at all.
+    """
+    index(
+        client,
+        MINE,
+        GENERATION,
+        *(chunk(MINE, GENERATION, f"passage {i}", ordinal=i) for i in reversed(range(8))),
+    )
+    index(client, MINE, NEXT_GENERATION, chunk(MINE, NEXT_GENERATION, "pending", ordinal=0))
+    index(client, THEIRS, GENERATION, chunk(THEIRS, GENERATION, "theirs", ordinal=0))
+
+    listed = passages(client, MINE, [GENERATION]).json()
+
+    assert [p["content"] for p in listed["passages"]] == [f"passage {i}" for i in range(8)]
+    assert listed["total"] == 8
+    assert listed["passages"][0]["filename"] == "paper.pdf"
+    assert listed["passages"][0]["locator"] == {"page": 2, "section": "Results"}
+
+
+def test_a_listing_cut_short_says_how_many_the_library_holds(client: TestClient) -> None:
+    index(
+        client,
+        MINE,
+        GENERATION,
+        *(chunk(MINE, GENERATION, f"passage {i}", ordinal=i) for i in range(3)),
+    )
+
+    listed = passages(client, MINE, [GENERATION], limit=2).json()
+
+    assert [p["ordinal"] for p in listed["passages"]] == [0, 1]
+    assert listed["total"] == 3

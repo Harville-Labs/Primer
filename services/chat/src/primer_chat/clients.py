@@ -17,6 +17,8 @@ from primer_contracts.identity import Principal
 from primer_contracts.indexing import (
     LibraryAccessRequest,
     LibraryScope,
+    PassagesRequest,
+    PassagesResult,
     SearchRequest,
     SearchResult,
 )
@@ -36,6 +38,8 @@ class PassageSource(Protocol):
     """Retrieval, which is the only thing that touches a vector store."""
 
     async def search(self, request: SearchRequest) -> SearchResult: ...
+
+    async def passages(self, request: PassagesRequest) -> PassagesResult: ...
 
 
 class SearchFailed(Exception):
@@ -135,17 +139,32 @@ class RetrievalClient(_Client):
         response = await self._client.post(
             "/internal/v1/search", json=request.model_dump(mode="json")
         )
-        if response.status_code == 503:
-            # Retrieval says which of its own dependencies is down, and that
-            # sentence is worth more to whoever reads it than anything this
-            # service could invent. Carried through rather than flattened to
-            # "the answer stopped", which points at the model instead.
-            raise SearchUnavailable(_detail_of(response))
-        if response.status_code == 422 and _problem_of(response).get("code") == (
-            ErrorCode.QUOTA_EXCEEDED
-        ):
-            # By code as well as status: any other 422 is a request Chat
-            # built wrongly, which is a bug here and should fail as one.
-            raise SearchRefused(_detail_of(response))
-        response.raise_for_status()
+        _raise_for(response)
         return SearchResult.model_validate(response.json())
+
+    async def passages(self, request: PassagesRequest) -> PassagesResult:
+        try:
+            response = await self._client.post(
+                "/internal/v1/passages", json=request.model_dump(mode="json")
+            )
+        except httpx2.TransportError as error:
+            raise SearchUnavailable("Retrieval could not be reached.") from error
+        _raise_for(response)
+        return PassagesResult.model_validate(response.json())
+
+
+def _raise_for(response: httpx2.Response) -> None:
+    """Name Retrieval's refusals for what they are, and fail on anything else."""
+    if response.status_code == 503:
+        # Retrieval says which of its own dependencies is down, and that
+        # sentence is worth more to whoever reads it than anything this
+        # service could invent. Carried through rather than flattened to
+        # "the answer stopped", which points at the model instead.
+        raise SearchUnavailable(_detail_of(response))
+    if response.status_code == 422 and _problem_of(response).get("code") == (
+        ErrorCode.QUOTA_EXCEEDED
+    ):
+        # By code as well as status: any other 422 is a request Chat
+        # built wrongly, which is a bug here and should fail as one.
+        raise SearchRefused(_detail_of(response))
+    response.raise_for_status()

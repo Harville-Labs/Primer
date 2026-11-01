@@ -143,6 +143,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/libraries/{library_id}/passages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * A library's passages, in reading order
+         * @description The passages of a library you can read, as they are stored, by file and then by position. At most `limit`; `total` says how many the library holds.
+         */
+        get: operations["list_passages_api_v1_libraries__library_id__passages_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/models": {
         parameters: {
             query?: never;
@@ -508,6 +528,42 @@ export interface components {
             reasoning?: string | null;
             role: components["schemas"]["MessageRole"];
             state: components["schemas"]["MessageState"];
+        };
+        /**
+         * Passage
+         * @description A passage as it is stored, with what is needed to point back to it.
+         */
+        Passage: {
+            /**
+             * Chunk Id
+             * Format: uuid
+             */
+            chunk_id: string;
+            /** Content */
+            content: string;
+            /**
+             * Document Id
+             * Format: uuid
+             */
+            document_id: string;
+            /** Filename */
+            filename: string;
+            locator?: components["schemas"]["SourceLocator"] | null;
+            /** Ordinal */
+            ordinal: number;
+        };
+        /** PassagesResult */
+        PassagesResult: {
+            /**
+             * Passages
+             * @default []
+             */
+            passages: components["schemas"]["Passage"][];
+            /**
+             * Total
+             * @default 0
+             */
+            total: number;
         };
         /**
          * ProviderCheck
@@ -1142,6 +1198,39 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_passages_api_v1_libraries__library_id__passages_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                library_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PassagesResult"];
+                };
             };
             /** @description Validation Error */
             422: {

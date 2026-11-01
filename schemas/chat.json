@@ -448,6 +448,73 @@
         "title": "MessageSummary",
         "type": "object"
       },
+      "Passage": {
+        "additionalProperties": false,
+        "description": "A passage as it is stored, with what is needed to point back to it.",
+        "properties": {
+          "chunk_id": {
+            "format": "uuid",
+            "title": "Chunk Id",
+            "type": "string"
+          },
+          "content": {
+            "title": "Content",
+            "type": "string"
+          },
+          "document_id": {
+            "format": "uuid",
+            "title": "Document Id",
+            "type": "string"
+          },
+          "filename": {
+            "title": "Filename",
+            "type": "string"
+          },
+          "locator": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SourceLocator"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "ordinal": {
+            "title": "Ordinal",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "chunk_id",
+          "document_id",
+          "filename",
+          "ordinal",
+          "content"
+        ],
+        "title": "Passage",
+        "type": "object"
+      },
+      "PassagesResult": {
+        "additionalProperties": false,
+        "properties": {
+          "passages": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/Passage"
+            },
+            "title": "Passages",
+            "type": "array"
+          },
+          "total": {
+            "default": 0,
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "title": "PassagesResult",
+        "type": "object"
+      },
       "ProviderCheck": {
         "additionalProperties": false,
         "description": "What happened when Primer asked a provider what it serves.\n\nRun on demand from the settings page, because the useful moment to learn\nthat a URL is wrong is while it is still on screen being typed.",
@@ -1589,6 +1656,62 @@
         "summary": "Continue a conversation",
         "tags": [
           "chat"
+        ]
+      }
+    },
+    "/api/v1/libraries/{library_id}/passages": {
+      "get": {
+        "description": "The passages of a library you can read, as they are stored, by file and then by position. At most `limit`; `total` says how many the library holds.",
+        "operationId": "list_passages_api_v1_libraries__library_id__passages_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "library_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Library Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 500,
+              "maximum": 2000,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PassagesResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "A library's passages, in reading order",
+        "tags": [
+          "passages"
         ]
       }
     },

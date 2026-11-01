@@ -3,6 +3,7 @@ import type {
 	ChatModelList,
 	ConversationSummary,
 	MessageSummary,
+	PassagesResult,
 	ProblemDetail,
 	ProviderCheck,
 	ProviderCreate,
@@ -161,5 +162,16 @@ export class ChatApi {
 
 	deleteConversation(conversationId: string): Promise<void> {
 		return this.request(`/api/v1/conversations/${conversationId}`, { method: 'DELETE' });
+	}
+
+	/**
+	 * A library's passages in reading order, for Lab's scan. Chat asks
+	 * Control whether the caller may read the library before listing any.
+	 * The id is encoded: it comes from the browser, and must not become a
+	 * different path.
+	 */
+	passages(libraryId: string, limit: number): Promise<PassagesResult> {
+		const library = encodeURIComponent(libraryId);
+		return this.request(`/api/v1/libraries/${library}/passages?limit=${limit}`);
 	}
 }

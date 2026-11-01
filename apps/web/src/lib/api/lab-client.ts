@@ -9,6 +9,8 @@ import type {
 	GenerateRequest,
 	InspectRequest,
 	InspectResponse,
+	LabScanned,
+	LabScanRequest,
 	LabScored,
 	LabScoreRequest,
 	LabStatus,
@@ -119,6 +121,11 @@ export class LabApi {
 	/** The resident model's surprise at each token, with entropy over the whole vocabulary. */
 	score(payload: LabScoreRequest): Promise<LabScored> {
 		return this.post('/api/v1/lab/score', payload);
+	}
+
+	/** A batch of passages' surprise, and a probe's reading of each. Lab is given text, not a library. */
+	scan(payload: LabScanRequest): Promise<LabScanned> {
+		return this.post('/api/v1/lab/scan', payload);
 	}
 
 	vectors(): Promise<SteeringVector[]> {
