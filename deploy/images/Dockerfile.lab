@@ -1,9 +1,10 @@
 # Lab: loads a small open model and lets a user look inside it.
 #
-# Two targets, built from one set of locked dependencies:
+# Three targets, built from one set of locked dependencies:
 #
 #   docker build -f deploy/images/Dockerfile.lab --target cpu .
 #   docker build -f deploy/images/Dockerfile.lab --target cuda .
+#   docker build -f deploy/images/Dockerfile.lab --target graphs .
 #
 # `cpu` is the default, because it is the last stage. Weights are not baked
 # in: they are fetched into /models when a model is chosen, and that volume
@@ -69,6 +70,29 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     && uv pip install --python /app/.venv --reinstall-package torch \
          --index https://download.pytorch.org/whl/cu132 "torch==${version}" \
     && chown -R 10001:10001 /app
+USER 10001:10001
+
+# Attribution graphs (ADR 0009): the CUDA image with the graph builder
+# installed beside Lab, in an environment of its own, because the builder
+# needs transformers 4.x and Lab's lock has 5. Lab runs it as a program, so
+# the two never share an interpreter. Only for a GPU: a graph built on a CPU
+# does not finish inside the time Lab gives one.
+FROM cuda AS graphs
+USER root
+COPY services/lab-graphs/ services/lab-graphs/
+RUN --mount=type=cache,target=/root/.cache/uv \
+    apt-get update \
+    && apt-get install -y --no-install-recommends gcc libc6-dev \
+    && UV_PROJECT_ENVIRONMENT=/opt/graphs \
+         uv sync --locked --no-dev --no-editable --project services/lab-graphs \
+    && version="$(/opt/graphs/bin/python -c 'import importlib.metadata as m; print(m.version("torch").split("+")[0])')" \
+    && uv pip install --python /opt/graphs --reinstall-package torch \
+         --index https://download.pytorch.org/whl/cu132 "torch==${version}" \
+    && apt-get purge -y --auto-remove gcc libc6-dev \
+    && rm -rf /var/lib/apt/lists/* \
+    && chown -R 10001:10001 /opt/graphs
+# The image is the switch: Lab offers graphs when it is told where the builder is.
+ENV PRIMER_LAB_GRAPH_PYTHON=/opt/graphs/bin/python
 USER 10001:10001
 
 FROM base AS cpu
