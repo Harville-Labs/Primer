@@ -35,7 +35,7 @@ from primer_lab.inspection import describe, special_ids
 from primer_lab.interventions import Comparison, InterventionRefused, compare, first_divergence
 from primer_lab.interventions import resolve as resolve_edits
 from primer_lab.routes import check_new_tokens, current_resident, read_prompt, refused, run_queued
-from primer_lab.steering import difference_of_means, last_token_residuals
+from primer_lab.steering import difference_of_means, last_token_residuals, made_vector
 
 logger = logging.getLogger(__name__)
 
@@ -224,14 +224,10 @@ async def make_vector(
         )
 
     vector = await run_queued(request, resident, work)
-    return resident.vectors.add(
-        principal.user_id,
-        vector,
-        label=body.label,
-        layer=body.layer,
-        positive=len(positive),
-        negative=len(negative),
+    summary = made_vector(
+        vector, label=body.label, layer=body.layer, positive=len(positive), negative=len(negative)
     )
+    return resident.vectors.add(principal.user_id, summary, vector)
 
 
 @router.get("/vectors", summary="The steering vectors you have made on this model")

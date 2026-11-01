@@ -2,17 +2,17 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterator
 from typing import Any, cast
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 import torch
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from lab_streams import completed, generate
-from lab_support import lab, settle
-from primer_lab.steering import MAX_VECTORS_PER_OWNER, SteeringVectors, difference_of_means
+from lab_support import as_user
+from primer_lab.owned import MAX_PER_OWNER, Owned
+from primer_lab.steering import difference_of_means, made_vector
 from primer_service.identity import LOCAL_SUBJECT, user_id_for_subject
 
 POSITIVE = ["hello world", "w1 w2 w3"]
@@ -83,18 +83,6 @@ def test_a_vector_at_a_layer_the_model_does_not_have_is_refused(client):
     assert "0 to 1" in answer.json()["detail"]
 
 
-@pytest.fixture
-def shared(weights_dir, hub, factory) -> Iterator[TestClient]:
-    """Lab behind the proxy, so requests can come from different people."""
-    with lab(weights_dir, hub, factory, auth_mode="oidc") as client:
-        settle(client)
-        yield client
-
-
-def as_user(name: str) -> dict[str, str]:
-    return {"X-Forwarded-User": name}
-
-
 def test_a_vector_is_listed_only_for_the_person_who_made_it(shared):
     made = make(shared, headers=as_user("ada")).json()
 
@@ -117,13 +105,16 @@ def test_someone_elses_vector_cannot_be_added_even_knowing_its_id(shared):
 
 
 def test_past_the_cap_the_oldest_vector_goes_and_only_the_owners():
-    store = SteeringVectors()
+    store: Owned[Any, torch.Tensor] = Owned()
     me, them = uuid4(), uuid4()
-    theirs = store.add(them, torch.ones(2), label="theirs", layer=0, positive=1, negative=1)
-    made = [
-        store.add(me, torch.ones(2), label=str(i), layer=0, positive=1, negative=1)
-        for i in range(MAX_VECTORS_PER_OWNER + 1)
-    ]
+
+    def add(owner: UUID, label: str) -> Any:
+        vector = torch.ones(2)
+        summary = made_vector(vector, label=label, layer=0, positive=1, negative=1)
+        return store.add(owner, summary, vector)
+
+    theirs = add(them, "theirs")
+    made = [add(me, str(i)) for i in range(MAX_PER_OWNER + 1)]
 
     assert [v.id for v in store.listed(me)] == [v.id for v in made[1:]]
     assert [v.id for v in store.listed(them)] == [theirs.id]

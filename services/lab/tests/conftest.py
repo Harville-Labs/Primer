@@ -135,3 +135,11 @@ def with_saes(weights_dir, hub, factory, published, tmp_path) -> Iterator[TestCl
     with lab_with_saes(weights_dir, hub, factory) as client:
         settle(client)
         yield client
+
+
+@pytest.fixture
+def shared(weights_dir, hub, factory) -> Iterator[TestClient]:
+    """Lab behind the proxy, so requests can come from different people."""
+    with lab(weights_dir, hub, factory, auth_mode="oidc") as client:
+        settle(client)
+        yield client

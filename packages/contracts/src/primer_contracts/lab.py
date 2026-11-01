@@ -288,6 +288,14 @@ class GenerateRequest(PromptInput):
     target: str | None = Field(default=None, min_length=1, max_length=200)
 
 
+#: One prompt of a set a steering vector or a probe is made from. Each is a
+#: forward pass, so the count and the length are both bounded.
+SetPrompt = Annotated[str, Field(min_length=1, max_length=20_000)]
+MAX_SET_PROMPTS = 64
+#: Per set, so every fold of the cross-validation holds out at least one of each.
+MIN_PROBE_PROMPTS = 4
+
+
 class SteeringVectorRequest(WireModel):
     """A difference of means between two sets of prompts at one layer.
 
@@ -301,12 +309,8 @@ class SteeringVectorRequest(WireModel):
 
     label: str = Field(min_length=1, max_length=120)
     layer: int = Field(ge=0)
-    positive: list[Annotated[str, Field(min_length=1, max_length=20_000)]] = Field(
-        min_length=1, max_length=64
-    )
-    negative: list[Annotated[str, Field(min_length=1, max_length=20_000)]] = Field(
-        min_length=1, max_length=64
-    )
+    positive: list[SetPrompt] = Field(min_length=1, max_length=MAX_SET_PROMPTS)
+    negative: list[SetPrompt] = Field(min_length=1, max_length=MAX_SET_PROMPTS)
     chat: bool = True
 
 
@@ -321,6 +325,43 @@ class SteeringVector(WireModel):
     norm: float
     positive: int = Field(ge=1)
     negative: int = Field(ge=1)
+
+
+class ProbeRequest(WireModel):
+    """A linear probe trained to tell two sets of prompts apart at one layer.
+
+    Logistic regression on the residual stream after `layer`, at each
+    prompt's last token - the same reading a steering vector is made from.
+    Each set needs a few prompts, so that some can be held out to measure
+    the probe on prompts it was not trained on.
+    """
+
+    model_config = VERBATIM
+
+    label: str = Field(min_length=1, max_length=120)
+    layer: int = Field(ge=0)
+    positive: list[SetPrompt] = Field(min_length=MIN_PROBE_PROMPTS, max_length=MAX_SET_PROMPTS)
+    negative: list[SetPrompt] = Field(min_length=MIN_PROBE_PROMPTS, max_length=MAX_SET_PROMPTS)
+    chat: bool = True
+
+
+class Probe(WireModel):
+    """A probe Lab holds for its owner until the model changes, with how well it did."""
+
+    id: str
+    label: str
+    layer: int
+    positive: int = Field(ge=1)
+    negative: int = Field(ge=1)
+    #: The share of prompts labelled correctly while held out of training,
+    #: averaged over `folds` folds of cross-validation.
+    accuracy: float = Field(ge=0, le=1)
+    folds: int = Field(ge=2)
+    #: The share a probe would get by always answering the larger set.
+    chance: float = Field(ge=0, le=1)
+    #: Whether `accuracy` is more than two standard errors above `chance`.
+    #: A probe that is not has learned nothing to trust.
+    beats_chance: bool
 
 
 class TargetChange(WireModel):

@@ -1000,6 +1000,120 @@
         "title": "ModelSwitch",
         "type": "object"
       },
+      "Probe": {
+        "additionalProperties": false,
+        "description": "A probe Lab holds for its owner until the model changes, with how well it did.",
+        "properties": {
+          "accuracy": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Accuracy",
+            "type": "number"
+          },
+          "beats_chance": {
+            "title": "Beats Chance",
+            "type": "boolean"
+          },
+          "chance": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Chance",
+            "type": "number"
+          },
+          "folds": {
+            "minimum": 2.0,
+            "title": "Folds",
+            "type": "integer"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "layer": {
+            "title": "Layer",
+            "type": "integer"
+          },
+          "negative": {
+            "minimum": 1.0,
+            "title": "Negative",
+            "type": "integer"
+          },
+          "positive": {
+            "minimum": 1.0,
+            "title": "Positive",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "layer",
+          "positive",
+          "negative",
+          "accuracy",
+          "folds",
+          "chance",
+          "beats_chance"
+        ],
+        "title": "Probe",
+        "type": "object"
+      },
+      "ProbeRequest": {
+        "additionalProperties": false,
+        "description": "A linear probe trained to tell two sets of prompts apart at one layer.\n\nLogistic regression on the residual stream after `layer`, at each\nprompt's last token - the same reading a steering vector is made from.\nEach set needs a few prompts, so that some can be held out to measure\nthe probe on prompts it was not trained on.",
+        "properties": {
+          "chat": {
+            "default": true,
+            "title": "Chat",
+            "type": "boolean"
+          },
+          "label": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Label",
+            "type": "string"
+          },
+          "layer": {
+            "minimum": 0.0,
+            "title": "Layer",
+            "type": "integer"
+          },
+          "negative": {
+            "items": {
+              "maxLength": 20000,
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 64,
+            "minItems": 4,
+            "title": "Negative",
+            "type": "array"
+          },
+          "positive": {
+            "items": {
+              "maxLength": 20000,
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 64,
+            "minItems": 4,
+            "title": "Positive",
+            "type": "array"
+          }
+        },
+        "required": [
+          "label",
+          "layer",
+          "positive",
+          "negative"
+        ],
+        "title": "ProbeRequest",
+        "type": "object"
+      },
       "ProblemDetail": {
         "additionalProperties": false,
         "description": "Sanitized error body. Operational context stays in logs, not here.",
@@ -1647,6 +1761,71 @@
           }
         },
         "summary": "Switch the resident model",
+        "tags": [
+          "lab"
+        ]
+      }
+    },
+    "/api/v1/lab/probes": {
+      "get": {
+        "operationId": "list_probes_api_v1_lab_probes_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/Probe"
+                  },
+                  "title": "Response List Probes Api V1 Lab Probes Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "The probes you have trained on this model",
+        "tags": [
+          "lab"
+        ]
+      },
+      "post": {
+        "description": "Logistic regression on the residual stream after the layer, at each prompt's last token, telling the positive prompts from the negative ones. The answer says how accurate it was on prompts held out of training, beside chance. Lab holds it for the person who trained it until the model changes; apply it when scoring.",
+        "operationId": "train_probe_api_v1_lab_probes_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProbeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Probe"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Train a linear probe on two sets of prompts",
         "tags": [
           "lab"
         ]
