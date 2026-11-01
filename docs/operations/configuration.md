@@ -250,6 +250,7 @@ Compose passes one.
 | `PRIMER_LAB_REPOSITORY_PATTERNS` | `lab.repositoryPatterns` | `["*/*"]` | JSON list of shell-style patterns a repository must match |
 | `PRIMER_LAB_MAX_MODEL_BYTES` | `lab.maxModelBytes` | `20000000000` | Checked against the hub's file list before anything downloads |
 | `PRIMER_LAB_SAES` | `lab.saes` | Qwen3-1.7B and Qwen3-1.7B-Base to Qwen-Scope | JSON object from a model repository to the SAE repository read with it. `{}` maps none. See [SAE features](lab.md#sae-features) |
+| `PRIMER_LAB_FEATURE_LABELS` | `lab.featureLabels` | none | JSON object from an SAE repository to a labels file, as a path inside the weights volume. See [Feature labels](lab.md#feature-labels) |
 | `PRIMER_LAB_HUB_ENDPOINT` | `lab.hubEndpoint` | the public hub | A mirror |
 | `PRIMER_LAB_DEVICE` | `lab.device` | `auto` | `auto` uses CUDA when torch can see a GPU |
 | `PRIMER_LAB_DTYPE` | `lab.dtype` | `auto` | `auto` is `bfloat16` on CUDA and `float32` on CPU |

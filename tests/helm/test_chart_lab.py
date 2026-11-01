@@ -114,6 +114,15 @@ def test_the_default_model_is_given_its_saes_and_an_operator_can_turn_them_off()
     assert env_of(lab(render(*ENABLED, "lab.saes=null")))["PRIMER_LAB_SAES"] == "{}"
 
 
+def test_feature_labels_are_passed_as_json_and_default_to_none() -> None:
+    assert env_of(lab(render(*ENABLED)))["PRIMER_LAB_FEATURE_LABELS"] == "{}"
+
+    mapped = render(*ENABLED, "lab.featureLabels.Qwen/SAE-Res-Qwen3-1\\.7B=labels/qwen.jsonl")
+    assert env_of(lab(mapped))["PRIMER_LAB_FEATURE_LABELS"] == (
+        '{"Qwen/SAE-Res-Qwen3-1.7B":"labels/qwen.jsonl"}'
+    )
+
+
 def test_a_gpu_switches_to_the_cuda_image_and_requests_the_device() -> None:
     container = containers(lab(render(*ENABLED, "lab.gpu=1")))[0]
 

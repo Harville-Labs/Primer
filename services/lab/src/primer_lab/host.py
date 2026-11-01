@@ -12,7 +12,7 @@ from __future__ import annotations
 import asyncio
 import gc
 import logging
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
@@ -27,6 +27,7 @@ from primer_contracts.lab import (
 )
 
 from primer_lab.config import Settings
+from primer_lab.labels import FeatureLabels
 from primer_lab.loader import (
     DeviceUnavailable,
     LoadedModel,
@@ -94,8 +95,12 @@ class ModelHost:
         factory: ModelFactory,
         *,
         cuda_available: Callable[[], bool] | None = None,
+        labels: Mapping[str, FeatureLabels] | None = None,
     ) -> None:
         self._settings = settings
+        #: Read at startup, so a malformed file stops Lab there; matched to
+        #: SAEs here, once they are fetched and their shape is known.
+        self._labels = labels or {}
         self._queue = queue
         self._hub = hub
         self._factory = factory
@@ -177,7 +182,7 @@ class ModelHost:
             logger.exception("attaching SAEs failed")
             attachment.failed("The SAEs passed Lab's checks but could not be opened.")
         else:
-            attachment.attached(saes)
+            attachment.attached(saes.labelled(self._labels.get(saes.repository)))
 
     def _saes_for(self, reference: HubModel | LocalModel) -> Attachment | None:
         # By repository alone: an operator maps a model to the SAEs trained
