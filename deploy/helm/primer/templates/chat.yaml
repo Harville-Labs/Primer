@@ -80,6 +80,10 @@ spec:
               value: {{ .Values.inference.chat.compactHistory | quote }}
             - name: PRIMER_CHAT_SUMMARY_TOKENS
               value: {{ .Values.inference.chat.summaryTokens | quote }}
+            - name: PRIMER_CHAT_SUPPORTS_LOGPROBS
+              value: {{ .Values.inference.chat.supportsLogprobs | quote }}
+            - name: PRIMER_CHAT_SUPPORTS_PROMPT_LOGPROBS
+              value: {{ .Values.inference.chat.supportsPromptLogprobs | quote }}
             {{- with .Values.inference.chat.modelContextTokens }}
             - name: PRIMER_CHAT_MODEL_CONTEXT_TOKENS
               value: {{ toJson . | quote }}

@@ -274,6 +274,14 @@
               "description": "Summarize the turns that no longer fit instead of dropping them.",
               "type": "boolean"
             },
+            "supportsLogprobs": {
+              "description": "Declare that the endpoint returns logprobs for what it generates. Never probed.",
+              "type": "boolean"
+            },
+            "supportsPromptLogprobs": {
+              "description": "Declare that the endpoint scores supplied text through echo on /completions. Never probed.",
+              "type": "boolean"
+            },
             "summaryTokens": {
               "description": "Room reserved for the summary of compacted turns.",
               "type": "integer",

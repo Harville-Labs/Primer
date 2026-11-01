@@ -229,3 +229,12 @@ class ChatUser:
 
     async def delete(self, path: str) -> Response:
         return await self._http.delete(path, headers=self._headers)
+
+
+class GroupedUser(ChatUser):
+    """A subject the proxy also asserts groups for."""
+
+    def __init__(self, http: AsyncClient, subject: str, groups: str = "") -> None:
+        super().__init__(http, subject)
+        if groups:
+            self._headers["X-Forwarded-Groups"] = groups

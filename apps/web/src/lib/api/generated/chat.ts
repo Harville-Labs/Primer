@@ -169,6 +169,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/score": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Score a model's surprise at each token */
+        post: operations["score_api_v1_score_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/tool-requests": {
         parameters: {
             query?: never;
@@ -393,6 +410,12 @@ export interface components {
              */
             updated_at: string;
         };
+        /**
+         * EntropyEstimate
+         * @description How much of each next-token distribution the score could see.
+         * @enum {string}
+         */
+        EntropyEstimate: "full" | "truncated";
         /** FollowUpRequest */
         FollowUpRequest: {
             /**
@@ -510,6 +533,16 @@ export interface components {
             enabled: boolean;
             /** Name */
             name: string;
+            /**
+             * Supports Logprobs
+             * @default false
+             */
+            supports_logprobs: boolean;
+            /**
+             * Supports Prompt Logprobs
+             * @default false
+             */
+            supports_prompt_logprobs: boolean;
         };
         /**
          * ProviderSummary
@@ -543,6 +576,16 @@ export interface components {
              * @enum {string}
              */
             source: "deployment" | "configured";
+            /**
+             * Supports Logprobs
+             * @default false
+             */
+            supports_logprobs: boolean;
+            /**
+             * Supports Prompt Logprobs
+             * @default false
+             */
+            supports_prompt_logprobs: boolean;
             /** Updated At */
             updated_at?: string | null;
         };
@@ -564,6 +607,77 @@ export interface components {
             enabled?: boolean | null;
             /** Name */
             name?: string | null;
+            /** Supports Logprobs */
+            supports_logprobs?: boolean | null;
+            /** Supports Prompt Logprobs */
+            supports_prompt_logprobs?: boolean | null;
+        };
+        /**
+         * ScoreRequest
+         * @description What to score, and against which model.
+         *
+         *     Not a `WireModel`, which strips whitespace from every string: the text
+         *     being scored is the text that was given, and a leading space is a token
+         *     of its own.
+         */
+        ScoreRequest: {
+            /**
+             * Max Tokens
+             * @default 256
+             */
+            max_tokens: number;
+            /**
+             * Mode
+             * @enum {string}
+             */
+            mode: "generate" | "text";
+            /** Model */
+            model: string;
+            /**
+             * Provider Id
+             * Format: uuid
+             */
+            provider_id: string;
+            /** Text */
+            text: string;
+            /**
+             * Top K
+             * @default 20
+             */
+            top_k: number;
+        };
+        /** ScoredText */
+        ScoredText: {
+            /**
+             * Mode
+             * @enum {string}
+             */
+            mode: "generate" | "text";
+            /** Model */
+            model: string;
+            /**
+             * Provider Id
+             * Format: uuid
+             */
+            provider_id: string;
+            score: components["schemas"]["SequenceScore"];
+            /** Text */
+            text: string;
+        };
+        /** SequenceScore */
+        SequenceScore: {
+            estimate: components["schemas"]["EntropyEstimate"];
+            /** Perplexity */
+            perplexity: number;
+            /** Spans */
+            spans: components["schemas"]["Span"][];
+            /** Tokens */
+            tokens: components["schemas"]["TokenScore"][];
+            /**
+             * Top K
+             * @description How many logprobs each truncated entropy saw.
+             */
+            top_k?: number | null;
         };
         /**
          * SourceLocator
@@ -577,6 +691,47 @@ export interface components {
             page?: number | null;
             /** Section */
             section?: string | null;
+        };
+        /**
+         * Span
+         * @description Consecutive tokens that stand out, `start` inclusive, `end` exclusive.
+         */
+        Span: {
+            /** End */
+            end: number;
+            kind: components["schemas"]["SpanKind"];
+            /** Peak Index */
+            peak_index: number;
+            /** Peak Z */
+            peak_z: number;
+            /** Start */
+            start: number;
+        };
+        /**
+         * SpanKind
+         * @enum {string}
+         */
+        SpanKind: "surprisal_spike" | "low_confidence";
+        /** TokenScore */
+        TokenScore: {
+            /**
+             * Entropy Bits
+             * @description Exact entropy over the full vocabulary.
+             */
+            entropy_bits?: number | null;
+            /** Index */
+            index: number;
+            /** Logprob */
+            logprob: number;
+            /** Surprisal Bits */
+            surprisal_bits: number;
+            /** Token */
+            token: string;
+            /**
+             * Truncated Entropy Bits
+             * @description A lower bound on entropy, from only the top-k logprobs.
+             */
+            truncated_entropy_bits?: number | null;
         };
         /**
          * ToolCallSummary
@@ -1005,6 +1160,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ChatModelList"];
+                };
+            };
+        };
+    };
+    score_api_v1_score_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ScoreRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScoredText"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

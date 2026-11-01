@@ -227,6 +227,14 @@ inference:
     # something is actually dropped, which is the reason to turn it off.
     compactHistory: true
     summaryTokens: 512
+    # Whether the endpoint returns logprobs, for scoring on the Anomalies
+    # tab. Declared, never probed: a server without them usually answers
+    # anyway with the field left out, which would read as a model that is
+    # never surprised. Prompt logprobs score text the model did not write,
+    # through `echo` on /completions; vLLM supports it, most hosted APIs
+    # do not.
+    supportsLogprobs: false
+    supportsPromptLogprobs: false
   # Text Embeddings Inference, the server `inference.*.bundled` runs. One
   # pinned version for both: TEI returned wrong vectors for Qwen3 until
   # huggingface/text-embeddings-inference#648, plausible enough that nothing

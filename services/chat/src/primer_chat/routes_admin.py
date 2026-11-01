@@ -123,6 +123,8 @@ async def add_provider(
         base_url=payload.base_url,
         api_key_sealed=sealed_or_refused(request.app.state.secret_box, payload.api_key),
         enabled=payload.enabled,
+        supports_logprobs=payload.supports_logprobs,
+        supports_prompt_logprobs=payload.supports_prompt_logprobs,
     )
     session.add(row)
     try:
@@ -156,6 +158,10 @@ async def update_provider(
         row.base_url = payload.base_url
     if payload.enabled is not None:
         row.enabled = payload.enabled
+    if payload.supports_logprobs is not None:
+        row.supports_logprobs = payload.supports_logprobs
+    if payload.supports_prompt_logprobs is not None:
+        row.supports_prompt_logprobs = payload.supports_prompt_logprobs
     if payload.api_key is not None:
         # Three states, not two: an empty string removes the stored key,
         # which is the only way to unset one that has been set.

@@ -12,6 +12,7 @@ dependencies = [
     "fastapi",
     "haystack-ai",
     "httpx2",
+    "primer-anomaly",
     "primer-contracts",
     "primer-observability",
     "primer-service",
@@ -39,6 +40,7 @@ requires = ["uv_build>=0.12,<0.13"]
 build-backend = "uv_build"
 
 [tool.uv.sources]
+primer-anomaly = { workspace = true }
 primer-contracts = { workspace = true }
 primer-observability = { workspace = true }
 primer-service = { workspace = true }

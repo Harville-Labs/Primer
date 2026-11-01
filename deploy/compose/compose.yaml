@@ -411,6 +411,9 @@ services:
       # says which model to offer first; a name nothing serves is ignored.
       PRIMER_CHAT_MODEL: ${PRIMER_CHAT_MODEL:-}
       PRIMER_CHAT_API_KEY: ${PRIMER_CHAT_API_KEY:-}
+      # Declared, never probed. See env.example.
+      PRIMER_CHAT_SUPPORTS_LOGPROBS: ${PRIMER_CHAT_SUPPORTS_LOGPROBS:-false}
+      PRIMER_CHAT_SUPPORTS_PROMPT_LOGPROBS: ${PRIMER_CHAT_SUPPORTS_PROMPT_LOGPROBS:-false}
     command:
       ["uvicorn", "primer_chat.app:create_app", "--factory",
        "--host", "0.0.0.0", "--port", "8000"]

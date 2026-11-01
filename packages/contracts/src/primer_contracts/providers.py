@@ -54,6 +54,11 @@ class ProviderSummary(WireModel):
     #: does not have it is a deployment misconfiguration worth showing.
     api_key_set: bool = False
     source: ProviderSource = "configured"
+    #: What the operator has said this endpoint returns. Declared, never
+    #: probed: an endpoint that ignores the parameter answers as though it had
+    #: honoured it, so asking once would prove nothing about the next model.
+    supports_logprobs: bool = False
+    supports_prompt_logprobs: bool = False
     #: Null for the deployment's own provider, which has no stored row.
     created_at: datetime | None = None
     updated_at: datetime | None = None
@@ -68,6 +73,12 @@ class ProviderCreate(WireModel):
     #: want; they ignore it but require the header to exist.
     api_key: str | None = Field(default=None, max_length=500)
     enabled: bool = True
+    #: Returns `logprobs` and `top_logprobs` on a chat completion. Most
+    #: OpenAI-compatible servers do; some hosted APIs do not.
+    supports_logprobs: bool = False
+    #: Scores supplied text: returns logprobs for the prompt it was sent,
+    #: through `echo` on `/completions`. vLLM does; few others do.
+    supports_prompt_logprobs: bool = False
 
     @field_validator("base_url")
     @classmethod
@@ -98,6 +109,8 @@ class ProviderUpdate(WireModel):
     base_url: str | None = Field(default=None, max_length=2000)
     api_key: str | None = Field(default=None, max_length=500)
     enabled: bool | None = None
+    supports_logprobs: bool | None = None
+    supports_prompt_logprobs: bool | None = None
 
 
 class ProviderCheck(WireModel):

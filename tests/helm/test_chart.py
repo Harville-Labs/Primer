@@ -486,6 +486,22 @@ def test_a_models_context_window_reaches_chat() -> None:
     assert json.loads(env["PRIMER_CHAT_MODEL_CONTEXT_TOKENS"]) == {"long-model": 131072}
 
 
+def test_logprobs_are_off_until_declared(manifests: list[dict[str, Any]]) -> None:
+    """Scoring trusts the declaration, so a default of true would be a claim."""
+    env = env_of(named(manifests, "Deployment", "-chat"))
+
+    assert env["PRIMER_CHAT_SUPPORTS_LOGPROBS"] == "false"
+    assert env["PRIMER_CHAT_SUPPORTS_PROMPT_LOGPROBS"] == "false"
+
+
+def test_declaring_prompt_logprobs_reaches_chat() -> None:
+    rendered = render("inference.chat.supportsPromptLogprobs=true")
+    env = env_of(named(rendered, "Deployment", "-chat"))
+
+    assert env["PRIMER_CHAT_SUPPORTS_PROMPT_LOGPROBS"] == "true"
+    assert env["PRIMER_CHAT_SUPPORTS_LOGPROBS"] == "false"
+
+
 # --- Isolation ----------------------------------------------------------
 
 
