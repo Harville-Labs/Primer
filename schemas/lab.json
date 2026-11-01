@@ -164,7 +164,8 @@
           "kind": {
             "enum": [
               "neurons",
-              "anomalies"
+              "anomalies",
+              "scan"
             ],
             "title": "Kind",
             "type": "string"
@@ -183,7 +184,8 @@
             "discriminator": {
               "mapping": {
                 "anomalies": "#/components/schemas/AnomaliesRun",
-                "neurons": "#/components/schemas/NeuronsRun"
+                "neurons": "#/components/schemas/NeuronsRun",
+                "scan": "#/components/schemas/ScanRun"
               },
               "propertyName": "kind"
             },
@@ -193,6 +195,9 @@
               },
               {
                 "$ref": "#/components/schemas/AnomaliesRun"
+              },
+              {
+                "$ref": "#/components/schemas/ScanRun"
               }
             ],
             "title": "Run"
@@ -230,7 +235,8 @@
             "discriminator": {
               "mapping": {
                 "anomalies": "#/components/schemas/AnomaliesRun",
-                "neurons": "#/components/schemas/NeuronsRun"
+                "neurons": "#/components/schemas/NeuronsRun",
+                "scan": "#/components/schemas/ScanRun"
               },
               "propertyName": "kind"
             },
@@ -240,6 +246,9 @@
               },
               {
                 "$ref": "#/components/schemas/AnomaliesRun"
+              },
+              {
+                "$ref": "#/components/schemas/ScanRun"
               }
             ],
             "title": "Run"
@@ -295,7 +304,8 @@
           "kind": {
             "enum": [
               "neurons",
-              "anomalies"
+              "anomalies",
+              "scan"
             ],
             "title": "Kind",
             "type": "string"
@@ -871,6 +881,68 @@
         "title": "LabModelStatus",
         "type": "object"
       },
+      "LabScanRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "passages": {
+            "items": {
+              "$ref": "#/components/schemas/ScanPassage"
+            },
+            "maxItems": 16,
+            "minItems": 1,
+            "title": "Passages",
+            "type": "array"
+          },
+          "probe_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Probe Id"
+          }
+        },
+        "required": [
+          "passages"
+        ],
+        "title": "LabScanRequest",
+        "type": "object"
+      },
+      "LabScanned": {
+        "additionalProperties": false,
+        "properties": {
+          "model": {
+            "$ref": "#/components/schemas/LabModelStatus"
+          },
+          "passages": {
+            "items": {
+              "$ref": "#/components/schemas/ScannedPassage"
+            },
+            "title": "Passages",
+            "type": "array"
+          },
+          "probe": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Probe"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "model",
+          "passages"
+        ],
+        "title": "LabScanned",
+        "type": "object"
+      },
       "LabScoreRequest": {
         "additionalProperties": false,
         "properties": {
@@ -1324,6 +1396,53 @@
         "title": "Outliers",
         "type": "object"
       },
+      "Passage": {
+        "additionalProperties": false,
+        "description": "A passage as it is stored, with what is needed to point back to it.",
+        "properties": {
+          "chunk_id": {
+            "format": "uuid",
+            "title": "Chunk Id",
+            "type": "string"
+          },
+          "content": {
+            "title": "Content",
+            "type": "string"
+          },
+          "document_id": {
+            "format": "uuid",
+            "title": "Document Id",
+            "type": "string"
+          },
+          "filename": {
+            "title": "Filename",
+            "type": "string"
+          },
+          "locator": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SourceLocator"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "ordinal": {
+            "title": "Ordinal",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "chunk_id",
+          "document_id",
+          "filename",
+          "ordinal",
+          "content"
+        ],
+        "title": "Passage",
+        "type": "object"
+      },
       "Probe": {
         "additionalProperties": false,
         "description": "A probe Lab holds for its owner until the model changes, with how well it did.",
@@ -1591,6 +1710,215 @@
         "title": "SaeStatus",
         "type": "object"
       },
+      "ScanFinding": {
+        "additionalProperties": false,
+        "properties": {
+          "passage": {
+            "$ref": "#/components/schemas/Passage"
+          },
+          "scored": {
+            "$ref": "#/components/schemas/ScannedPassage"
+          }
+        },
+        "required": [
+          "passage",
+          "scored"
+        ],
+        "title": "ScanFinding",
+        "type": "object"
+      },
+      "ScanPassage": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Id",
+            "type": "string"
+          },
+          "text": {
+            "maxLength": 20000,
+            "minLength": 1,
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "text"
+        ],
+        "title": "ScanPassage",
+        "type": "object"
+      },
+      "ScanResult": {
+        "additionalProperties": false,
+        "properties": {
+          "findings": {
+            "items": {
+              "$ref": "#/components/schemas/ScanFinding"
+            },
+            "maxItems": 50,
+            "title": "Findings",
+            "type": "array"
+          },
+          "model": {
+            "$ref": "#/components/schemas/LabModelStatus"
+          },
+          "probe": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Probe"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "scanned": {
+            "minimum": 0.0,
+            "title": "Scanned",
+            "type": "integer"
+          },
+          "total": {
+            "minimum": 0.0,
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "model",
+          "scanned",
+          "total",
+          "findings"
+        ],
+        "title": "ScanResult",
+        "type": "object"
+      },
+      "ScanRun": {
+        "additionalProperties": false,
+        "description": "A scan of a library's passages, from the Scan tab, with what it found.\n\nIts findings keep the passages' text, which is the point of saving one:\nit can be read again without the library or the model. That text is\nthe library owner's, now held in Lab for the retention period too.",
+        "properties": {
+          "kind": {
+            "const": "scan",
+            "default": "scan",
+            "title": "Kind",
+            "type": "string"
+          },
+          "request": {
+            "$ref": "#/components/schemas/ScanSettings"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ScanResult"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "request"
+        ],
+        "title": "ScanRun",
+        "type": "object"
+      },
+      "ScanSettings": {
+        "additionalProperties": false,
+        "description": "What a saved scan was of, as the web app asked for it.\n\nThe library is recorded so the saved scan can say what it was of and\nlink back; Lab never reads it. Opening the passages again goes through\nthe libraries API, which asks again whether the person may.",
+        "properties": {
+          "library_id": {
+            "format": "uuid",
+            "title": "Library Id",
+            "type": "string"
+          },
+          "library_name": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Library Name",
+            "type": "string"
+          },
+          "probe_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Probe Id"
+          }
+        },
+        "required": [
+          "library_id",
+          "library_name"
+        ],
+        "title": "ScanSettings",
+        "type": "object"
+      },
+      "ScannedPassage": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "mean_bits": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mean Bits"
+          },
+          "peak_bits": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Peak Bits"
+          },
+          "probe": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Probe"
+          },
+          "tokens": {
+            "title": "Tokens",
+            "type": "integer"
+          },
+          "truncated": {
+            "title": "Truncated",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "tokens",
+          "truncated",
+          "mean_bits",
+          "peak_bits",
+          "probe"
+        ],
+        "title": "ScannedPassage",
+        "type": "object"
+      },
       "SequenceScore": {
         "additionalProperties": false,
         "properties": {
@@ -1637,6 +1965,38 @@
           "spans"
         ],
         "title": "SequenceScore",
+        "type": "object"
+      },
+      "SourceLocator": {
+        "additionalProperties": false,
+        "description": "Where a passage sits inside its source document.\n\nLocators are user-meaningful positions only. Filesystem or object-store\npaths are deliberately absent from citation-facing contracts.",
+        "properties": {
+          "page": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Page"
+          },
+          "section": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Section"
+          }
+        },
+        "title": "SourceLocator",
         "type": "object"
       },
       "Span": {
@@ -2407,6 +2767,48 @@
           }
         },
         "summary": "Train a linear probe on two sets of prompts",
+        "tags": [
+          "lab"
+        ]
+      }
+    },
+    "/api/v1/lab/scan": {
+      "post": {
+        "description": "Scores each passage as plain text: its mean and peak surprisal, and optionally what one of your probes makes of it at its last token. A passage longer than this Lab reads is scored from its start and marked truncated. Lab is given text, not a library: list a library's passages through the libraries API, then send them here.",
+        "operationId": "scan_api_v1_lab_scan_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LabScanRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LabScanned"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Score a batch of passages for surprise and with a probe",
         "tags": [
           "lab"
         ]

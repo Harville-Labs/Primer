@@ -45,6 +45,7 @@ from primer_lab.host import Resident
 from primer_lab.identity import CurrentPrincipal
 from primer_lab.probes import Fitted
 from primer_lab.routes import current_resident, refused
+from primer_lab.scan import ScanResult, ScanSettings
 from primer_lab.scoring import LabScored, LabScoreRequest
 from primer_lab.tables import ExperimentRow
 
@@ -76,8 +77,23 @@ class AnomaliesRun(BaseModel):
     result: LabScored | None = None
 
 
-Run = Annotated[NeuronsRun | AnomaliesRun, Field(discriminator="kind")]
-_RUN: TypeAdapter[NeuronsRun | AnomaliesRun] = TypeAdapter(Run)
+class ScanRun(BaseModel):
+    """A scan of a library's passages, from the Scan tab, with what it found.
+
+    Its findings keep the passages' text, which is the point of saving one:
+    it can be read again without the library or the model. That text is
+    the library owner's, now held in Lab for the retention period too.
+    """
+
+    model_config = _STRICT
+
+    kind: Literal["scan"] = "scan"
+    request: ScanSettings
+    result: ScanResult | None = None
+
+
+Run = Annotated[NeuronsRun | AnomaliesRun | ScanRun, Field(discriminator="kind")]
+_RUN: TypeAdapter[NeuronsRun | AnomaliesRun | ScanRun] = TypeAdapter(Run)
 
 Title = Annotated[str, Field(min_length=1, max_length=200)]
 
@@ -99,7 +115,7 @@ class ExperimentSummary(BaseModel):
     model_config = _STRICT
 
     id: UUID
-    kind: Literal["neurons", "anomalies"]
+    kind: Literal["neurons", "anomalies", "scan"]
     title: str
     #: The model it was run on, which is the only one it can be restored onto.
     model: LabModelStatus
@@ -212,7 +228,9 @@ def _named(model: LabModelStatus) -> str:
     return f"{name} at {model.commit[:12]}" if model.commit else name
 
 
-def _used(resident: Resident, owner: UUID, run: NeuronsRun | AnomaliesRun) -> tuple[list, list]:
+def _used(
+    resident: Resident, owner: UUID, run: NeuronsRun | AnomaliesRun | ScanRun
+) -> tuple[list, list]:
     """The caller's vectors and probes the run names, as they will be stored."""
     if isinstance(run, NeuronsRun):
         vector_ids = list(dict.fromkeys(i.vector_id for i in run.request.interventions))
