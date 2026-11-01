@@ -251,6 +251,8 @@ Compose passes one.
 | `PRIMER_LAB_MAX_MODEL_BYTES` | `lab.maxModelBytes` | `20000000000` | Checked against the hub's file list before anything downloads |
 | `PRIMER_LAB_SAES` | `lab.saes` | Qwen3-1.7B and Qwen3-1.7B-Base to Qwen-Scope | JSON object from a model repository to the SAE repository read with it. `{}` maps none. See [SAE features](lab.md#sae-features) |
 | `PRIMER_LAB_FEATURE_LABELS` | `lab.featureLabels` | none | JSON object from an SAE repository to a labels file, as a path inside the weights volume. See [Feature labels](lab.md#feature-labels) |
+| `PRIMER_LAB_TRANSCODERS` | `lab.graphs.transcoders` | Qwen3-4B to `mwhanna/qwen3-4b-transcoders` | JSON object from a model repository to its transcoders. Read only where graphs can be built. See [Attribution graphs](lab.md#attribution-graphs) |
+| `PRIMER_LAB_MAX_TRANSCODER_BYTES` | `lab.graphs.maxTranscoderBytes` | `70000000000` | Checked against the hub's file list before transcoders download |
 | `PRIMER_LAB_HUB_ENDPOINT` | `lab.hubEndpoint` | the public hub | A mirror |
 | `PRIMER_LAB_DEVICE` | `lab.device` | `auto` | `auto` uses CUDA when torch can see a GPU |
 | `PRIMER_LAB_DTYPE` | `lab.dtype` | `auto` | `auto` is `bfloat16` on CUDA and `float32` on CPU |
@@ -262,7 +264,13 @@ Compose passes one.
 | `PRIMER_LAB_MAX_INTERVENTIONS` | | `16` | Most edits one generation applies |
 | `PRIMER_LAB_RUN_TIMEOUT_SECONDS` | | `120` | A run past this is abandoned, and its caller told so |
 | `PRIMER_LAB_MAX_WAITING_RUNS` | | `32` | Runs that may wait behind the one in progress before more are refused |
+| `PRIMER_LAB_GRAPH_PYTHON` | set by the `-graphs` image | unset | The graph builder's interpreter. Unset, Lab builds no graphs and fetches no transcoders |
+| `PRIMER_LAB_GRAPH_MAX_PROMPT_TOKENS` | | `64` | Longest prompt a graph reads, as plain text |
+| `PRIMER_LAB_GRAPH_MAX_FEATURE_NODES` | | `2048` | Most features a graph keeps before pruning |
+| `PRIMER_LAB_GRAPH_MAX_EDGES` | | `2000` | Most edges a graph returns, strongest first |
+| `PRIMER_LAB_GRAPH_TIMEOUT_SECONDS` | | `240` | A build past this is abandoned. At most 240, under the web server's five-minute wait |
 | | `lab.gpu` | `0` | GPUs to request. Above zero, the `-cuda` image is used |
+| | `lab.graphs.enabled` | `false` | Uses the `-graphs` image and passes the transcoders. Needs `lab.gpu` |
 | | `lab.persistence.size` | `50Gi` | Nothing is evicted; see [Lab](lab.md) |
 | | `lab.nodeSelector`, `lab.tolerations` | none | To place Lab on a GPU node |
 
