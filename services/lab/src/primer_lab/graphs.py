@@ -67,7 +67,8 @@ class BuildFailed(RuntimeError):
         "Traces which transcoder features carried the prompt to the token it names, or to "
         "the tokens the model found likeliest, and returns the graph pruned to the nodes "
         "and edges with the most influence. The prompt is read as plain text, without a "
-        "chat template. A build takes minutes on a CPU and holds the model while it runs."
+        "chat template. A build holds the model while it runs, and takes seconds on a GPU "
+        "and far longer on a CPU."
     ),
 )
 async def graph(

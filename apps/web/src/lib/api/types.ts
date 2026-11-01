@@ -90,6 +90,12 @@ export type ScanFinding = LabSchemas['ScanFinding'];
 export type LabScanRequest = LabSchemas['LabScanRequest'];
 export type LabScanned = LabSchemas['LabScanned'];
 export type ScannedPassage = LabSchemas['ScannedPassage'];
+export type TranscoderStatus = LabSchemas['TranscoderStatus'];
+export type GraphRequest = LabSchemas['GraphRequest'];
+export type AttributionGraph = LabSchemas['AttributionGraph'];
+export type BuiltGraph = LabSchemas['BuiltGraph'];
+export type GraphNode = LabSchemas['GraphNode'];
+export type GraphEdge = LabSchemas['GraphEdge'];
 
 /** States where nothing further will happen without the user acting. */
 export const TERMINAL_STATUSES: readonly IngestionStatus[] = [

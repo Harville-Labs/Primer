@@ -80,7 +80,11 @@ class Settings(BaseSettings):
     #: The most edges a graph returns, strongest first, so a response stays
     #: something a browser can draw.
     lab_graph_max_edges: int = Field(default=2000, ge=1, le=20000)
-    lab_graph_timeout_seconds: float = Field(default=600.0, gt=0)
+    #: Held under five minutes, with the queue's grace, because that is how
+    #: long the web server's fetch waits for Lab's response to begin. A
+    #: longer limit would let Lab finish a graph nobody is waiting for. In
+    #: practice that means graphs are built on a GPU.
+    lab_graph_timeout_seconds: float = Field(default=240.0, gt=0, le=240)
     #: A mirror, for a deployment that cannot reach the public hub.
     lab_hub_endpoint: str | None = None
     lab_weights_dir: Path = Field(
