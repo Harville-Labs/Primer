@@ -116,7 +116,7 @@ export interface paths {
         put?: never;
         /**
          * Score the resident model's surprise at each token
-         * @description Either generates a greedy answer to the prompt and scores it, or scores the prompt itself as plain text, without the chat template. Entropy is over the whole vocabulary. The first token of a text is not scored: nothing came before it.
+         * @description Either generates a greedy answer to the prompt and scores it, or scores the prompt itself as plain text, without the chat template. Entropy is over the whole vocabulary. The first token of a text is not scored: nothing came before it. Optionally, each scored token's distance from ordinary text at a layer, and what one of your probes makes of it.
          */
         post: operations["score_api_v1_lab_score_post"];
         delete?: never;
@@ -506,6 +506,10 @@ export interface components {
              * @enum {string}
              */
             mode: "generate" | "text";
+            /** Outlier Layer */
+            outlier_layer?: number | null;
+            /** Probe Id */
+            probe_id?: string | null;
             /** Prompt */
             prompt: string;
         };
@@ -517,6 +521,8 @@ export interface components {
              */
             mode: "generate" | "text";
             model: components["schemas"]["LabModelStatus"];
+            outliers?: components["schemas"]["Outliers"] | null;
+            probe?: components["schemas"]["ProbeReading"] | null;
             score: components["schemas"]["SequenceScore"];
             /** Text */
             text: string;
@@ -600,6 +606,17 @@ export interface components {
              */
             state: "fetching" | "loading" | "failed";
         };
+        /** Outliers */
+        Outliers: {
+            /** Distances */
+            distances: number[];
+            /** Layer */
+            layer: number;
+            /** Reference Tokens */
+            reference_tokens: number;
+            /** Threshold */
+            threshold: number;
+        };
         /**
          * Probe
          * @description A probe Lab holds for its owner until the model changes, with how well it did.
@@ -623,6 +640,12 @@ export interface components {
             negative: number;
             /** Positive */
             positive: number;
+        };
+        /** ProbeReading */
+        ProbeReading: {
+            /** Probabilities */
+            probabilities: number[];
+            probe: components["schemas"]["Probe"];
         };
         /**
          * ProbeRequest

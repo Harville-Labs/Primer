@@ -37,6 +37,7 @@ from primer_lab.loader import (
 )
 from primer_lab.owned import Owned
 from primer_lab.queue import RunQueue, RunTimedOut
+from primer_lab.reference import References
 from primer_lab.saes import Attachment, SaeSet, fetch_saes
 from primer_lab.sources import Hub, ModelUnavailable, check_allowed, resolve
 
@@ -65,6 +66,7 @@ class Resident:
     #: Made on this model and meaningless on any other, so they go with it.
     vectors: Owned[SteeringVector, torch.Tensor] = field(default_factory=Owned)
     probes: Owned[Probe, Fitted] = field(default_factory=Owned)
+    references: References = field(default_factory=References)
 
     @property
     def ready_saes(self) -> SaeSet | None:

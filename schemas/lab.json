@@ -688,6 +688,30 @@
             "title": "Mode",
             "type": "string"
           },
+          "outlier_layer": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Outlier Layer"
+          },
+          "probe_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Probe Id"
+          },
           "prompt": {
             "maxLength": 100000,
             "minLength": 1,
@@ -715,6 +739,26 @@
           },
           "model": {
             "$ref": "#/components/schemas/LabModelStatus"
+          },
+          "outliers": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Outliers"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "probe": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ProbeReading"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "score": {
             "$ref": "#/components/schemas/SequenceScore"
@@ -1000,6 +1044,38 @@
         "title": "ModelSwitch",
         "type": "object"
       },
+      "Outliers": {
+        "additionalProperties": false,
+        "properties": {
+          "distances": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Distances",
+            "type": "array"
+          },
+          "layer": {
+            "title": "Layer",
+            "type": "integer"
+          },
+          "reference_tokens": {
+            "title": "Reference Tokens",
+            "type": "integer"
+          },
+          "threshold": {
+            "title": "Threshold",
+            "type": "number"
+          }
+        },
+        "required": [
+          "layer",
+          "distances",
+          "threshold",
+          "reference_tokens"
+        ],
+        "title": "Outliers",
+        "type": "object"
+      },
       "Probe": {
         "additionalProperties": false,
         "description": "A probe Lab holds for its owner until the model changes, with how well it did.",
@@ -1060,6 +1136,27 @@
           "beats_chance"
         ],
         "title": "Probe",
+        "type": "object"
+      },
+      "ProbeReading": {
+        "additionalProperties": false,
+        "properties": {
+          "probabilities": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Probabilities",
+            "type": "array"
+          },
+          "probe": {
+            "$ref": "#/components/schemas/Probe"
+          }
+        },
+        "required": [
+          "probe",
+          "probabilities"
+        ],
+        "title": "ProbeReading",
         "type": "object"
       },
       "ProbeRequest": {
@@ -1833,7 +1930,7 @@
     },
     "/api/v1/lab/score": {
       "post": {
-        "description": "Either generates a greedy answer to the prompt and scores it, or scores the prompt itself as plain text, without the chat template. Entropy is over the whole vocabulary. The first token of a text is not scored: nothing came before it.",
+        "description": "Either generates a greedy answer to the prompt and scores it, or scores the prompt itself as plain text, without the chat template. Entropy is over the whole vocabulary. The first token of a text is not scored: nothing came before it. Optionally, each scored token's distance from ordinary text at a layer, and what one of your probes makes of it.",
         "operationId": "score_api_v1_lab_score_post",
         "requestBody": {
           "content": {

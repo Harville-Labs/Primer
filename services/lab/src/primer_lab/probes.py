@@ -16,13 +16,19 @@ from uuid import UUID, uuid4
 import numpy as np
 import torch
 from fastapi import APIRouter, Request, status
-from primer_contracts.lab import Probe, ProbeRequest, PromptInput
+from primer_contracts.lab import Probe, ProbeRequest
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import StratifiedKFold, cross_val_score
 
 from primer_lab.host import Resident
 from primer_lab.identity import CurrentPrincipal
-from primer_lab.routes import current_resident, read_prompt, refused, run_queued
+from primer_lab.routes import (
+    check_layer,
+    current_resident,
+    read_prompt_set,
+    refused,
+    run_queued,
+)
 from primer_lab.steering import last_token_residuals
 
 router = APIRouter(prefix="/api/v1/lab", tags=["lab"])
@@ -80,19 +86,9 @@ def probability(fitted: Fitted, rows: np.ndarray) -> list[float]:
 )
 async def train_probe(request: Request, body: ProbeRequest, principal: CurrentPrincipal) -> Probe:
     resident = current_resident(request)
-    if body.layer >= resident.loaded.num_layers:
-        raise refused(
-            "No such layer",
-            f"This model's layers are 0 to {resident.loaded.num_layers - 1}.",
-        )
-
-    def ids(prompts: list[str]) -> list[list[int]]:
-        return [
-            read_prompt(request, resident, PromptInput(prompt=text, chat=body.chat)).ids
-            for text in prompts
-        ]
-
-    positive, negative = ids(body.positive), ids(body.negative)
+    check_layer(resident, body.layer)
+    positive = read_prompt_set(request, resident, body.positive, chat=body.chat)
+    negative = read_prompt_set(request, resident, body.negative, chat=body.chat)
     model = resident.loaded.model
 
     def work() -> Fitted:
