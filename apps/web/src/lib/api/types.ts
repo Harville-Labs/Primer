@@ -1,5 +1,6 @@
 import type { components as ChatComponents } from './generated/chat';
 import type { components as ControlComponents } from './generated/control';
+import type { components as LabComponents } from './generated/lab';
 
 /**
  * The shapes Primer's HTTP API returns.
@@ -19,6 +20,7 @@ import type { components as ControlComponents } from './generated/control';
 
 type ControlSchemas = ControlComponents['schemas'];
 type ChatSchemas = ChatComponents['schemas'];
+type LabSchemas = LabComponents['schemas'];
 
 export type IngestionStatus = ControlSchemas['IngestionStatus'];
 export type LibrarySummary = ControlSchemas['LibrarySummary'];
@@ -40,6 +42,16 @@ export type ProviderSummary = ChatSchemas['ProviderSummary'];
 export type ProviderCreate = ChatSchemas['ProviderCreate'];
 export type ProviderUpdate = ChatSchemas['ProviderUpdate'];
 export type ProviderCheck = ChatSchemas['ProviderCheck'];
+
+export type LabStatus = LabSchemas['LabStatus'];
+export type LabModelStatus = LabSchemas['LabModelStatus'];
+export type InspectRequest = LabSchemas['InspectRequest'];
+export type InspectResponse = LabSchemas['InspectResponse'];
+export type InspectedToken = LabSchemas['InspectedToken'];
+export type LayerReadings = LabSchemas['LayerReadings'];
+export type ActivationRequest = LabSchemas['ActivationRequest'];
+export type ActivationVector = LabSchemas['ActivationVector'];
+export type ActivationSite = ActivationRequest['site'];
 
 /** States where nothing further will happen without the user acting. */
 export const TERMINAL_STATUSES: readonly IngestionStatus[] = [
