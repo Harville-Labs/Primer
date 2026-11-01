@@ -58,6 +58,18 @@ def special_ids(tokenizer: Any) -> set[int]:
     return set(tokenizer.all_special_ids) | added
 
 
+def scored_positions(ids: list[int], start: int, special: set[int]) -> list[int]:
+    """The positions from `start` whose token is text the model predicted.
+
+    Never the first, which nothing came before. Special tokens are passed
+    over: a chat template's markers and the end of an answer are the
+    model's punctuation rather than its text, and an end-of-sequence token
+    is often the least likely thing at its position without that meaning
+    anything.
+    """
+    return [i for i in range(max(start, 1), len(ids)) if ids[i] not in special]
+
+
 def inspect_prompt(
     model: Any, prompt: Prompt, *, neurons: int, features: int, saes: SaeSet | None
 ) -> Reading:

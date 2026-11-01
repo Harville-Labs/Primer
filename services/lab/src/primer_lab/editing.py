@@ -21,7 +21,6 @@ from primer_contracts.lab import (
     GenerationQueued,
     GenerationStreamEvent,
     InspectedToken,
-    PromptInput,
     SteeringVector,
     SteeringVectorRequest,
     TargetChange,
@@ -34,8 +33,16 @@ from primer_lab.identity import CurrentPrincipal
 from primer_lab.inspection import describe, special_ids
 from primer_lab.interventions import Comparison, InterventionRefused, compare, first_divergence
 from primer_lab.interventions import resolve as resolve_edits
-from primer_lab.routes import check_new_tokens, current_resident, read_prompt, refused, run_queued
-from primer_lab.steering import difference_of_means, last_token_residuals
+from primer_lab.routes import (
+    check_layer,
+    check_new_tokens,
+    current_resident,
+    read_prompt,
+    read_prompt_set,
+    refused,
+    run_queued,
+)
+from primer_lab.steering import difference_of_means, last_token_residuals, made_vector
 
 logger = logging.getLogger(__name__)
 
@@ -202,19 +209,9 @@ async def make_vector(
     request: Request, body: SteeringVectorRequest, principal: CurrentPrincipal
 ) -> SteeringVector:
     resident = current_resident(request)
-    if body.layer >= resident.loaded.num_layers:
-        raise refused(
-            "No such layer",
-            f"This model's layers are 0 to {resident.loaded.num_layers - 1}.",
-        )
-
-    def ids(prompts: list[str]) -> list[list[int]]:
-        return [
-            read_prompt(request, resident, PromptInput(prompt=text, chat=body.chat)).ids
-            for text in prompts
-        ]
-
-    positive, negative = ids(body.positive), ids(body.negative)
+    check_layer(resident, body.layer)
+    positive = read_prompt_set(request, resident, body.positive, chat=body.chat)
+    negative = read_prompt_set(request, resident, body.negative, chat=body.chat)
     model = resident.loaded.model
 
     def work() -> torch.Tensor:
@@ -224,14 +221,10 @@ async def make_vector(
         )
 
     vector = await run_queued(request, resident, work)
-    return resident.vectors.add(
-        principal.user_id,
-        vector,
-        label=body.label,
-        layer=body.layer,
-        positive=len(positive),
-        negative=len(negative),
+    summary = made_vector(
+        vector, label=body.label, layer=body.layer, positive=len(positive), negative=len(negative)
     )
+    return resident.vectors.add(principal.user_id, summary, vector)
 
 
 @router.get("/vectors", summary="The steering vectors you have made on this model")

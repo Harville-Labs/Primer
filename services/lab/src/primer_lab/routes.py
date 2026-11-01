@@ -132,6 +132,23 @@ def read_prompt(request: Request, resident: Resident, body: PromptInput) -> Prom
     return prompt
 
 
+def read_prompt_set(
+    request: Request, resident: Resident, prompts: list[str], *, chat: bool
+) -> list[list[int]]:
+    """Tokenize each of a set of prompts a vector or a probe is made from."""
+    return [
+        read_prompt(request, resident, PromptInput(prompt=text, chat=chat)).ids for text in prompts
+    ]
+
+
+def check_layer(resident: Resident, layer: int) -> None:
+    if layer >= resident.loaded.num_layers:
+        raise refused(
+            "No such layer",
+            f"This model's layers are 0 to {resident.loaded.num_layers - 1}.",
+        )
+
+
 def check_new_tokens(settings: Settings, wanted: int) -> None:
     if wanted > settings.lab_max_new_tokens:
         raise refused(

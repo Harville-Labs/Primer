@@ -130,3 +130,8 @@ def settle(client: TestClient) -> dict:
     assert client.portal is not None, "settle needs a client inside its `with`"
     client.portal.call(app.state.host.wait)
     return client.get("/api/v1/lab/status").json()
+
+
+def as_user(name: str) -> dict[str, str]:
+    """Headers as the proxy sets them, for a Lab running with authentication on."""
+    return {"X-Forwarded-User": name}

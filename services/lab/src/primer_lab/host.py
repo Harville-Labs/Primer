@@ -14,9 +14,17 @@ import gc
 import logging
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
 import torch
-from primer_contracts.lab import HubModel, LabModelStatus, LocalModel, ModelSwitch
+from primer_contracts.lab import (
+    HubModel,
+    LabModelStatus,
+    LocalModel,
+    ModelSwitch,
+    Probe,
+    SteeringVector,
+)
 
 from primer_lab.config import Settings
 from primer_lab.loader import (
@@ -27,10 +35,15 @@ from primer_lab.loader import (
     load_model,
     plan_load,
 )
+from primer_lab.owned import Owned
 from primer_lab.queue import RunQueue, RunTimedOut
+from primer_lab.reference import References
 from primer_lab.saes import Attachment, SaeSet, fetch_saes
 from primer_lab.sources import Hub, ModelUnavailable, check_allowed, resolve
-from primer_lab.steering import SteeringVectors
+
+if TYPE_CHECKING:
+    # Probes are trained by routes that need the resident, so the import is one way at runtime.
+    from primer_lab.probes import Fitted
 
 logger = logging.getLogger(__name__)
 
@@ -51,7 +64,9 @@ class Resident:
     loaded: LoadedModel
     saes: Attachment | None = None
     #: Made on this model and meaningless on any other, so they go with it.
-    vectors: SteeringVectors = field(default_factory=SteeringVectors)
+    vectors: Owned[SteeringVector, torch.Tensor] = field(default_factory=Owned)
+    probes: Owned[Probe, Fitted] = field(default_factory=Owned)
+    references: References = field(default_factory=References)
 
     @property
     def ready_saes(self) -> SaeSet | None:

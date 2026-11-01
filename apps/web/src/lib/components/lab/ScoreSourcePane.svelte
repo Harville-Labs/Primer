@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { TriangleAlert } from '@lucide/svelte';
+	import type { Snippet } from 'svelte';
 	import { Composer, Select, Spinner, ToggleGroup } from '@sivir-ui/svelte';
 	import type { Scorer } from '#lib/lab/scorer.svelte.ts';
 
@@ -10,9 +11,11 @@
 		problems: { title: string; detail: string }[];
 		//: Whether Chat offered models at all, so "none declare logprobs" is not said of none.
 		endpointModels: number;
+		//: What else the source can read beside the score; Lab's detectors.
+		detectors?: Snippet;
 	}
 
-	let { scorer, problems, endpointModels }: Props = $props();
+	let { scorer, problems, endpointModels, detectors }: Props = $props();
 
 	let source = $derived(scorer.source);
 	let generating = $derived(scorer.effectiveMode === 'generate');
@@ -115,6 +118,8 @@
 				: 'Each token is scored by how unlikely the model found it after the text before it. The first token has nothing before it and is not scored.'}
 		</p>
 	</section>
+
+	{@render detectors?.()}
 
 	{#if scorer.running}
 		<p role="status" class="flex items-center gap-2 text-xs text-muted-foreground">

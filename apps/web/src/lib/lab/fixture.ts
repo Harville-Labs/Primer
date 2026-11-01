@@ -1,4 +1,10 @@
-import type { ChatModel, InspectResponse, LabModelStatus, SequenceScore } from '#lib/api/types.ts';
+import type {
+	ChatModel,
+	InspectResponse,
+	LabModelStatus,
+	Probe,
+	SequenceScore,
+} from '#lib/api/types.ts';
 
 /**
  * A reading small enough to reason about by eye: three layers, two tokens,
@@ -108,6 +114,19 @@ export const RESIDENT: LabModelStatus = {
 	num_layers: 2,
 	reference: { source: 'local', path: 'qwen3-tiny' },
 } as LabModelStatus;
+
+/** A probe that did better than chance on held-out prompts. */
+export const PROBE: Probe = {
+	id: 'b'.repeat(32),
+	label: 'formal',
+	layer: 1,
+	positive: 8,
+	negative: 8,
+	accuracy: 0.875,
+	folds: 5,
+	chance: 0.5,
+	beats_chance: true,
+};
 
 export function sequence(
 	surprisals: number[],

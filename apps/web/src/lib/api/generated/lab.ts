@@ -84,6 +84,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/lab/probes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The probes you have trained on this model */
+        get: operations["list_probes_api_v1_lab_probes_get"];
+        put?: never;
+        /**
+         * Train a linear probe on two sets of prompts
+         * @description Logistic regression on the residual stream after the layer, at each prompt's last token, telling the positive prompts from the negative ones. The answer says how accurate it was on prompts held out of training, beside chance. Lab holds it for the person who trained it until the model changes; apply it when scoring.
+         */
+        post: operations["train_probe_api_v1_lab_probes_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/lab/score": {
         parameters: {
             query?: never;
@@ -95,7 +116,7 @@ export interface paths {
         put?: never;
         /**
          * Score the resident model's surprise at each token
-         * @description Either generates a greedy answer to the prompt and scores it, or scores the prompt itself as plain text, without the chat template. Entropy is over the whole vocabulary. The first token of a text is not scored: nothing came before it.
+         * @description Either generates a greedy answer to the prompt and scores it, or scores the prompt itself as plain text, without the chat template. Entropy is over the whole vocabulary. The first token of a text is not scored: nothing came before it. Optionally, each scored token's distance from ordinary text at a layer, and what one of your probes makes of it.
          */
         post: operations["score_api_v1_lab_score_post"];
         delete?: never;
@@ -485,6 +506,10 @@ export interface components {
              * @enum {string}
              */
             mode: "generate" | "text";
+            /** Outlier Layer */
+            outlier_layer?: number | null;
+            /** Probe Id */
+            probe_id?: string | null;
             /** Prompt */
             prompt: string;
         };
@@ -496,6 +521,8 @@ export interface components {
              */
             mode: "generate" | "text";
             model: components["schemas"]["LabModelStatus"];
+            outliers?: components["schemas"]["Outliers"] | null;
+            probe?: components["schemas"]["ProbeReading"] | null;
             score: components["schemas"]["SequenceScore"];
             /** Text */
             text: string;
@@ -578,6 +605,71 @@ export interface components {
              * @enum {string}
              */
             state: "fetching" | "loading" | "failed";
+        };
+        /** Outliers */
+        Outliers: {
+            /** Distances */
+            distances: number[];
+            /** Layer */
+            layer: number;
+            /** Reference Tokens */
+            reference_tokens: number;
+            /** Threshold */
+            threshold: number;
+        };
+        /**
+         * Probe
+         * @description A probe Lab holds for its owner until the model changes, with how well it did.
+         */
+        Probe: {
+            /** Accuracy */
+            accuracy: number;
+            /** Beats Chance */
+            beats_chance: boolean;
+            /** Chance */
+            chance: number;
+            /** Folds */
+            folds: number;
+            /** Id */
+            id: string;
+            /** Label */
+            label: string;
+            /** Layer */
+            layer: number;
+            /** Negative */
+            negative: number;
+            /** Positive */
+            positive: number;
+        };
+        /** ProbeReading */
+        ProbeReading: {
+            /** Probabilities */
+            probabilities: number[];
+            probe: components["schemas"]["Probe"];
+        };
+        /**
+         * ProbeRequest
+         * @description A linear probe trained to tell two sets of prompts apart at one layer.
+         *
+         *     Logistic regression on the residual stream after `layer`, at each
+         *     prompt's last token - the same reading a steering vector is made from.
+         *     Each set needs a few prompts, so that some can be held out to measure
+         *     the probe on prompts it was not trained on.
+         */
+        ProbeRequest: {
+            /**
+             * Chat
+             * @default true
+             */
+            chat: boolean;
+            /** Label */
+            label: string;
+            /** Layer */
+            layer: number;
+            /** Negative */
+            negative: string[];
+            /** Positive */
+            positive: string[];
         };
         /**
          * ProblemDetail
@@ -874,6 +966,59 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["LabStatus"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_probes_api_v1_lab_probes_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Probe"][];
+                };
+            };
+        };
+    };
+    train_probe_api_v1_lab_probes_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProbeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Probe"];
                 };
             };
             /** @description Validation Error */

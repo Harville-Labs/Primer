@@ -15,6 +15,7 @@ dependencies = [
     "primer-service",
     "pydantic-settings",
     "safetensors",
+    "scikit-learn",
     "torch",
     "transformers",
 ]

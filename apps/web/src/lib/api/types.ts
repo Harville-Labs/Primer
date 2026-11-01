@@ -69,6 +69,10 @@ export type SteeringVector = LabSchemas['SteeringVector'];
 export type SteeringVectorRequest = LabSchemas['SteeringVectorRequest'];
 export type LabScoreRequest = LabSchemas['LabScoreRequest'];
 export type LabScored = LabSchemas['LabScored'];
+export type Outliers = LabSchemas['Outliers'];
+export type Probe = LabSchemas['Probe'];
+export type ProbeRequest = LabSchemas['ProbeRequest'];
+export type ProbeReading = LabSchemas['ProbeReading'];
 export type ActivationSite = ActivationRequest['site'];
 
 /** States where nothing further will happen without the user acting. */
