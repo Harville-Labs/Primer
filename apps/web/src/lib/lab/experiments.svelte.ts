@@ -4,12 +4,13 @@ import type {
 	ExperimentKind,
 	ExperimentSummary,
 	NeuronsRun,
+	ScanRun,
 } from '#lib/api/types.ts';
 import { asFailure, type Failure, problemOf } from './failure';
 
 /**
  * The caller's saved experiments of one kind: Neurons runs on the Neurons
- * tab, Anomalies runs on the Anomalies tab.
+ * tab, Anomalies runs on the Anomalies tab, scans on the Scan tab.
  *
  * Nothing is kept until the user saves. Lab keeps each saved experiment
  * for the operator's retention period and lists only the caller's own, so
@@ -22,7 +23,12 @@ export interface ExperimentsOptions {
 	fetch?: typeof globalThis.fetch;
 }
 
-type RunOf<K extends ExperimentKind> = K extends 'neurons' ? NeuronsRun : AnomaliesRun;
+/** What a tab saves, by its kind. */
+export type RunOf<K extends ExperimentKind> = K extends 'neurons'
+	? NeuronsRun
+	: K extends 'anomalies'
+		? AnomaliesRun
+		: ScanRun;
 
 export class Experiments<K extends ExperimentKind> {
 	// Raw: replaced whole from Lab's answer, never written into.

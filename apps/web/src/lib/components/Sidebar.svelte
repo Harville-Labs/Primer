@@ -7,6 +7,7 @@
 		Library,
 		MessageSquare,
 		ScanLine,
+		ScanSearch,
 		Search,
 		Settings,
 		SquarePen,
@@ -94,11 +95,18 @@
 	});
 
 	// Neurons reads Lab's resident model; Anomalies can score a chat
-	// endpoint too, so it is offered wherever there is one.
+	// endpoint too, so it is offered wherever there is one. Scan reads a
+	// library through Chat and scores it with Lab, so it needs both.
 	let lab = $derived(
 		[
 			{ href: '/lab/neurons', label: 'Neurons', icon: ScanLine, show: capabilities.lab_available },
 			{ href: '/lab/anomalies', label: 'Anomalies', icon: Activity, show: true },
+			{
+				href: '/lab/scan',
+				label: 'Scan',
+				icon: ScanSearch,
+				show: capabilities.lab_available && capabilities.chat_available,
+			},
 		].filter((tab) => tab.show)
 	);
 

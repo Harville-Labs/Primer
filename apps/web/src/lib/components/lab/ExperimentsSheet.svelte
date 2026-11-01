@@ -1,13 +1,13 @@
 <script lang="ts" generics="K extends ExperimentKind">
 	import { Check, Pencil, Trash2, X } from '@lucide/svelte';
 	import { Button, Input, Sheet, Spinner } from '@sivir-ui/svelte';
-	import type { AnomaliesRun, Experiment, ExperimentKind, NeuronsRun } from '#lib/api/types.ts';
-	import type { Experiments } from '#lib/lab/experiments.svelte.ts';
+	import type { Experiment, ExperimentKind } from '#lib/api/types.ts';
+	import type { Experiments, RunOf } from '#lib/lab/experiments.svelte.ts';
 	import { exactly, timeAgo } from '#lib/when.ts';
 
 	/**
 	 * Saving the run on screen, and opening, renaming and deleting the ones
-	 * saved before. Shared by Neurons and Anomalies, which differ only in
+	 * saved before. Shared by Neurons, Anomalies and Scan, which differ only in
 	 * what a run is and how it is shown.
 	 */
 	interface Props {
@@ -16,7 +16,7 @@
 		/** The operator's retention period, which the user is told before saving. */
 		retentionDays: number;
 		/** The run a save would store, or null when there is nothing to save yet. */
-		run: (K extends 'neurons' ? NeuronsRun : AnomaliesRun) | null;
+		run: RunOf<K> | null;
 		/** Why there is nothing to save, said where the form would be. */
 		unsaved: string;
 		/** The title the form starts with: the prompt, usually. */

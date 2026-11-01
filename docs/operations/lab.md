@@ -118,6 +118,29 @@ How long a run may be is the operator's choice: the run limits under
 many edits one run applies. The GPU is shared, and a run holds it from its
 first step to its last.
 
+## Scanning a library
+
+The Scan tab reads every passage of a library through Lab's model and
+lists the ones it found most anomalous: by mean surprisal, or by a probe
+trained on the Anomalies tab to tell instructions from ordinary text. It is
+for finding a passage that would hijack a model reading the library, the
+kind an injected instruction is.
+
+Lab is never given a library. The web app lists the passages through Chat,
+which asks Control whether the person may read the library, exactly as a
+question would, and hands Lab their text sixteen at a time. Each batch is
+one turn of Lab's run queue, so a long scan takes turns with everyone else.
+The scan runs in the browser tab that started it: stopping it, or leaving
+the page, sends no more batches.
+
+A scan reads at most the first 2,000 passages of a library, in order of
+file and then position, and says when the library holds more. A passage
+longer than `PRIMER_LAB_MAX_PROMPT_TOKENS` is scored from its start and
+marked truncated.
+
+The tab needs Chat as well as Lab, since that is where the passages are
+read from, and is hidden on a deployment without both.
+
 ## Saved experiments
 
 Nothing Lab does is kept unless someone saves it. A saved experiment holds
@@ -137,6 +160,11 @@ so nobody sees one past its date. The web app shows each experiment's
 expiry date. Shortening the period deletes the newly expired ones within the
 hour; lengthening it keeps the rest longer, but brings back none already
 deleted.
+
+A saved scan keeps its fifty most anomalous passages with their text, so
+for the retention period Lab's schema holds those passages of the library
+as well as the library's own store. Deleting a document does not remove
+them from a scan saved before; deleting the scan does.
 
 Opening an experiment puts its vectors and probes back, under the ids the
 saved request names, so the run can be repeated as it was. It does that

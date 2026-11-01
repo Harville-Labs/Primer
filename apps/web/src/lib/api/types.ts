@@ -47,6 +47,8 @@ export type ScoredText = ChatSchemas['ScoredText'];
 export type SequenceScore = ChatSchemas['SequenceScore'];
 export type TokenScore = ChatSchemas['TokenScore'];
 export type Span = ChatSchemas['Span'];
+export type Passage = ChatSchemas['Passage'];
+export type PassagesResult = ChatSchemas['PassagesResult'];
 
 export type LabStatus = LabSchemas['LabStatus'];
 export type LabModelStatus = LabSchemas['LabModelStatus'];
@@ -81,6 +83,13 @@ export type ExperimentRename = LabSchemas['ExperimentRename'];
 export type ExperimentKind = ExperimentSummary['kind'];
 export type NeuronsRun = LabSchemas['NeuronsRun'];
 export type AnomaliesRun = LabSchemas['AnomaliesRun'];
+export type ScanRun = LabSchemas['ScanRun'];
+export type ScanSettings = LabSchemas['ScanSettings'];
+export type ScanResult = LabSchemas['ScanResult'];
+export type ScanFinding = LabSchemas['ScanFinding'];
+export type LabScanRequest = LabSchemas['LabScanRequest'];
+export type LabScanned = LabSchemas['LabScanned'];
+export type ScannedPassage = LabSchemas['ScannedPassage'];
 
 /** States where nothing further will happen without the user acting. */
 export const TERMINAL_STATUSES: readonly IngestionStatus[] = [
