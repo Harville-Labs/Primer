@@ -35,7 +35,7 @@ describe('Lab not answering', () => {
 		});
 
 		const failure = (await lab
-			.inspect({ prompt: 'hi', chat: true, neurons: 8 })
+			.inspect({ prompt: 'hi', chat: true, neurons: 8, features: 8 })
 			.catch((error: unknown) => error)) as ApiError;
 
 		expect(failure.code).toBe('quota_exceeded');

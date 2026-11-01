@@ -147,6 +147,13 @@
             "title": "Chat",
             "type": "boolean"
           },
+          "features": {
+            "default": 8,
+            "maximum": 32.0,
+            "minimum": 1.0,
+            "title": "Features",
+            "type": "integer"
+          },
           "neurons": {
             "default": 8,
             "maximum": 32.0,
@@ -169,7 +176,7 @@
       },
       "InspectResponse": {
         "additionalProperties": false,
-        "description": "What a prompt does inside the resident model.\n\nBounded by its shape: num_layers x tokens x (LENS_TOP + neurons) values,\nwith tokens at most the deployment's max_prompt_tokens and neurons at\nmost MAX_NEURONS.",
+        "description": "What a prompt does inside the resident model.\n\nBounded by its shape: num_layers x tokens x (LENS_TOP + neurons + features)\nvalues, with tokens at most the deployment's max_prompt_tokens, neurons\nat most MAX_NEURONS, and features at most MAX_FEATURES.",
         "properties": {
           "chat_template": {
             "description": "Whether the chat template was applied",
@@ -301,6 +308,16 @@
               }
             ],
             "title": "Reference"
+          },
+          "saes": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SaeStatus"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -382,6 +399,40 @@
         "additionalProperties": false,
         "description": "One layer's summary at every position, as parallel arrays.\n\nIndexed by token position first. Columns rather than an object per\nposition, because a full-length prompt on a 36-layer model is about\neighteen thousand of them, and naming every field in every one roughly\ndoubles a response that is already the largest Lab sends.",
         "properties": {
+          "feature_activations": {
+            "anyOf": [
+              {
+                "items": {
+                  "items": {
+                    "type": "number"
+                  },
+                  "type": "array"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Feature Activations"
+          },
+          "feature_indices": {
+            "anyOf": [
+              {
+                "items": {
+                  "items": {
+                    "type": "integer"
+                  },
+                  "type": "array"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Feature Indices"
+          },
           "lens_probabilities": {
             "items": {
               "items": {
@@ -546,6 +597,86 @@
         "title": "ModelSwitch",
         "type": "object"
       },
+      "SaeStatus": {
+        "additionalProperties": false,
+        "description": "The sparse autoencoders attached to the resident model, if any.\n\nFetched after the model loads, so the model is usable while they\ndownload; until they are ready an inspection reads no features.",
+        "properties": {
+          "commit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Commit"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "k": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "K"
+          },
+          "layers": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Layers",
+            "type": "array"
+          },
+          "repository": {
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,95}/[A-Za-z0-9][A-Za-z0-9._-]{0,95}$",
+            "title": "Repository",
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "fetching",
+              "ready",
+              "failed"
+            ],
+            "title": "State",
+            "type": "string"
+          },
+          "width": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Width"
+          }
+        },
+        "required": [
+          "repository",
+          "state"
+        ],
+        "title": "SaeStatus",
+        "type": "object"
+      },
       "ValidationError": {
         "properties": {
           "ctx": {
@@ -639,7 +770,7 @@
     },
     "/api/v1/lab/inspect": {
       "post": {
-        "description": "Runs the prompt through the resident model once and returns, for every layer and position, the residual stream's norm, the logit lens's likeliest tokens, and the MLP neurons with the largest activations. Summaries, not raw activations: read one whole vector with the activation route.",
+        "description": "Runs the prompt through the resident model once and returns, for every layer and position, the residual stream's norm, the logit lens's likeliest tokens, and the MLP neurons with the largest activations, and the strongest SAE features at layers this deployment has SAEs for. Summaries, not raw activations: read one whole vector with the activation route.",
         "operationId": "inspect_api_v1_lab_inspect_post",
         "requestBody": {
           "content": {
@@ -673,7 +804,7 @@
             "description": "Validation Error"
           }
         },
-        "summary": "Read the logit lens and top MLP neurons for a prompt",
+        "summary": "Read the logit lens, top MLP neurons and SAE features for a prompt",
         "tags": [
           "lab"
         ]

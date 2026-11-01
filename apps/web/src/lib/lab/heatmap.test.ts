@@ -3,6 +3,7 @@ import { reading } from './fixture';
 import {
 	cellColour,
 	cellValues,
+	featuresAt,
 	lensAt,
 	moveSelection,
 	neuronsAt,
@@ -88,6 +89,20 @@ describe('reading a cell', () => {
 			{ index: 2, activation: -2 },
 			{ index: 3, activation: 1 },
 		]);
+	});
+
+	it('reads a layer with no SAE as no reading, not as no features firing', () => {
+		const layers = reading().layers.map((layer, index) =>
+			index === 1
+				? { ...layer, feature_indices: [[9], [40, 7]], feature_activations: [[3], [-0.5, 0.25]] }
+				: layer,
+		);
+		const withSaes = reading({ layers });
+		expect(featuresAt(withSaes, { layer: 1, token: 1 })).toEqual([
+			{ index: 40, activation: -0.5 },
+			{ index: 7, activation: 0.25 },
+		]);
+		expect(featuresAt(withSaes, { layer: 0, token: 1 })).toBeNull();
 	});
 
 	it('follows one token up through every layer', () => {

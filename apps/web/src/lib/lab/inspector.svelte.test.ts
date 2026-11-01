@@ -31,10 +31,13 @@ describe('running a prompt', () => {
 		view.prompt = '  hello world ';
 		view.chat = false;
 
-		await view.run(4);
+		await view.run(4, 3);
 
 		expect(asked).toEqual([
-			{ path: '/lab/inspect', body: { prompt: 'hello world', chat: false, neurons: 4 } },
+			{
+				path: '/lab/inspect',
+				body: { prompt: 'hello world', chat: false, neurons: 4, features: 3 },
+			},
 		]);
 		expect(view.reading?.tokens).toHaveLength(2);
 		expect(view.selected).toEqual({ layer: 2, token: 1 });

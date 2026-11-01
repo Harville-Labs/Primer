@@ -28,6 +28,7 @@ from primer_lab.loader import (
     plan_load,
 )
 from primer_lab.queue import RunQueue, RunTimedOut
+from primer_lab.saes import Attachment, SaeSet, fetch_saes
 from primer_lab.sources import Hub, ModelUnavailable, check_allowed, resolve
 
 logger = logging.getLogger(__name__)
@@ -47,6 +48,11 @@ class SwitchInProgress(RuntimeError):
 class Resident:
     reference: HubModel | LocalModel
     loaded: LoadedModel
+    saes: Attachment | None = None
+
+    @property
+    def ready_saes(self) -> SaeSet | None:
+        return self.saes.ready if self.saes else None
 
     def status(self) -> LabModelStatus:
         plan = self.loaded.plan
@@ -57,6 +63,7 @@ class Resident:
             device=plan.device,
             dtype=plan.dtype,
             num_layers=self.loaded.num_layers,
+            saes=self.saes.status if self.saes else None,
         )
 
 
@@ -126,6 +133,41 @@ class ModelHost:
             )
         else:
             self.switch = None
+            if self.resident is not None and self.resident.saes is not None:
+                await self._attach_saes(self.resident, self.resident.saes)
+
+    async def _attach_saes(self, resident: Resident, attachment: Attachment) -> None:
+        """Fetch the resident's SAEs beside whatever runs, and say how it went.
+
+        Part of the switch's task, so waiting for a switch waits for these
+        too, but after the switch is reported done: the model answers runs
+        while the SAEs download. A failure here leaves the model as it is.
+        """
+        config = resident.loaded.model.config
+        try:
+            saes = await asyncio.to_thread(
+                fetch_saes,
+                self._settings,
+                attachment.status.repository,
+                self._hub,
+                hidden_size=config.hidden_size,
+                num_layers=resident.loaded.num_layers,
+            )
+        except ModelUnavailable as error:
+            attachment.failed(str(error))
+        except Exception:
+            logger.exception("attaching SAEs failed")
+            attachment.failed("The SAEs passed Lab's checks but could not be opened.")
+        else:
+            attachment.attached(saes)
+
+    def _saes_for(self, reference: HubModel | LocalModel) -> Attachment | None:
+        # By repository alone: an operator maps a model to the SAEs trained
+        # for it, and a revision of the same model is still that model.
+        if isinstance(reference, LocalModel):
+            return None
+        repository = self._settings.lab_saes.get(reference.repository)
+        return Attachment(repository) if repository else None
 
     def _replace(self, reference: HubModel | LocalModel, plan: LoadPlan) -> None:
         """Swap the resident model, on the queue's thread.
@@ -138,15 +180,19 @@ class ModelHost:
         """
         # Only what is needed to load it again: holding the old Resident
         # here would hold its weights, and the release would free nothing.
-        previous = (self.resident.reference, self.resident.loaded.plan) if self.resident else None
-        self.resident = None
+        # Its SAEs are kept: they are memory-mapped files, not the weights.
+        old = self.resident
+        restore = (old.reference, old.loaded.plan, old.saes) if old else None
+        old = self.resident = None
         _release()
         try:
-            self.resident = Resident(reference, load_model(plan, self._factory))
+            loaded = load_model(plan, self._factory)
+            self.resident = Resident(reference, loaded, self._saes_for(reference))
         except BaseException:
             _release()
-            if previous is not None:
-                self.resident = Resident(previous[0], load_model(previous[1], self._factory))
+            if restore is not None:
+                reference, plan, saes = restore
+                self.resident = Resident(reference, load_model(plan, self._factory), saes)
             raise
 
     def _failed(self, reference: HubModel | LocalModel, message: str) -> None:
