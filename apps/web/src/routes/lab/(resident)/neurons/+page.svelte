@@ -1,14 +1,17 @@
 <script lang="ts">
-	import { Grid3x3, PanelLeft, PanelRight, Rows3, Sparkles } from '@lucide/svelte';
+	import { Bookmark, Grid3x3, PanelLeft, PanelRight, Rows3, Sparkles } from '@lucide/svelte';
 	import { Button, Sheet, ToggleGroup } from '@sivir-ui/svelte';
 	import { onMount } from 'svelte';
 	import ActivationHeatmap from '#lib/components/lab/ActivationHeatmap.svelte';
 	import ComparePane from '#lib/components/lab/ComparePane.svelte';
 	import EditsPanel from '#lib/components/lab/EditsPanel.svelte';
+	import ExperimentsSheet from '#lib/components/lab/ExperimentsSheet.svelte';
 	import LabPromptPane from '#lib/components/lab/LabPromptPane.svelte';
 	import NeuronInspector from '#lib/components/lab/NeuronInspector.svelte';
 	import SteerSheet from '#lib/components/lab/SteerSheet.svelte';
+	import type { Experiment, NeuronsRun } from '#lib/api/types.ts';
 	import { Edits, Generator, Steering } from '#lib/lab/edits.svelte.ts';
+	import { Experiments } from '#lib/lab/experiments.svelte.ts';
 	import {
 		type Cell,
 		cellValues,
@@ -27,8 +30,10 @@
 	const edits = new Edits();
 	const generator = new Generator();
 	const steering = new Steering();
+	const experiments = new Experiments('neurons');
 
 	let steerOpen = $state(false);
+	let savedOpen = $state(false);
 	let pane = $state<'grid' | 'compare'>('grid');
 
 	let promptOpen = $state(false);
@@ -48,9 +53,33 @@
 	let model = $derived(reading?.model ?? data.status?.model ?? null);
 	let saes = $derived(model?.saes?.state === 'ready' ? model.saes : null);
 
+	// Null when Lab has no database, and saving is not offered at all.
+	let retentionDays = $derived(data.status?.experiment_retention_days ?? null);
+	let saveable = $derived<NeuronsRun | null>(
+		generator.asked && generator.view.completed
+			? { kind: 'neurons', request: generator.asked, result: generator.view.completed }
+			: null
+	);
+
 	onMount(() => {
 		if (data.status?.model) void steering.load();
+		if (data.status?.model && retentionDays !== null) void experiments.load();
 	});
+
+	/** Put a saved run back as it was: its prompt, its edits, and its two answers. */
+	function reopen(experiment: Experiment) {
+		if (experiment.run.kind !== 'neurons') return;
+		const { request, result } = experiment.run;
+		inspector.prompt = request.prompt;
+		inspector.chat = request.chat;
+		edits.replace(request.interventions ?? []);
+		// Read again: the restore put the run's vectors back under their ids.
+		void steering.load();
+		if (result) {
+			generator.show(request, result);
+			pane = 'compare';
+		}
+	}
 
 	// What the pointer is over, read out under the grid, so sweeping across a
 	// row is a way of reading it without committing the selection.
@@ -187,6 +216,19 @@
 			</Button>
 			{/if}
 
+			{#if retentionDays !== null && model}
+				<Button
+					variant="ghost"
+					size="icon"
+					class={pane === 'grid' ? '' : 'ml-auto'}
+					onclick={() => (savedOpen = true)}
+					title="Save this run, or open one saved before"
+				>
+					<Bookmark size={15} aria-hidden="true" />
+					<span class="sr-only">Saved experiments</span>
+				</Button>
+			{/if}
+
 			<Button
 				variant="ghost"
 				size="icon"
@@ -269,6 +311,18 @@
 		saeLayers={saes?.layers ?? []}
 		saeWidth={saes?.width ?? null}
 		chat={inspector.chat}
+	/>
+{/if}
+
+{#if retentionDays !== null}
+	<ExperimentsSheet
+		bind:open={savedOpen}
+		{experiments}
+		{retentionDays}
+		run={saveable}
+		unsaved="Generate with edits first. A saved Neurons experiment is the prompt, its edits, and the two answers they produced."
+		suggested={generator.asked?.prompt ?? ''}
+		onopen={reopen}
 	/>
 {/if}
 

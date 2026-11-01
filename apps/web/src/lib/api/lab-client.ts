@@ -2,6 +2,10 @@ import { ApiError, asProblem } from './client';
 import type {
 	ActivationRequest,
 	ActivationVector,
+	Experiment,
+	ExperimentCreate,
+	ExperimentRename,
+	ExperimentSummary,
 	GenerateRequest,
 	InspectRequest,
 	InspectResponse,
@@ -133,6 +137,32 @@ export class LabApi {
 		return this.post('/api/v1/lab/probes', payload);
 	}
 
+	/** The caller's saved experiments, newest first; Lab decides whose they are. */
+	experiments(): Promise<ExperimentSummary[]> {
+		return this.request('/api/v1/lab/experiments');
+	}
+
+	saveExperiment(payload: ExperimentCreate): Promise<Experiment> {
+		return this.post('/api/v1/lab/experiments', payload);
+	}
+
+	experiment(id: string): Promise<Experiment> {
+		return this.request(experimentPath(id));
+	}
+
+	renameExperiment(id: string, payload: ExperimentRename): Promise<ExperimentSummary> {
+		return this.request(experimentPath(id), { ...jsonPost(payload), method: 'PATCH' });
+	}
+
+	async deleteExperiment(id: string): Promise<void> {
+		await this.send(experimentPath(id), { method: 'DELETE' });
+	}
+
+	/** Put the experiment's vectors and probes back on the model, and return it. */
+	restoreExperiment(id: string): Promise<Experiment> {
+		return this.post(`${experimentPath(id)}/restore`, {});
+	}
+
 	private post<T>(path: string, payload: unknown): Promise<T> {
 		return this.request(path, jsonPost(payload));
 	}
@@ -144,4 +174,9 @@ function jsonPost(payload: unknown): RequestInit {
 		headers: { 'Content-Type': 'application/json' },
 		body: JSON.stringify(payload),
 	};
+}
+
+/** Encoded: the id comes from the browser, and must not become a different path. */
+function experimentPath(id: string): string {
+	return `/api/v1/lab/experiments/${encodeURIComponent(id)}`;
 }

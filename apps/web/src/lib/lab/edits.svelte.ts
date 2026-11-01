@@ -1,5 +1,11 @@
 import { parseEvents } from '#lib/api/sse.ts';
-import type { Intervention, SteeringVector, SteeringVectorRequest } from '#lib/api/types.ts';
+import type {
+	GenerateRequest,
+	GenerationCompleted,
+	Intervention,
+	SteeringVector,
+	SteeringVectorRequest,
+} from '#lib/api/types.ts';
 import { asFailure, problemOf } from './failure';
 import { emptyGeneration, foldGeneration, type GenerationView, OP_DEFAULTS } from './generation';
 import { OwnedList, type OwnedOptions } from './owned.svelte';
@@ -70,6 +76,12 @@ export class Edits {
 		}
 	}
 
+	/** Start again from a saved run's edits, with none open. */
+	replace(interventions: Intervention[]): void {
+		this.items = interventions.map((edit) => ({ ...edit, key: `edit-${this.next++}` }));
+		this.active = null;
+	}
+
 	/** Take the list's new order, as the reorder list hands it back. */
 	reorder(items: DraftEdit[]): void {
 		const known = new Set(this.items.map((item) => item.key));
@@ -104,6 +116,8 @@ export class Generator {
 	running = $state(false);
 	// Raw: replaced whole on every event, never written into.
 	view = $state.raw<GenerationView>(emptyGeneration());
+	/** What the view was asked with, which is what a save stores beside it. */
+	asked = $state.raw<GenerateRequest | null>(null);
 
 	private readonly fetch: typeof globalThis.fetch;
 	private controller: AbortController | null = null;
@@ -122,18 +136,19 @@ export class Generator {
 		this.controller = controller;
 		this.running = true;
 		this.view = emptyGeneration();
-		const target = ask.target.trim() ? ask.target : null;
+		const asked: GenerateRequest = {
+			prompt,
+			chat: ask.chat,
+			interventions: ask.interventions,
+			max_new_tokens: ask.maxNewTokens,
+			target: ask.target.trim() ? ask.target : null,
+		};
+		this.asked = asked;
 		try {
 			const response = await this.fetch('/lab/generate', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({
-					prompt,
-					chat: ask.chat,
-					interventions: ask.interventions,
-					max_new_tokens: ask.maxNewTokens,
-					target,
-				}),
+				body: JSON.stringify(asked),
 				signal: controller.signal,
 			});
 			if (!response.ok) throw await problemOf(response);
@@ -160,6 +175,18 @@ export class Generator {
 				this.running = false;
 			}
 		}
+	}
+
+	/** Show a saved run's answers as if it had just finished. */
+	show(asked: GenerateRequest, completed: GenerationCompleted): void {
+		this.stop();
+		this.asked = asked;
+		this.view = {
+			...emptyGeneration(),
+			completed,
+			baseline: completed.baseline,
+			edited: completed.edited,
+		};
 	}
 
 	/** Stop reading. Lab notices the stream has gone and stops between tokens. */

@@ -147,6 +147,54 @@ describe("Lab's detectors", () => {
 		expect(asked[0].body).toMatchObject({ outlier_layer: 1, probe_id: PROBE.id });
 		expect(scorer.scored?.outliers).toEqual(OUTLIERS);
 		expect(scorer.scored?.probe?.probabilities).toEqual([0.9]);
+		expect(scorer.scored?.lab?.request).toEqual(asked[0].body);
+	});
+
+	it('puts a saved Lab score back with the choices that made it', () => {
+		const { fetch, asked } = primer({});
+		const scorer = new Scorer(SOURCES, { fetch });
+		const request = {
+			prompt: 'the text',
+			mode: 'text' as const,
+			chat: true,
+			max_new_tokens: 16,
+			outlier_layer: 1,
+			probe_id: PROBE.id,
+		};
+		const result = {
+			mode: 'text' as const,
+			model: RESIDENT,
+			text: 'the text',
+			score: sequence([1, 7]),
+			outliers: OUTLIERS,
+			probe: null,
+		};
+
+		expect(scorer.show(request, result)).toBe(true);
+
+		expect(asked).toEqual([]);
+		expect(scorer.source?.kind).toBe('lab');
+		expect([scorer.mode, scorer.text, scorer.outlierLayer, scorer.probeId]).toEqual([
+			'text',
+			'the text',
+			1,
+			PROBE.id,
+		]);
+		expect(scorer.scored?.outliers).toEqual(OUTLIERS);
+		expect(scorer.scored?.lab).toEqual({ request, result });
+		expect(scorer.selected).toBe(1);
+	});
+
+	it('cannot put a Lab score back on a page offered no Lab', () => {
+		const scorer = new Scorer(sourcesFrom([chatModel('answers')], null));
+
+		expect(
+			scorer.show(
+				{ prompt: 'x', mode: 'text', chat: true, max_new_tokens: 1 },
+				{ mode: 'text', model: RESIDENT, text: 'x', score: sequence([1]) },
+			),
+		).toBe(false);
+		expect(scorer.scored).toBeNull();
 	});
 
 	it('are never sent to an endpoint, which has no residual stream to read', async () => {
@@ -168,6 +216,7 @@ describe("Lab's detectors", () => {
 		expect(Object.keys(asked[0].body)).not.toContain('probe_id');
 		expect(scorer.scored?.outliers).toBeNull();
 		expect(scorer.scored?.probe).toBeNull();
+		expect(scorer.scored?.lab, "an endpoint's score is not Lab's to save").toBeNull();
 	});
 });
 

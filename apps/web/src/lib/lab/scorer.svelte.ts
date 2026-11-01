@@ -38,6 +38,8 @@ export interface Scored {
 	outliers: Outliers | null;
 	/** A probe's reading at each token, when Lab was asked for one. */
 	probe: ProbeReading | null;
+	/** Lab's request and answer as they were, which is what a save stores. Null for an endpoint. */
+	lab: { request: LabScoreRequest; result: LabScored } | null;
 }
 
 /** How long an answer to ask for. Short: the point is to read it token by token. */
@@ -90,17 +92,21 @@ export class Scorer {
 		const mode = this.effectiveMode;
 		this.running = true;
 		this.failure = null;
+		const labRequest: LabScoreRequest | null =
+			source.kind === 'lab'
+				? {
+						prompt: text,
+						mode,
+						chat: true,
+						max_new_tokens: Math.min(ANSWER_TOKENS, this.labMaxNewTokens),
+						outlier_layer: this.outlierLayer ?? undefined,
+						probe_id: this.probeId ?? undefined,
+					}
+				: null;
 		try {
 			const response = await this.fetch(
 				...(source.kind === 'lab'
-					? request('/lab/score', {
-							prompt: text,
-							mode,
-							chat: true,
-							max_new_tokens: Math.min(ANSWER_TOKENS, this.labMaxNewTokens),
-							outlier_layer: this.outlierLayer ?? undefined,
-							probe_id: this.probeId ?? undefined,
-						} satisfies LabScoreRequest)
+					? request('/lab/score', labRequest)
 					: request('/chat/score', {
 							provider_id: source.providerId,
 							model: source.model,
@@ -120,6 +126,7 @@ export class Scorer {
 				score: body.score,
 				outliers: body.outliers ?? null,
 				probe: body.probe ?? null,
+				lab: labRequest ? { request: labRequest, result: body as LabScored } : null,
 			};
 			this.selected = mostSurprising(body.score);
 		} catch (failure) {
@@ -127,6 +134,33 @@ export class Scorer {
 		} finally {
 			this.running = false;
 		}
+	}
+
+	/**
+	 * Show a saved Lab score as if it had just been made, with the choices
+	 * that made it, so running it again repeats it. False when this page
+	 * offers no Lab to have made it.
+	 */
+	show(request: LabScoreRequest, result: LabScored): boolean {
+		const source = this.sources.find((each) => each.kind === 'lab');
+		if (!source) return false;
+		this.sourceKey = source.key;
+		this.mode = request.mode;
+		this.text = request.prompt;
+		this.outlierLayer = request.outlier_layer ?? null;
+		this.probeId = request.probe_id ?? null;
+		this.failure = null;
+		this.scored = {
+			source,
+			mode: request.mode,
+			text: result.text,
+			score: result.score,
+			outliers: result.outliers ?? null,
+			probe: result.probe ?? null,
+			lab: { request, result },
+		};
+		this.selected = mostSurprising(result.score);
+		return true;
 	}
 
 	select(index: number): void {

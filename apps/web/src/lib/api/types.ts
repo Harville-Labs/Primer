@@ -74,6 +74,13 @@ export type Probe = LabSchemas['Probe'];
 export type ProbeRequest = LabSchemas['ProbeRequest'];
 export type ProbeReading = LabSchemas['ProbeReading'];
 export type ActivationSite = ActivationRequest['site'];
+export type ExperimentSummary = LabSchemas['ExperimentSummary'];
+export type Experiment = LabSchemas['Experiment'];
+export type ExperimentCreate = LabSchemas['ExperimentCreate'];
+export type ExperimentRename = LabSchemas['ExperimentRename'];
+export type ExperimentKind = ExperimentSummary['kind'];
+export type NeuronsRun = LabSchemas['NeuronsRun'];
+export type AnomaliesRun = LabSchemas['AnomaliesRun'];
 
 /** States where nothing further will happen without the user acting. */
 export const TERMINAL_STATUSES: readonly IngestionStatus[] = [
