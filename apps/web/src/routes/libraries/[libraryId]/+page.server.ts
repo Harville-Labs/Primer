@@ -1,5 +1,6 @@
 import { error, fail } from '@sveltejs/kit';
 import { ApiError } from '#lib/api/client.ts';
+import { owns } from '#lib/libraries.ts';
 import { apiFor } from '#lib/server/api.ts';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -22,7 +23,7 @@ export const load: PageServerLoad = async ({ params, parent, request, fetch }) =
 		// when the principal is unknown - the layout tolerates `/me` failing,
 		// and an unknown caller is not an owner. Control refuses either way;
 		// this only decides what is worth putting on screen.
-		const owned = principal !== null && library.owner_user_id === principal.user_id;
+		const owned = owns(principal, library);
 		return {
 			library,
 			documents,

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { Button } from '@sivir-ui/svelte';
-	import type { StudioImage } from '#lib/api/types.ts';
+	import type { LibrarySummary, StudioImage } from '#lib/api/types.ts';
 	import ImageDetail from '#lib/components/studio/ImageDetail.svelte';
 	import type { Problem } from '#lib/server/problem.ts';
 	import type { Generator } from '#lib/studio/generator.svelte.ts';
@@ -13,9 +13,11 @@
 		problem: Problem | null;
 		onreuse: (image: StudioImage) => void;
 		onedit: (image: StudioImage) => void;
+		//: Libraries an image may be copied to; empty where none can take one.
+		targets: LibrarySummary[];
 	}
 
-	let { generator, problem, onreuse, onedit }: Props = $props();
+	let { generator, problem, onreuse, onedit, targets }: Props = $props();
 
 	let selected = $derived(generator.selected);
 
@@ -37,6 +39,8 @@
 			onedit={() => onedit(image)}
 			ondelete={() => remove(image)}
 			onselect={(each) => (generator.selectedId = each.id)}
+			{targets}
+			onaddtolibrary={(libraryId) => generator.addToLibrary(image, libraryId)}
 		/>
 	{/if}
 	<section aria-labelledby="history-heading" class="flex flex-col gap-2 border-t border-border px-4 py-4">

@@ -40,6 +40,7 @@
 	<History
 		{generator}
 		problem={data.historyProblem}
+		targets={data.libraryTargets}
 		onreuse={reuse}
 		onedit={(image) => goto(`/studio/edit?source=${image.id}`)}
 	/>

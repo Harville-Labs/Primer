@@ -262,6 +262,15 @@ export class PrimerApi {
 		return this.request(`/api/v1/studio/images/${imageId}`, { method: 'DELETE' });
 	}
 
+	/** Copy a Studio image into a library the caller manages, to be read as a document. */
+	addStudioImageToLibrary(imageId: string, libraryId: string): Promise<DocumentSummary> {
+		return this.request(`/api/v1/studio/images/${imageId}/library`, {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ library_id: libraryId }),
+		});
+	}
+
 	/** A Studio image's bytes, as the response carrying them, for the same reason as `content`. */
 	studioContent(imageId: string): Promise<Response> {
 		return this.send(`/api/v1/studio/images/${imageId}/content`);

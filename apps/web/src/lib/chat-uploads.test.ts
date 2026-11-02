@@ -10,6 +10,7 @@ const capabilities: DeploymentCapabilities = {
 	tools_available: false,
 	lab_available: false,
 	studio_available: false,
+	studio_library_available: false,
 	is_admin: false,
 	max_upload_bytes: 1024,
 	supported_extensions: ['.pdf', '.md'],

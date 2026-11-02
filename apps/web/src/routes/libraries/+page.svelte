@@ -2,18 +2,15 @@
 	import { enhance } from '$app/forms';
 	import { Copy, Plus, Trash2, Users } from '@lucide/svelte';
 	import { Alert, Button, Input } from '@sivir-ui/svelte';
+	import { owns } from '#lib/libraries.ts';
 	import type { ActionData, PageData } from './$types';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
 
 	let total = $derived(data.libraries.reduce((sum, library) => sum + library.document_count, 0));
 
-	//: Whether a library is the caller's own rather than one shared with
-	//: them. Only decides what to offer; Control refuses the rest either
-	//: way. False when the principal is unknown, because the layout
-	//: tolerates `/me` failing and an unknown caller owns nothing.
 	function mine(library: { owner_user_id: string }): boolean {
-		return data.principal !== null && library.owner_user_id === data.principal.user_id;
+		return owns(data.principal, library);
 	}
 </script>
 
