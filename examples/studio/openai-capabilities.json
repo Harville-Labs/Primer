@@ -1,0 +1,16 @@
+{
+  "models": [
+    "gpt-image-1"
+  ],
+  "operations": [
+    "generate",
+    "edit",
+    "inpaint"
+  ],
+  "sizes": [
+    "1024x1024",
+    "1536x1024",
+    "1024x1536"
+  ],
+  "max_images": 4
+}
