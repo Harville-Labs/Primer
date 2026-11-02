@@ -1,6 +1,6 @@
 [project]
 name = "primer-lab-graphs"
-version = "0.1.14"
+version = "1.0.0"
 description = "Builds attribution graphs for Primer Lab, as a program Lab runs"
 requires-python = ">=3.13"
 dependencies = [

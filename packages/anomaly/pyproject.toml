@@ -1,6 +1,6 @@
 [project]
 name = "primer-anomaly"
-version = "0.1.14"
+version = "1.0.0"
 description = "Token surprisal, entropy, and spike detection shared by Chat and Lab"
 requires-python = ">=3.13"
 dependencies = ["numpy", "pydantic"]
