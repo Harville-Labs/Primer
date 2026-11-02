@@ -66,11 +66,12 @@ values`, and in whatever stores your release history.
 | `auth.oidc.existingSecret` | `client-secret`, `cookie-secret` |
 | `inference.*.existingSecret` | API keys, if your endpoint needs them |
 | `vectorStore.existingSecret` | `qdrant-api-key`, if your Qdrant needs one |
-| `graph.existingSecret` | `graph-password`, when the graph is on |
+| `graph.existingSecret` | `graph-password`. Required with `graph.url`; with the bundled Neo4j, the release makes one if you name none |
 | `graph.extraction.existingSecret` | `graph-extraction-api-key`, if the extraction endpoint needs one |
 
-The one it does create is Primer's own cluster-internal service token, which
-means nothing outside the release. It is generated once and preserved across
+The one it does create holds Primer's own cluster-internal service token,
+which means nothing outside the release, and the bundled Neo4j's password
+when `graph.existingSecret` names none. It is generated once and preserved across
 upgrades — regenerating it on every `helm upgrade` would leave in-flight
 workers holding a credential the API had just stopped accepting.
 
@@ -402,28 +403,35 @@ running now: above one it is `ReadWriteMany`, and the chart refuses a
 
 ## The knowledge graph
 
-Off until you choose a Neo4j for it. The chart can run one for you:
+On by default: the release runs a Neo4j for it, as it runs Qdrant
+([ADR 0011](../adr/0011-bundle-neo4j-by-default.md)). With nothing set, the
+release makes the password itself and extracts with the chat model. To
+size it, name the password, or extract with a different model:
 
 ```yaml
 graph:
   neo4j:
-    enabled: true
     persistence:
       size: 10Gi
-  existingSecret: primer-neo4j        # key: graph-password, 8+ characters
+  existingSecret: primer-neo4j        # optional; key: graph-password, 8+ characters
   extraction:
     baseUrl: http://vllm.models.svc:8000/v1
     model: Qwen/Qwen2.5-7B-Instruct
 ```
 
-Or point it at one you already run, with `graph.url` in place of
-`graph.neo4j`. Setting both is refused.
+Or point it at one you already run, with `graph.url`, and turn the bundled
+one off. Setting both is refused, and an external Neo4j needs its password
+named:
 
 ```yaml
 graph:
   url: bolt://neo4j.graph.svc:7687
   existingSecret: primer-neo4j
+  neo4j:
+    enabled: false
 ```
+
+`graph.neo4j.enabled: false` with no `graph.url` turns the graph off.
 
 Either way, Retrieval is given the graph and a `migrate-graph` hook applies
 its constraints and indexes on every install and upgrade. Nothing else is
@@ -432,8 +440,11 @@ Retrieval rather than writing it, so the password stays with the one
 service that owns the store.
 
 `graph.extraction` is the model that reads entities and relations out of
-each passage, and it runs on the index worker. It is optional - without it
-the graph stays empty and search answers from vectors alone - but setting it
+each passage, and it runs on the index worker. Left empty, it is the chat
+endpoint and model, with the chat key, when both of those are set. It must
+support structured output. Extraction calls it once per passage, so on a
+small shared endpoint name a separate model. With no model at all the graph
+stays empty and search answers from vectors alone. Setting it
 with the graph off is refused at render time, because every document would
 then extract a graph that Retrieval has nowhere to put and fail to index.
 Documents indexed before extraction was turned on have no graph until they
@@ -457,25 +468,15 @@ port and nothing else; the workers extract graphs but never open one.
   from the node rather than the container, so `graph.neo4j.heapSize` and
   `pageCacheSize` are set explicitly and must fit inside
   `graph.neo4j.resources.limits.memory` with room for the JVM itself.
-- **The schema hook runs after install, and before upgrades.** A
-  pre-install hook would run before the StatefulSet exists. With a bundled
-  Neo4j the hook is `post-install,pre-upgrade`, as it is for a bundled
-  PostgreSQL, and waits up to five minutes for Neo4j to answer; with
-  `graph.url` it stays beside the SQL migrations.
-- **Turning a bundled Neo4j on for an existing release takes two
-  upgrades.** The pre-upgrade hook runs before the new StatefulSet exists,
-  so it waits five minutes and fails the upgrade. Create Neo4j first without
-  hooks, then upgrade again so the schema is applied:
-
-    ```bash
-    helm upgrade primer deploy/helm/primer -f values.yaml --no-hooks
-    helm upgrade primer deploy/helm/primer -f values.yaml
-    ```
-
-    `--no-hooks` skips the SQL migrations too, so do it with the chart
-    version you are already running.
-- **The Secret sets the password once.** Neo4j reads it on first start, when
-  its store is empty. To change it later, change it in Neo4j first, then
+- **The schema hook runs after install and after upgrades.** A pre hook
+  would wait for a StatefulSet that does not exist yet, both before install
+  and before the upgrade that first turns the bundled Neo4j on. With a
+  bundled Neo4j the hook is `post-install,post-upgrade` and waits up to five
+  minutes for Neo4j to answer; with `graph.url` it stays beside the SQL
+  migrations, before the new code.
+- **The password is set once.** Neo4j reads it on first start, when its
+  store is empty, whether you named it or the release made it. A release
+  that made one keeps it across upgrades. To change it later, change it in Neo4j first, then
   update the Secret and restart Retrieval:
 
     ```bash
@@ -504,8 +505,8 @@ and the schema hook:
 ## What is not here
 
 No RabbitMQ or model server. Qdrant is run by the release unless you name
-your own. PostgreSQL and Neo4j can each be run by it too, and both are off
-by default. Primer assumes you already have the
+your own. So is Neo4j, since the graph is rebuilt from the library by a reindex.
+PostgreSQL can be run by it too, and is off by default. Primer assumes you already have the
 infrastructure you want to keep your documents on, and a database you
 already run and back up is a better home for a library than one this chart
 started.

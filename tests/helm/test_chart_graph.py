@@ -1,4 +1,4 @@
-"""The knowledge graph in the rendered chart: off by default, and on in one place.
+"""The knowledge graph in the rendered chart: a bundled Neo4j by default, or one named.
 
 Kept apart from `test_chart.py` because the graph is optional and its
 assertions are about which workloads it reaches and which it must not.
@@ -10,7 +10,8 @@ from typing import Any
 
 from test_chart import containers, env_of, named, of_kind, refusal, render, workloads
 
-GRAPH_ON = ("graph.url=bolt://neo4j.graph:7687", "graph.existingSecret=primer-neo4j")
+GRAPH_OFF = ("graph.neo4j.enabled=false",)
+GRAPH_ON = (*GRAPH_OFF, "graph.url=bolt://neo4j.graph:7687", "graph.existingSecret=primer-neo4j")
 BUNDLED = ("graph.neo4j.enabled=true", "graph.existingSecret=primer-neo4j")
 EXTRACTION_ON = (
     "graph.extraction.baseUrl=http://model/v1",
@@ -27,9 +28,9 @@ def graph_variables(workload: dict[str, Any]) -> set[str]:
     }
 
 
-def test_without_a_graph_url_nothing_is_told_about_a_graph() -> None:
-    """The default deployment must render as it did before the graph existed."""
-    rendered = render()
+def test_with_the_graph_off_nothing_is_told_about_a_graph() -> None:
+    """Turned off, a deployment must render as it did before the graph existed."""
+    rendered = render(*GRAPH_OFF)
     found = workloads(rendered)
     assert found, "the chart rendered no workloads, so this test would check nothing"
 
@@ -37,6 +38,30 @@ def test_without_a_graph_url_nothing_is_told_about_a_graph() -> None:
         assert graph_variables(workload) == set(), f"{name} is told about a graph nobody set"
     assert not any(name.endswith("-migrate-graph") for name in found)
     assert not [doc for doc in rendered if "neo4j" in doc["metadata"]["name"]]
+
+
+def test_by_default_a_release_runs_its_own_neo4j_with_a_password_it_made() -> None:
+    """As it runs its own Qdrant: a graph is part of Primer, not an extra.
+
+    Nobody named a Secret, so the password is the release's own, kept in the
+    internal Secret both the server and its clients read.
+    """
+    rendered = render()
+    internal = named(rendered, "Secret", "-internal")
+    expected = {"name": internal["metadata"]["name"], "key": "graph-password"}
+
+    assert "graph-password" in internal["data"]
+    neo4j = containers(named(rendered, "StatefulSet", "-neo4j"))[0]
+    retrieval = containers(named(rendered, "Deployment", "-retrieval"))[0]
+    for container in (neo4j, retrieval):
+        env = {entry["name"]: entry for entry in container["env"]}
+        assert env["PRIMER_GRAPH_PASSWORD"]["valueFrom"]["secretKeyRef"] == expected
+
+
+def test_a_named_secret_replaces_the_generated_password() -> None:
+    rendered = render(*BUNDLED)
+
+    assert "graph-password" not in named(rendered, "Secret", "-internal")["data"]
 
 
 def test_retrieval_reads_the_graph_password_from_the_named_secret() -> None:
@@ -99,14 +124,15 @@ def test_extraction_runs_on_the_index_worker_alone() -> None:
     assert graph_variables(parse) == set()
 
 
-def test_a_graph_without_its_password_is_refused() -> None:
-    assert "graph.existingSecret is required" in refusal("graph.url=bolt://neo4j.graph:7687")
-    assert "graph.existingSecret is required" in refusal("graph.neo4j.enabled=true")
+def test_a_graph_url_without_its_password_is_refused() -> None:
+    """Only a bundled Neo4j has a password the release can make up."""
+    message = refusal(*GRAPH_OFF, "graph.url=bolt://neo4j.graph:7687")
+    assert "graph.existingSecret is required" in message
 
 
 def test_extraction_without_a_graph_is_refused() -> None:
     """Every document would extract a graph and then fail to store it."""
-    assert "Set graph.url or graph.neo4j.enabled" in refusal(*EXTRACTION_ON)
+    assert "Set graph.url or graph.neo4j.enabled" in refusal(*GRAPH_OFF, *EXTRACTION_ON)
 
 
 def test_extraction_without_a_model_is_refused() -> None:
@@ -184,12 +210,17 @@ def test_a_bundled_neo4j_runs_under_the_charts_hardening() -> None:
     assert {"/data", "/var/lib/neo4j/conf", "/logs", "/tmp"} <= mounts  # noqa: S108
 
 
-def test_a_bundled_neo4j_is_given_its_schema_after_install_and_before_upgrade() -> None:
-    """The StatefulSet does not exist before install; afterwards, the schema leads the code."""
+def test_a_bundled_neo4j_is_given_its_schema_once_it_is_running() -> None:
+    """A pre hook would wait for a StatefulSet that does not exist yet.
+
+    That is true before install, and before the upgrade that first turns the
+    bundled Neo4j on - which is every 1.0 release taking the new default, so
+    a pre-upgrade hook here would fail that upgrade and roll it back.
+    """
     bundled = named(render(*BUNDLED), "Job", "-migrate-graph")
     external = named(render(*GRAPH_ON), "Job", "-migrate-graph")
 
-    assert bundled["metadata"]["annotations"]["helm.sh/hook"] == "post-install,pre-upgrade"
+    assert bundled["metadata"]["annotations"]["helm.sh/hook"] == "post-install,post-upgrade"
     assert external["metadata"]["annotations"]["helm.sh/hook"] == "pre-install,pre-upgrade"
 
 
@@ -237,3 +268,26 @@ def test_extraction_writes_into_a_bundled_neo4j() -> None:
     index = named(render(*BUNDLED, *EXTRACTION_ON), "Deployment", "-worker-index")
 
     assert env_of(index)["PRIMER_GRAPH_EXTRACTION_MODEL"] == "extract-model"
+
+
+def test_without_an_extraction_model_the_graph_is_built_by_the_chat_model() -> None:
+    """A graph on by default would otherwise stay empty until someone found the setting."""
+    env = env_of(named(render(), "Deployment", "-worker-index"))
+
+    assert env["PRIMER_GRAPH_EXTRACTION_BASE_URL"] == "http://model/v1"
+    assert env["PRIMER_GRAPH_EXTRACTION_MODEL"] == "chat-model"
+
+
+def test_a_named_extraction_model_is_preferred_to_the_chat_model() -> None:
+    env = env_of(named(render(*EXTRACTION_ON), "Deployment", "-worker-index"))
+
+    assert env["PRIMER_GRAPH_EXTRACTION_MODEL"] == "extract-model"
+
+
+def test_without_a_chat_model_to_fall_back_on_nothing_is_extracted() -> None:
+    """An endpoint alone is not enough: extraction has no "first served model"."""
+    rendered = render("inference.chat.model=")
+    index = named(rendered, "Deployment", "-worker-index")
+
+    assert not {name for name in graph_variables(index) if "EXTRACTION" in name}
+    assert named(rendered, "StatefulSet", "-neo4j")

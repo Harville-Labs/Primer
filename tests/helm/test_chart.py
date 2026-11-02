@@ -177,11 +177,14 @@ def test_migrations_run_once_per_release_not_once_per_pod(
 ) -> None:
     """Three replicas racing to alter one schema is what a hook avoids."""
     jobs = of_kind(manifests, "Job")
-    assert len(jobs) == 2
+    assert len(jobs) == 3
 
     for job in jobs:
         annotations = job["metadata"]["annotations"]
-        assert annotations["helm.sh/hook"] == "pre-install,pre-upgrade"
+        assert annotations["helm.sh/hook"] in {
+            "pre-install,pre-upgrade",
+            "post-install,post-upgrade",
+        }
         assert job["spec"]["template"]["spec"]["restartPolicy"] == "Never"
 
     for deployment in of_kind(manifests, "Deployment"):
@@ -191,11 +194,14 @@ def test_migrations_run_once_per_release_not_once_per_pod(
 def test_every_schema_the_deployment_needs_is_migrated(
     manifests: list[dict[str, Any]],
 ) -> None:
-    """Control and Chat. Retrieval keeps nothing in PostgreSQL, so a job for
-    it would migrate a schema nothing reads."""
-    directories = {containers(job)[0]["workingDir"] for job in of_kind(manifests, "Job")}
+    """Control and Chat in PostgreSQL, and the graph. Retrieval keeps nothing
+    in PostgreSQL, so a SQL job for it would migrate a schema nothing reads."""
+    jobs = [containers(job)[0] for job in of_kind(manifests, "Job")]
+    sql = {job["workingDir"] for job in jobs if job["command"][0] == "alembic"}
+    graph = [job for job in jobs if job["command"][-1] == "primer_retrieval.graph_schema"]
 
-    assert directories == {"/app/services/control-api", "/app/services/chat"}
+    assert sql == {"/app/services/control-api", "/app/services/chat"}
+    assert len(graph) == 1
 
 
 def test_parsing_and_indexing_scale_separately(manifests: list[dict[str, Any]]) -> None:

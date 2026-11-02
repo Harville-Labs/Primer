@@ -421,10 +421,11 @@ vectorStore:
 
 # --- Knowledge graph ----------------------------------------------------
 #
-# Optional, and off unless `url` is set. With it, the index worker asks a
-# model for the entities and relations each passage names, and search
-# follows them to passages that share no words with the question. See
-# docs/architecture/retrieval.md for what it finds and what it costs.
+# The index worker asks a model for the entities and relations each passage
+# names, and search follows them to passages that share no words with the
+# question. See docs/architecture/retrieval.md for what it finds and what it
+# costs. This release runs a Neo4j for it by default, as it does Qdrant:
+# docs/adr/0011-bundle-neo4j-by-default.md says why.
 #
 # Neo4j Community is enough: the schema uses only uniqueness constraints and
 # range indexes.
@@ -433,12 +434,12 @@ graph:
   # below off, turns the graph off: nothing below is rendered and no pod
   # opens a connection to it.
   url: ""
-  # A Neo4j run by this release instead, for a deployment with nowhere else
-  # to put one. Set this or `url`, not both. It is reachable only from
-  # Retrieval and the step that prepares its schema, on the Bolt port, and
-  # its HTTP interface and browser are switched off.
+  # A Neo4j run by this release. Turn it off to set `url` instead, or to run
+  # without a graph. It is reachable only from Retrieval and the step that
+  # prepares its schema, on the Bolt port, and its HTTP interface and
+  # browser are switched off.
   neo4j:
-    enabled: false
+    enabled: true
     image:
       repository: neo4j
       tag: "5.26-community"
@@ -458,9 +459,10 @@ graph:
         memory: 1Gi
   username: neo4j
   database: neo4j
-  # Required once the graph is on. A Secret holding the Neo4j password under
-  # `passwordKey`. A bundled Neo4j takes its initial password from the same
-  # Secret, so it needs at least eight characters.
+  # A Secret holding the Neo4j password under `passwordKey`. Required with
+  # `url`. A bundled Neo4j takes its initial password from the same Secret,
+  # so it needs at least eight characters; left empty, the release generates
+  # one, keeps it in its own internal Secret, and never shows it.
   existingSecret: ""
   passwordKey: graph-password
   # How far search follows relations from the entities a question names,
@@ -474,8 +476,9 @@ graph:
   # which on a large library is the most expensive thing ingestion does. Any
   # OpenAI-compatible endpoint whose model supports structured output.
   #
-  # Leaving it empty with the graph on is allowed and almost never wanted:
-  # nothing writes to the graph, so search consults an empty one.
+  # Empty, it is the chat endpoint and model, with the chat key, when both of
+  # those are set. With neither, nothing writes to the graph and search
+  # consults an empty one.
   extraction:
     baseUrl: ""
     model: ""

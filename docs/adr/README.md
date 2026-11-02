@@ -12,3 +12,4 @@
 | [0008](0008-lab-saves-experiments-in-postgresql.md) | Keep Lab's saved experiments in the shared PostgreSQL | Accepted |
 | [0009](0009-lab-attribution-graphs-in-their-own-environment.md) | Build Lab's attribution graphs in an environment of their own | Accepted |
 | [0010](0010-studio-image-generation.md) | Make images in Studio, through a backend the operator brings | Accepted |
+| [0011](0011-bundle-neo4j-by-default.md) | Run a Neo4j in every chart release by default | Accepted |

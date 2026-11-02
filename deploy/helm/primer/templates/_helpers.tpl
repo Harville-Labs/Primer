@@ -304,11 +304,25 @@ without a vector store, so having neither is refused, as having both is.
 {{- end -}}
 
 {{/*
-The Secret holding the graph's password. Retrieval reads it, and a bundled
-Neo4j takes its initial password from it, so the two cannot disagree.
+Where the graph's password is, as a secretKeyRef. Retrieval reads it, and a
+bundled Neo4j takes its initial password from it, so the two cannot
+disagree.
+
+A bundled Neo4j with no Secret named uses one this release generated, in its
+internal Secret, because a graph on by default must not make every install
+write a password first. An operator's Neo4j has a password the chart cannot
+know, so it still needs one named.
 */}}
-{{- define "primer.graphSecret" -}}
-{{- required "graph.existingSecret is required when the graph is on: name a Secret holding the Neo4j password under graph.passwordKey" .Values.graph.existingSecret -}}
+{{- define "primer.graphPasswordRef" -}}
+{{- if .Values.graph.existingSecret -}}
+name: {{ .Values.graph.existingSecret }}
+key: {{ .Values.graph.passwordKey }}
+{{- else if .Values.graph.neo4j.enabled -}}
+name: {{ include "primer.fullname" . }}-internal
+key: graph-password
+{{- else -}}
+{{- fail "graph.existingSecret is required with graph.url: name a Secret holding the Neo4j password under graph.passwordKey" -}}
+{{- end -}}
 {{- end -}}
 
 {{/*
@@ -328,8 +342,7 @@ without a graph renders exactly as it did before there was one.
 - name: PRIMER_GRAPH_PASSWORD
   valueFrom:
     secretKeyRef:
-      name: {{ include "primer.graphSecret" . }}
-      key: {{ .Values.graph.passwordKey }}
+      {{- include "primer.graphPasswordRef" . | nindent 6 }}
 {{- end -}}
 
 {{/*
@@ -342,8 +355,7 @@ to put a graph refuses every one it is sent, so the deployment would install
 cleanly and then fail every document it indexed.
 */}}
 {{- define "primer.graphExtractionEnv" -}}
-{{- with .Values.graph.extraction }}
-{{- if .baseUrl }}
+{{- with include "primer.graphExtraction" . | fromYaml }}
 {{- if not (include "primer.graphUrl" $) }}
 {{- fail "graph.extraction.baseUrl is set but the graph is off, so every extracted graph would be refused and every document would fail to index. Set graph.url or graph.neo4j.enabled, or unset graph.extraction.baseUrl." }}
 {{- end }}
@@ -352,9 +364,9 @@ cleanly and then fail every document it indexed.
 - name: PRIMER_GRAPH_EXTRACTION_MODEL
   value: {{ required "graph.extraction.model is required when graph.extraction.baseUrl is set" .model | quote }}
 - name: PRIMER_GRAPH_EXTRACTION_CONCURRENCY
-  value: {{ .concurrency | quote }}
+  value: {{ $.Values.graph.extraction.concurrency | quote }}
 - name: PRIMER_GRAPH_EXTRACTION_TIMEOUT_SECONDS
-  value: {{ .timeoutSeconds | quote }}
+  value: {{ $.Values.graph.extraction.timeoutSeconds | quote }}
 {{- if .existingSecret }}
 - name: PRIMER_GRAPH_EXTRACTION_API_KEY
   valueFrom:
@@ -363,7 +375,28 @@ cleanly and then fail every document it indexed.
       key: {{ .apiKeyKey }}
 {{- end }}
 {{- end }}
-{{- end }}
+{{- end -}}
+
+{{/*
+Which model extracts the graph, as YAML, or nothing when none does: the one
+named in graph.extraction, else the chat model when the graph is on and a
+chat endpoint and model are both set. The one place that decides it, so the
+index worker and the install notes cannot disagree about whether anything
+writes to the graph.
+
+The chat model is the fallback because a graph that is on by default and
+written by nothing is a Neo4j that costs memory and adds nothing to search.
+It is not the fallback when chat has no model named, because chat then asks
+the endpoint which it serves, and the worker cannot.
+*/}}
+{{- define "primer.graphExtraction" -}}
+{{- $extraction := .Values.graph.extraction -}}
+{{- $chat := .Values.inference.chat -}}
+{{- if $extraction.baseUrl -}}
+{{- dict "baseUrl" $extraction.baseUrl "model" $extraction.model "existingSecret" $extraction.existingSecret "apiKeyKey" $extraction.apiKeyKey | toYaml -}}
+{{- else if and (include "primer.graphUrl" .) $chat.baseUrl $chat.model -}}
+{{- dict "baseUrl" $chat.baseUrl "model" $chat.model "existingSecret" $chat.existingSecret "apiKeyKey" $chat.apiKeyKey | toYaml -}}
+{{- end -}}
 {{- end -}}
 
 {{/*
