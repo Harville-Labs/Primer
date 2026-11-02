@@ -1,31 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { comfyProvider, image, openaiProvider, provenance } from './fixture';
+import { comfyProvider, image, openaiProvider, primer, provenance, stream } from './fixture';
 import { Generator } from './generator.svelte';
 import { offersFor } from './offer';
 
-const OFFERS = offersFor([comfyProvider(), openaiProvider()], 'generate');
-
-/** An SSE body, one event a frame, the way Control writes it. */
-function stream(...events: object[]): Response {
-	const body = events.map((event) => `data: ${JSON.stringify(event)}\n\n`).join('');
-	return new Response(body, { headers: { 'Content-Type': 'text/event-stream' } });
-}
-
-/** The page's own endpoints, answering from a list and keeping every request. */
-function primer(...answers: (() => Response)[]) {
-	const asked: { path: string; method: string; body: unknown }[] = [];
-	const fetch = (async (input: RequestInfo | URL, init: RequestInit = {}) => {
-		asked.push({
-			path: String(input),
-			method: init.method ?? 'GET',
-			body: init.body ? JSON.parse(String(init.body)) : null,
-		});
-		const answer = answers.shift();
-		if (!answer) throw new Error(`nothing answers ${String(input)}`);
-		return answer();
-	}) as typeof globalThis.fetch;
-	return { fetch, asked };
-}
+const OFFERS = offersFor([comfyProvider(), openaiProvider()], ['generate']);
 
 describe('a generation', () => {
 	it('runs, then adds the images to the top of the history', async () => {
@@ -52,6 +30,7 @@ describe('a generation', () => {
 		});
 		expect(generator.results).toEqual([made]);
 		expect(generator.history.map((each) => each.id)).toEqual(['new', 'old']);
+		expect(generator.selected).toEqual(made);
 		expect([generator.running, generator.progress, generator.failure]).toEqual([false, null, null]);
 	});
 
@@ -222,11 +201,13 @@ describe('the history', () => {
 		const doomed = image('doomed');
 		const generator = new Generator(OFFERS, [doomed, image('kept')], { fetch });
 		generator.results = [doomed];
+		generator.selectedId = 'doomed';
 
 		await generator.remove(doomed);
 
 		expect(asked[0]).toMatchObject({ path: '/studio/images/doomed', method: 'DELETE' });
 		expect(generator.history.map((each) => each.id)).toEqual(['kept']);
 		expect(generator.results).toEqual([]);
+		expect(generator.selected).toBeNull();
 	});
 });

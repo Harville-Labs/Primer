@@ -11,6 +11,7 @@
 		ScanSearch,
 		Search,
 		Settings,
+		Pencil,
 		SquarePen,
 		WandSparkles,
 	} from '@lucide/svelte';
@@ -113,7 +114,10 @@
 		].filter((tab) => tab.show)
 	);
 
-	const studio = [{ href: '/studio/generate', label: 'Generate', icon: WandSparkles }];
+	const studio = [
+		{ href: '/studio/generate', label: 'Generate', icon: WandSparkles },
+		{ href: '/studio/edit', label: 'Edit', icon: Pencil },
+	];
 
 	let sections = $derived(
 		[

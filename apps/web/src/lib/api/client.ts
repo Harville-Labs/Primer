@@ -204,7 +204,20 @@ export class PrimerApi {
 		body: ReadableStream<Uint8Array>,
 		contentType: string,
 	): Promise<DocumentSummary> {
-		return this.request(`/api/v1/libraries/${libraryId}/documents`, {
+		return this.forward(`/api/v1/libraries/${libraryId}/documents`, body, contentType);
+	}
+
+	/** Add an image to the caller's Studio history, passed on unread as `upload` is. */
+	uploadStudioImage(body: ReadableStream<Uint8Array>, contentType: string): Promise<StudioImage> {
+		return this.forward('/api/v1/studio/images', body, contentType);
+	}
+
+	private forward<T>(
+		path: string,
+		body: ReadableStream<Uint8Array>,
+		contentType: string,
+	): Promise<T> {
+		return this.request(path, {
 			method: 'POST',
 			body,
 			headers: { 'content-type': contentType },

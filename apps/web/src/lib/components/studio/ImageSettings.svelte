@@ -1,17 +1,27 @@
 <script lang="ts">
 	import { TriangleAlert } from '@lucide/svelte';
 	import { Composer, Input, Select, Slider, Textarea } from '@sivir-ui/svelte';
+	import type { Snippet } from 'svelte';
 	import type { Problem } from '#lib/server/problem.ts';
 	import type { Generator } from '#lib/studio/generator.svelte.ts';
 
-	/** The prompt and every setting the picked model or template takes, and nothing else. */
+	/**
+	 * The prompt and every setting the picked model or template takes, and
+	 * nothing else. Generate and Edit differ only in the words and in what
+	 * an edit adds under the model.
+	 */
 	interface Props {
 		generator: Generator;
 		//: Why Chat gave the page nothing to pick from, in its own words.
 		problem: Problem | null;
+		//: Said when nothing here can do what this tab does.
+		none: string;
+		prompt: { label: string; placeholder: string };
+		onsubmit: () => void;
+		children?: Snippet;
 	}
 
-	let { generator, problem }: Props = $props();
+	let { generator, problem, none, prompt, onsubmit, children }: Props = $props();
 
 	let offer = $derived(generator.offer);
 </script>
@@ -48,24 +58,26 @@
 			</p>
 		{:else}
 			<p class="text-xs leading-relaxed text-muted-foreground">
-				No image endpoint here makes images from a prompt. An administrator can declare one.
+				{none}
 			</p>
 		{/if}
 	</section>
+
+	{@render children?.()}
 
 	<section aria-labelledby="prompt-heading" class="flex flex-col gap-2">
 		<h2
 			id="prompt-heading"
 			class="font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground"
 		>
-			Prompt
+			{prompt.label}
 		</h2>
 		<Composer.Root
 			bind:value={generator.prompt}
 			disabled={!offer || generator.running}
-			onSubmit={() => generator.run()}
+			onSubmit={onsubmit}
 		>
-			<Composer.Input placeholder="A lighthouse at dusk, in watercolour." aria-label="Prompt" />
+			<Composer.Input placeholder={prompt.placeholder} aria-label={prompt.label} />
 			<Composer.Toolbar>
 				<Composer.Actions></Composer.Actions>
 				<Composer.Submit />

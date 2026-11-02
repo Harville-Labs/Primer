@@ -4,7 +4,7 @@ import { lineage, offerOf, offersFor } from './offer';
 
 describe('what Studio offers', () => {
 	it('offers each declared model of an OpenAI-style endpoint, with no settings it did not declare', () => {
-		const [offer] = offersFor([openaiProvider()], 'generate');
+		const [offer] = offersFor([openaiProvider()], ['generate']);
 
 		expect(offer).toMatchObject({
 			model: 'gpt-image-1',
@@ -15,7 +15,7 @@ describe('what Studio offers', () => {
 	});
 
 	it('offers a template only the inputs its operator bound, and one image a run', () => {
-		const offers = offersFor([comfyProvider()], 'generate');
+		const offers = offersFor([comfyProvider()], ['generate']);
 
 		expect(offers.map((each) => each.model)).toEqual(['sdxl']);
 		expect(offers[0]).toMatchObject({
@@ -27,14 +27,14 @@ describe('what Studio offers', () => {
 	});
 
 	it('leaves out what cannot do the operation', () => {
-		const offers = offersFor([openaiProvider({ operations: ['edit'] }), comfyProvider()], 'edit');
+		const offers = offersFor([openaiProvider({ operations: ['edit'] }), comfyProvider()], ['edit']);
 
 		expect(offers.map((each) => each.model)).toEqual(['gpt-image-1', 'sdxl-restyle']);
-		expect(offersFor([openaiProvider({ operations: ['edit'] })], 'generate')).toEqual([]);
+		expect(offersFor([openaiProvider({ operations: ['edit'] })], ['generate'])).toEqual([]);
 	});
 
 	it('finds the offer an image was made with, and none for an upload', () => {
-		const offers = offersFor([comfyProvider()], 'generate');
+		const offers = offersFor([comfyProvider()], ['generate']);
 
 		expect(offerOf(offers, image('a'))?.key).toBe('p-comfy:sdxl');
 		expect(offerOf(offers, image('b', { origin: 'upload', provenance: null }))).toBeNull();

@@ -81,10 +81,15 @@ To make one:
 | `steps` | Sampling steps | Optional |
 | `width`, `height` | The size the user chose | Optional. Without them the template makes its own size, so declare only that size |
 | `image` | The image to change, uploaded to ComfyUI first | `edit` and `inpaint` |
-| `mask` | The painted mask | `inpaint` |
+| `mask` | The painted mask. Bind it to a `LoadImageMask` node with channel `alpha` | `inpaint` |
 | `output` | The node whose images are the result, given as a node id | Every template |
 
 A binding names a node and one of its inputs:
+
+The mask is a PNG the size of the image, transparent where the image may
+change and opaque everywhere else. That is the mask the OpenAI images API
+takes, and `LoadImageMask` reading its alpha channel turns it into the
+marked area.
 
 ```json
 "bindings": {
