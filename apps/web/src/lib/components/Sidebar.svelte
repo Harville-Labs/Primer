@@ -6,11 +6,13 @@
 		FlaskConical,
 		Library,
 		MessageSquare,
+		Palette,
 		ScanLine,
 		ScanSearch,
 		Search,
 		Settings,
 		SquarePen,
+		WandSparkles,
 	} from '@lucide/svelte';
 	import { Shortcut } from '@sivir-ui/svelte';
 	import { untrack } from 'svelte';
@@ -81,6 +83,7 @@
 			'/libraries': path === '/libraries' || path.startsWith('/libraries/'),
 			'/chat': path === '/chat' || path.startsWith('/chat/'),
 			'/lab': path === '/lab' || path.startsWith('/lab/'),
+			'/studio': path === '/studio' || path.startsWith('/studio/'),
 		};
 	}
 
@@ -110,6 +113,8 @@
 		].filter((tab) => tab.show)
 	);
 
+	const studio = [{ href: '/studio/generate', label: 'Generate', icon: WandSparkles }];
+
 	let sections = $derived(
 		[
 			{
@@ -133,6 +138,14 @@
 				icon: FlaskConical,
 				count: 0,
 				show: canScore(capabilities),
+			},
+			{
+				// No count either: the gallery is inside Studio, not a list here.
+				href: '/studio',
+				label: 'Studio',
+				icon: Palette,
+				count: 0,
+				show: capabilities.studio_available,
 			},
 		].filter((section) => section.show)
 	);
@@ -293,7 +306,7 @@
 							<ConversationList {conversations} {libraries} />
 						{:else}
 							<ul class="space-y-0.5">
-								{#each lab as tab (tab.href)}
+								{#each section.href === '/studio' ? studio : lab as tab (tab.href)}
 									{@const current = inSection(tab.href)}
 									<li>
 										<a

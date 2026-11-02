@@ -26,3 +26,26 @@ export async function answeredWithProblems(respond: () => Promise<Response>): Pr
 		return json(problem, { status: failure.status });
 	}
 }
+
+/** What a service said when it would not answer, for a page to show beside what did. */
+export interface Problem {
+	title: string;
+	detail: string;
+}
+
+/**
+ * A service's answer, or its refusal in its own words.
+ *
+ * For a page that loads from more than one service, where one failing is
+ * a problem to show beside the rest rather than a page that will not load.
+ */
+export async function attempt<T>(
+	call: () => Promise<T>,
+): Promise<{ value: T } | { problem: Problem }> {
+	try {
+		return { value: await call() };
+	} catch (failure) {
+		if (!(failure instanceof ApiError)) throw failure;
+		return { problem: { title: failure.title, detail: failure.message } };
+	}
+}

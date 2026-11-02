@@ -2,6 +2,7 @@ import { ApiError, asProblem } from './client';
 import type {
 	ChatModelList,
 	ConversationSummary,
+	ImageProvider,
 	MessageSummary,
 	PassagesResult,
 	ProblemDetail,
@@ -99,6 +100,14 @@ export class ChatApi {
 	/** Every endpoint this deployment can ask. Administrators only. */
 	providers(): Promise<ProviderSummary[]> {
 		return this.request('/api/v1/admin/providers');
+	}
+
+	/**
+	 * The image endpoints the caller may use, with what each declared.
+	 * Chat decides which a person may see, so this is asked as them.
+	 */
+	imageProviders(): Promise<ImageProvider[]> {
+		return this.request('/api/v1/images/providers');
 	}
 
 	addProvider(payload: ProviderCreate): Promise<ProviderSummary> {

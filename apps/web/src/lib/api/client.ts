@@ -7,6 +7,8 @@ import type {
 	Principal,
 	ProblemDetail,
 	ReindexSummary,
+	StudioGeneration,
+	StudioImage,
 } from './types';
 
 /**
@@ -175,10 +177,13 @@ export class PrimerApi {
 	 * Buffering here instead would hold a whole upload in memory to hand
 	 * back something it already had.
 	 */
-	async content(libraryId: string, documentId: string): Promise<Response> {
-		const response = await this.fetch(
-			`${this.baseUrl}/api/v1/libraries/${libraryId}/documents/${documentId}/content`,
-		);
+	content(libraryId: string, documentId: string): Promise<Response> {
+		return this.send(`/api/v1/libraries/${libraryId}/documents/${documentId}/content`);
+	}
+
+	/** A response to pass on unread, refused as a problem when it is not one. */
+	private async send(path: string, init: RequestInit = {}): Promise<Response> {
+		const response = await this.fetch(`${this.baseUrl}${path}`, init);
 		if (!response.ok) {
 			throw new ApiError(await this.problemFrom(response));
 		}
@@ -228,6 +233,37 @@ export class PrimerApi {
 	deleteDocument(libraryId: string, documentId: string): Promise<void> {
 		return this.request(`/api/v1/libraries/${libraryId}/documents/${documentId}`, {
 			method: 'DELETE',
+		});
+	}
+
+	/**
+	 * The caller's Studio images, newest first. `before` is the oldest
+	 * `created_at` already shown, to page back from it.
+	 */
+	studioImages(before?: string): Promise<StudioImage[]> {
+		const query = before ? `?before=${encodeURIComponent(before)}` : '';
+		return this.request(`/api/v1/studio/images${query}`);
+	}
+
+	deleteStudioImage(imageId: string): Promise<void> {
+		return this.request(`/api/v1/studio/images/${imageId}`, { method: 'DELETE' });
+	}
+
+	/** A Studio image's bytes, as the response carrying them, for the same reason as `content`. */
+	studioContent(imageId: string): Promise<Response> {
+		return this.send(`/api/v1/studio/images/${imageId}/content`);
+	}
+
+	/**
+	 * Make images, as an event stream. A refusal - Studio off, over a limit,
+	 * a setting the provider did not declare - comes before the stream does,
+	 * and is thrown like any other.
+	 */
+	generate(payload: StudioGeneration): Promise<Response> {
+		return this.send('/api/v1/studio/generations', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify(payload),
 		});
 	}
 }
