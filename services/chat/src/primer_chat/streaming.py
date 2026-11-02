@@ -14,6 +14,7 @@ from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from uuid import UUID
 
+from haystack.dataclasses import ToolCall as ModelToolCall
 from primer_contracts.chat import (
     CitationEvent,
     MessageCompleted,
@@ -38,7 +39,7 @@ from primer_chat.clients import (
 from primer_chat.compaction import Compactor
 from primer_chat.config import Settings
 from primer_chat.failures import describe
-from primer_chat.generation import ChatGenerator, Endpoint
+from primer_chat.generation import ChatGenerator, Endpoint, ToolExchange
 from primer_chat.models import Conversation
 from primer_chat.rag import (
     NO_CONTEXT_REPLY,
@@ -52,6 +53,7 @@ from primer_chat.rag import (
 )
 from primer_chat.reasoning import Channel
 from primer_chat.repository import ChatRepository, summarize_message
+from primer_chat.tool_turn import MAX_TOOL_ROUNDS, ToolDesk, ToolEvent
 
 logger = logging.getLogger(__name__)
 
@@ -89,11 +91,13 @@ class Responder:
         control: LibraryAuthority,
         retrieval: PassageSource,
         generator: ChatGenerator,
+        tools: ToolDesk | None = None,
     ) -> None:
         self._settings = settings
         self._control = control
         self._retrieval = retrieval
         self._generator = generator
+        self._tools = tools
         self._compactor = Compactor(settings, generator)
 
     @property
@@ -160,6 +164,7 @@ class Responder:
         | CitationEvent
         | MessageCompleted
         | StreamError
+        | ToolEvent
     ]:
         """Answer one question, emitting events as the answer takes shape."""
         repository = ChatRepository(session)
@@ -206,13 +211,13 @@ class Responder:
         # is nothing to authorize and nothing to retrieve, and the prompt says
         # outright that the answer is unsourced.
         grounded = conversation.library_id is not None
-        # Tools are off because nothing here can call one: generation never
-        # invokes the tool runner. This is the line to change when it does -
-        # and it has to be this signal rather than a deployment setting,
-        # since telling a model to name its sources when it cannot fetch any
-        # is what taught it to invent them.
+        # What is actually offered to this person now, not what the
+        # deployment configures: a server that is down offers nothing, and
+        # telling a model to name its sources when it cannot fetch any is
+        # what taught it to invent them.
+        offered = await self._tools.offered(turn.principal) if self._tools else ()
         system_prompt = with_tools(
-            SYSTEM_PROMPT if grounded else UNGROUNDED_SYSTEM_PROMPT, enabled=False
+            SYSTEM_PROMPT if grounded else UNGROUNDED_SYSTEM_PROMPT, enabled=bool(offered)
         )
         context = build_context(())
 
@@ -358,16 +363,43 @@ class Responder:
         #: None until the model actually reasons aloud, so a model that does
         #: not is stored as null rather than as an empty thought.
         thinking: str | None = None
+        exchanges: tuple[ToolExchange, ...] = ()
         try:
-            async for fragment in self._generator.stream(
-                system_prompt, prompt, history=history, model=turn.model, endpoint=turn.endpoint
-            ):
-                if fragment.channel is Channel.REASONING:
-                    thinking = (thinking or "") + fragment.text
-                    yield ReasoningDelta(id=next_id(), text=fragment.text)
-                    continue
-                text += fragment.text
-                yield MessageDelta(id=next_id(), text=fragment.text)
+            for round_ in range(MAX_TOOL_ROUNDS + 1):
+                calls: list[ModelToolCall] = []
+                async for fragment in self._generator.stream(
+                    system_prompt,
+                    prompt,
+                    history=history,
+                    model=turn.model,
+                    endpoint=turn.endpoint,
+                    # The last round offers nothing, so a model that keeps
+                    # asking has to answer with what it was given.
+                    tools=offered if round_ < MAX_TOOL_ROUNDS else (),
+                    exchanges=exchanges,
+                ):
+                    if isinstance(fragment, ModelToolCall):
+                        calls.append(fragment)
+                    elif fragment.channel is Channel.REASONING:
+                        thinking = (thinking or "") + fragment.text
+                        yield ReasoningDelta(id=next_id(), text=fragment.text)
+                    else:
+                        text += fragment.text
+                        yield MessageDelta(id=next_id(), text=fragment.text)
+                if not calls or self._tools is None:
+                    break
+                for call in calls:
+                    async for event in self._tools.handle(
+                        session,
+                        principal=turn.principal,
+                        conversation_id=conversation.id,
+                        call=call,
+                        next_id=next_id,
+                    ):
+                        if isinstance(event, ToolExchange):
+                            exchanges = (*exchanges, event)
+                        else:
+                            yield event
         except Exception as error:
             # Many different failures share this path and they send whoever
             # reads them to different places: a rejected key is fixed in

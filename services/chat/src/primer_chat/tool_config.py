@@ -13,6 +13,8 @@ is refuse to offer such tools when nobody has made it.
 
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 #: Tools whose whole purpose is running code somebody wrote. These are the
@@ -60,6 +62,10 @@ class ToolServer(BaseModel):
 
     name: str = Field(min_length=1, max_length=64)
     url: str = Field(min_length=1)
+    #: How the server speaks MCP over HTTP. Streamable HTTP is the current
+    #: transport and the default; SSE is the older one, still what some
+    #: servers offer.
+    transport: Literal["streamable-http", "sse"] = "streamable-http"
     #: An allowlist, never a denylist. A server that gains a tool in a later
     #: release must not gain the right to run it here by default.
     allowed_tools: tuple[str, ...] = ()

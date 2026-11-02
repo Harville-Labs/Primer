@@ -87,7 +87,7 @@ class ToolRepository:
         """
         now = datetime.now(UTC)
         if call.expires_at <= now:
-            await self._expire(call, now)
+            await self.expire(call, now)
             return None
 
         target = ToolPhase.APPROVED if approved else ToolPhase.DENIED
@@ -102,11 +102,23 @@ class ToolRepository:
         await self._session.refresh(call)
         return call
 
-    async def _expire(self, call: ToolCall, now: datetime) -> None:
+    async def phase_of(self, request_id: UUID) -> ToolPhase:
+        """Where a call stands now, read fresh rather than from the session.
+
+        A turn waiting for a decision holds the row it wrote, and the
+        decision is made by another request on another connection: the
+        session's copy is the one thing guaranteed not to have changed.
+        """
+        result = await self._session.execute(
+            select(ToolCall.phase).where(ToolCall.id == request_id)
+        )
+        return ToolPhase(result.scalar_one())
+
+    async def expire(self, call: ToolCall, now: datetime) -> None:
         """Record the expiry, so the audit row says why nothing ran.
 
         Committed here rather than left to the request's transaction. The
-        caller answers this with a 409, and an error response rolls the
+        route answers this with a 409, and an error response rolls the
         session back - which would discard the very record explaining why
         the user's approval did nothing.
         """
