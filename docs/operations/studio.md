@@ -167,6 +167,32 @@ inference:
 The chart refuses a `baseUrl` with no `capabilities`, which Chat would refuse
 at startup anyway.
 
+## Adding images to a library
+
+Someone can add a copy of a Studio image to a library they manage. The
+parse worker asks a vision model what the image shows and indexes that,
+with the prompt and model that made it, so the picture can be found and
+cited like any other passage. The copy carries its prompt and model in the
+PNG, so it keeps saying how it was made after the original is deleted.
+
+It is off until the parse worker has a vision model: any OpenAI-compatible
+endpoint that accepts images in chat messages. Text in an image is treated
+as part of the picture, described and never followed.
+
+In Compose, set `PRIMER_VISION_BASE_URL` and `PRIMER_VISION_MODEL`; Control
+offers the action once the model is set. In the chart:
+
+```yaml
+inference:
+  vision:
+    baseUrl: http://vision.models.svc:8000/v1
+    model: Qwen/Qwen2.5-VL-7B-Instruct
+    existingSecret: ""   # a Secret holding vision-api-key, if it needs one
+```
+
+Only Studio can put an image in a library. An ordinary upload still refuses
+a PNG, since Primer promises nothing about an arbitrary photograph.
+
 ## Limits
 
 Limits apply per person.

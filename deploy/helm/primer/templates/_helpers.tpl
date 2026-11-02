@@ -506,3 +506,29 @@ produces the most fragments, so this is never left out.
 - name: PRIMER_MIN_CHUNK_CHARS
   value: {{ .Values.ingestion.minChunkChars | quote }}
 {{- end -}}
+
+{{/*
+The parse worker's vision model, for Studio images added to a library. Set
+only where Control will offer the action, so the two cannot disagree: an
+image Control accepted with no model to read it would fail after the person
+was told it was added.
+*/}}
+{{- define "primer.visionEnv" -}}
+{{- if and .Values.studio.enabled .Values.inference.vision.baseUrl }}
+{{- with .Values.inference.vision }}
+- name: PRIMER_VISION_BASE_URL
+  value: {{ .baseUrl | quote }}
+- name: PRIMER_VISION_MODEL
+  value: {{ required "inference.vision.model is required when inference.vision.baseUrl is set" .model | quote }}
+- name: PRIMER_VISION_TIMEOUT_SECONDS
+  value: {{ .timeoutSeconds | quote }}
+{{- if .existingSecret }}
+- name: PRIMER_VISION_API_KEY
+  valueFrom:
+    secretKeyRef:
+      name: {{ .existingSecret }}
+      key: {{ .apiKeyKey }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- end }}

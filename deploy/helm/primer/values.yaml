@@ -263,6 +263,17 @@ inference:
     # Longer than a chat answer's: a batch of large images on a busy GPU
     # can take minutes.
     timeoutSeconds: 300
+  # A model that can see, for adding Studio images to a library: the parse
+  # worker asks it what each image shows and indexes the answer. Any
+  # OpenAI-compatible endpoint that accepts images (vLLM serving a
+  # Qwen2.5-VL, Ollama with llava, a hosted API). Primer does not run one.
+  # Empty leaves the action out of Studio. Read only with `studio.enabled`.
+  vision:
+    baseUrl: ""
+    model: ""
+    existingSecret: ""
+    apiKeyKey: vision-api-key
+    timeoutSeconds: 120
   # Text Embeddings Inference, the server `inference.*.bundled` runs. One
   # pinned version for both: TEI returned wrong vectors for Qwen3 until
   # huggingface/text-embeddings-inference#648, plausible enough that nothing

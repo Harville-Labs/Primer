@@ -23,6 +23,7 @@ instead of silently keeping a default.
 | `PRIMER_STUDIO_MAX_SIDE` | `4096` | Pixels on a side, checked before an image is decoded; at most 8192 |
 | `PRIMER_STUDIO_MAX_IMAGES_PER_REQUEST` | `4` | Images one generation may ask for |
 | `PRIMER_STUDIO_GENERATIONS_PER_HOUR` | `30` | Per person. Failed generations count, since the provider still did the work |
+| `PRIMER_VISION_ENABLED` | `false` | The parse worker has a vision model, so Studio offers to add images to a library. Set it with `PRIMER_VISION_MODEL` below |
 | `PRIMER_STUDIO_QUOTA_BYTES` | `1073741824` | Studio storage per person, uploads and results together |
 | `PRIMER_STUDIO_RETENTION_DAYS` | unset | Unset keeps images until their owner deletes them. Applied by `python -m primer_control.studio.retention`, run on a schedule. See [Studio](studio.md#retention) |
 | `PRIMER_STUDIO_TIMEOUT_SECONDS` | `900` | How long one generation may take, end to end |
@@ -52,6 +53,10 @@ instead of silently keeping a default.
 | `PRIMER_GRAPH_EXTRACTION_API_KEY` | unset | Sent as a placeholder when unset; many local servers need the header |
 | `PRIMER_GRAPH_EXTRACTION_TIMEOUT_SECONDS` | `120` | Per passage |
 | `PRIMER_GRAPH_EXTRACTION_CONCURRENCY` | `4` | Passages sent to the model at once |
+| `PRIMER_VISION_BASE_URL` | unset | OpenAI-compatible endpoint that accepts images, to read Studio images added to a library |
+| `PRIMER_VISION_MODEL` | unset | Unset, or no base URL, refuses images for good with `vision_unconfigured` |
+| `PRIMER_VISION_API_KEY` | unset | Sent as a placeholder when unset |
+| `PRIMER_VISION_TIMEOUT_SECONDS` | `120` | Per image |
 
 An empty value counts as unset for the extraction settings, so Compose's
 `${VAR:-}` leaves extraction off rather than turning it on with nowhere to

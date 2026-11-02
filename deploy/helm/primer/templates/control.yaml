@@ -66,6 +66,10 @@ spec:
               value: {{ .maxSide | int | quote }}
             - name: PRIMER_STUDIO_TIMEOUT_SECONDS
               value: {{ .timeoutSeconds | quote }}
+            {{- if $.Values.inference.vision.baseUrl }}
+            - name: PRIMER_VISION_ENABLED
+              value: "true"
+            {{- end }}
             {{- end }}
             {{- end }}
           ports:
