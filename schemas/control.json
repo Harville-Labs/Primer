@@ -72,6 +72,11 @@
             "title": "Max Upload Bytes",
             "type": "integer"
           },
+          "studio_available": {
+            "default": false,
+            "title": "Studio Available",
+            "type": "boolean"
+          },
           "supported_extensions": {
             "default": [],
             "items": {
@@ -492,6 +497,313 @@
         "title": "ReindexSummary",
         "type": "object"
       },
+      "StudioGeneration": {
+        "additionalProperties": false,
+        "description": "One request to make images, as a person sends it.\n\nThe same fields as Chat's `ImageRequest`, except that the image to edit\nis named by id rather than sent: it is one of the person's own Studio\nimages, which is what lets the result record where it came from.",
+        "properties": {
+          "count": {
+            "default": 1,
+            "maximum": 10.0,
+            "minimum": 1.0,
+            "title": "Count",
+            "type": "integer"
+          },
+          "mask": {
+            "anyOf": [
+              {
+                "contentMediaType": "application/octet-stream",
+                "format": "base64",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mask"
+          },
+          "model": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Model",
+            "type": "string"
+          },
+          "negative_prompt": {
+            "anyOf": [
+              {
+                "maxLength": 4000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Negative Prompt"
+          },
+          "operation": {
+            "enum": [
+              "generate",
+              "edit",
+              "inpaint"
+            ],
+            "title": "Operation",
+            "type": "string"
+          },
+          "prompt": {
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Prompt",
+            "type": "string"
+          },
+          "provider_id": {
+            "format": "uuid",
+            "title": "Provider Id",
+            "type": "string"
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "maximum": 4294967295.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seed"
+          },
+          "size": {
+            "pattern": "^[1-9][0-9]{1,4}x[1-9][0-9]{1,4}$",
+            "title": "Size",
+            "type": "string"
+          },
+          "source_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Id"
+          },
+          "steps": {
+            "anyOf": [
+              {
+                "maximum": 200.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Steps"
+          }
+        },
+        "required": [
+          "provider_id",
+          "model",
+          "operation",
+          "prompt",
+          "size"
+        ],
+        "title": "StudioGeneration",
+        "type": "object"
+      },
+      "StudioImage": {
+        "additionalProperties": false,
+        "properties": {
+          "byte_size": {
+            "minimum": 0.0,
+            "title": "Byte Size",
+            "type": "integer"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "height": {
+            "minimum": 1.0,
+            "title": "Height",
+            "type": "integer"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "media_type": {
+            "title": "Media Type",
+            "type": "string"
+          },
+          "origin": {
+            "enum": [
+              "upload",
+              "generated"
+            ],
+            "title": "Origin",
+            "type": "string"
+          },
+          "parent_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Id"
+          },
+          "provenance": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StudioProvenance"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "width": {
+            "minimum": 1.0,
+            "title": "Width",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "origin",
+          "media_type",
+          "width",
+          "height",
+          "byte_size",
+          "created_at"
+        ],
+        "title": "StudioImage",
+        "type": "object"
+      },
+      "StudioProvenance": {
+        "additionalProperties": false,
+        "description": "How a generated image was made, kept so it can be made again.\n\nThe seed is the one the provider used when it said, which is not always\nthe one asked for: Primer chooses one for a template that binds a seed.",
+        "properties": {
+          "model": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Model",
+            "type": "string"
+          },
+          "negative_prompt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Negative Prompt"
+          },
+          "operation": {
+            "enum": [
+              "generate",
+              "edit",
+              "inpaint"
+            ],
+            "title": "Operation",
+            "type": "string"
+          },
+          "prompt": {
+            "title": "Prompt",
+            "type": "string"
+          },
+          "provider_id": {
+            "format": "uuid",
+            "title": "Provider Id",
+            "type": "string"
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seed"
+          },
+          "size": {
+            "pattern": "^[1-9][0-9]{1,4}x[1-9][0-9]{1,4}$",
+            "title": "Size",
+            "type": "string"
+          },
+          "steps": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Steps"
+          }
+        },
+        "required": [
+          "provider_id",
+          "model",
+          "operation",
+          "prompt",
+          "size"
+        ],
+        "title": "StudioProvenance",
+        "type": "object"
+      },
+      "StudioUsage": {
+        "additionalProperties": false,
+        "description": "One person's use of Studio, as an administrator may see it.\n\nCounts and sizes only. An administrator decides limits and needs to know\nwho is near them; nothing about that needs the images or the prompts.",
+        "properties": {
+          "byte_size": {
+            "minimum": 0.0,
+            "title": "Byte Size",
+            "type": "integer"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "image_count": {
+            "minimum": 0.0,
+            "title": "Image Count",
+            "type": "integer"
+          },
+          "user_id": {
+            "format": "uuid",
+            "title": "User Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "user_id",
+          "image_count",
+          "byte_size"
+        ],
+        "title": "StudioUsage",
+        "type": "object"
+      },
       "ValidationError": {
         "properties": {
           "ctx": {
@@ -558,6 +870,32 @@
           }
         },
         "summary": "What this deployment is wired to",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/studio/usage": {
+      "get": {
+        "description": "Counts and bytes per person. Never the images: see `StudioAccess`.",
+        "operationId": "studio_usage_api_v1_admin_studio_usage_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/StudioUsage"
+                  },
+                  "title": "Response Studio Usage Api V1 Admin Studio Usage Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "How much Studio storage each person uses",
         "tags": [
           "admin"
         ]
@@ -1424,6 +1762,265 @@
         "summary": "Describe the acting principal",
         "tags": [
           "identity"
+        ]
+      }
+    },
+    "/api/v1/studio/generations": {
+      "post": {
+        "operationId": "generate_api_v1_studio_generations_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StudioGeneration"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Generate or edit images into your Studio, reporting progress",
+        "tags": [
+          "studio"
+        ]
+      }
+    },
+    "/api/v1/studio/images": {
+      "get": {
+        "operationId": "list_images_api_v1_studio_images_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Only images made before this time, to page back",
+            "in": "query",
+            "name": "before",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only images made before this time, to page back",
+              "title": "Before"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/StudioImage"
+                  },
+                  "title": "Response List Images Api V1 Studio Images Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List your Studio images, newest first",
+        "tags": [
+          "studio"
+        ]
+      },
+      "post": {
+        "description": "Store an uploaded image as a PNG with its metadata removed.\n\nRead whole rather than streamed to the store, unlike a document: it has\nto be decoded before anything is kept, and the limit that bounds it is\none image, not a book.",
+        "operationId": "upload_image_api_v1_studio_images_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "properties": {
+                  "file": {
+                    "contentMediaType": "application/octet-stream",
+                    "description": "The source file to ingest",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "file"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StudioImage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Upload an image to edit",
+        "tags": [
+          "studio"
+        ]
+      }
+    },
+    "/api/v1/studio/images/{image_id}": {
+      "delete": {
+        "description": "Delete the row now and the bytes once that is committed.\n\nIn that order because bytes left behind by a failed removal are a file\nnobody can reach and no quota counts, where a row whose bytes went first\nis a gallery entry that will not load.",
+        "operationId": "delete_image_api_v1_studio_images__image_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "image_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Image Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete a Studio image",
+        "tags": [
+          "studio"
+        ]
+      },
+      "get": {
+        "operationId": "get_image_api_v1_studio_images__image_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "image_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Image Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StudioImage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "One Studio image and how it was made",
+        "tags": [
+          "studio"
+        ]
+      }
+    },
+    "/api/v1/studio/images/{image_id}/content": {
+      "get": {
+        "operationId": "download_image_api_v1_studio_images__image_id__content_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "image_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Image Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "image/png": {}
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Download a Studio image",
+        "tags": [
+          "studio"
         ]
       }
     },

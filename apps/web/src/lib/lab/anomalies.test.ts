@@ -19,6 +19,7 @@ function capabilities(lab: boolean, chat: boolean): DeploymentCapabilities {
 		chat_available: chat,
 		tools_available: false,
 		lab_available: lab,
+		studio_available: false,
 		is_admin: false,
 		max_upload_bytes: 1024,
 		supported_extensions: ['.pdf'],

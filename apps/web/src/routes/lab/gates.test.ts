@@ -21,6 +21,7 @@ function capabilities(labAvailable: boolean, chat: boolean): DeploymentCapabilit
 		chat_available: chat,
 		tools_available: false,
 		lab_available: labAvailable,
+		studio_available: false,
 		is_admin: false,
 		max_upload_bytes: 1024,
 		supported_extensions: ['.pdf'],
