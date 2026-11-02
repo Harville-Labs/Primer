@@ -1,0 +1,161 @@
+{{- if .Values.tools.search.enabled }}
+{{/*
+A web search server for Chat's tools: mcp-searxng, with a SearXNG beside it
+in the same pod. docs/adr/0012-bundle-a-search-mcp-server.md says why these
+two and why off by default.
+
+One pod rather than two because SearXNG is only ever reached by the MCP
+server: listening on localhost, it needs no Service, no policy and no
+address anything else could find. The pod's only port is MCP's, and the
+network policy admits Chat to it and nothing else.
+
+SearXNG is given its settings rather than left to write them. Its entrypoint
+copies a template into /etc/searxng when there is no settings.yml, which a
+read-only root filesystem refuses; with one mounted it only warns that the
+directories are not owned by its own user, which under a non-root UID they
+cannot be. The secret_key comes from SEARXNG_SECRET, which SearXNG prefers
+to the file.
+*/}}
+{{- if not .Values.tools.enabled }}
+{{- fail "tools.search.enabled runs a search server, but tools.enabled is false, so Chat would never offer it. Turn tools.enabled on as well, or turn the search server off." }}
+{{- end }}
+{{- $full := include "primer.fullname" . }}
+{{- $search := .Values.tools.search }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $full }}-search
+  labels:
+    {{- include "primer.labels" . | nindent 4 }}
+    app.kubernetes.io/component: search
+data:
+  # JSON results are what the MCP server reads; SearXNG serves HTML only
+  # unless told otherwise. The limiter is for a public instance and would
+  # rate-limit the one client this has.
+  settings.yml: |
+    use_default_settings: true
+    server:
+      limiter: false
+      image_proxy: false
+      public_instance: false
+    search:
+      formats: [html, json]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $full }}-search
+  labels:
+    {{- include "primer.labels" . | nindent 4 }}
+    app.kubernetes.io/component: search
+spec:
+  type: ClusterIP
+  ports:
+    - name: mcp
+      port: 3000
+      targetPort: mcp
+  selector:
+    {{- include "primer.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: search
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $full }}-search
+  labels:
+    {{- include "primer.labels" . | nindent 4 }}
+    app.kubernetes.io/component: search
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "primer.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: search
+  template:
+    metadata:
+      labels:
+        {{- include "primer.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: search
+    spec:
+      {{- include "primer.podIdentity" (dict "root" . "component" "search") | nindent 6 }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: mcp
+          image: {{ printf "%s:%s" $search.image.repository $search.image.tag }}
+          imagePullPolicy: {{ $search.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          env:
+            - name: SEARXNG_URL
+              value: http://127.0.0.1:8080
+            # Streamable HTTP at /mcp. It binds to localhost unless told
+            # otherwise, which in a pod means nothing can reach it.
+            - name: MCP_HTTP_PORT
+              value: "3000"
+            - name: MCP_HTTP_HOST
+              value: 0.0.0.0
+            # Stated rather than left to the default: web_url_read must
+            # never fetch a cluster address on the model's say-so.
+            - name: MCP_HTTP_ALLOW_PRIVATE_URLS
+              value: "false"
+          ports:
+            - name: mcp
+              containerPort: 3000
+          readinessProbe:
+            httpGet: { path: /health, port: mcp }
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /health, port: mcp }
+            periodSeconds: 20
+          resources:
+            {{- toYaml $search.resources | nindent 12 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+        - name: searxng
+          image: {{ printf "%s:%s" $search.searxng.image.repository $search.searxng.image.tag }}
+          imagePullPolicy: {{ $search.searxng.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          env:
+            - name: GRANIAN_HOST
+              value: 127.0.0.1
+            - name: SEARXNG_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $full }}-internal
+                  key: search-secret
+          # Exec, because it listens on localhost and the kubelet probes
+          # from outside the pod.
+          readinessProbe:
+            exec:
+              command: ["wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/healthz"]
+            periodSeconds: 10
+          livenessProbe:
+            exec:
+              command: ["wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/healthz"]
+            periodSeconds: 20
+          resources:
+            {{- toYaml $search.searxng.resources | nindent 12 }}
+          volumeMounts:
+            - name: settings
+              mountPath: /etc/searxng/settings.yml
+              subPath: settings.yml
+              readOnly: true
+            - name: cache
+              mountPath: /var/cache/searxng
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: settings
+          configMap:
+            name: {{ $full }}-search
+        - name: cache
+          emptyDir:
+            sizeLimit: 64Mi
+        - name: tmp
+          emptyDir:
+            sizeLimit: 64Mi
+{{- end }}

@@ -306,6 +306,36 @@ spec:
               app.kubernetes.io/component: retrieval
 {{- end }}
 {{- end }}
+{{- if .Values.tools.search.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ $full }}-allow-search
+  labels:
+    {{- include "primer.labels" . | nindent 4 }}
+spec:
+  # Chat, on the MCP port, and nothing else. The server has no
+  # authentication of its own, and a search proxy anything in the cluster
+  # can reach is an anonymous way out to the internet. SearXNG listens in
+  # the same pod and is not on this list at all: only the MCP server beside
+  # it talks to it, over localhost.
+  podSelector:
+    matchLabels:
+      {{- include "primer.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: search
+  policyTypes:
+    - Ingress
+  ingress:
+    - ports:
+        - port: 3000
+          protocol: TCP
+      from:
+        - podSelector:
+            matchLabels:
+              {{- include "primer.selectorLabels" . | nindent 14 }}
+              app.kubernetes.io/component: chat
+{{- end }}
 {{- if .Values.postgresql.bundled.enabled }}
 {{- $migrations := list }}
 {{- if .Values.migrations.enabled }}

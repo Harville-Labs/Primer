@@ -490,11 +490,56 @@ graph:
     timeoutSeconds: 120
 
 # --- Tools --------------------------------------------------------------
+#
+# MCP servers whose tools a model in Chat may ask to call. Nothing runs
+# until the person who asked approves the call. docs/operations/tools.md
+# says how a call goes.
 tools:
   # Off by default, deployment-wide. Turning this on without a sandbox
   # declaration on each execution server is refused at startup.
   enabled: false
+  # How long a request waits for someone to approve it before it expires.
+  approvalTtlSeconds: 300
+  # Servers you run, passed to Chat as written. Fields are Chat's own:
+  #   - name: search
+  #     url: http://search-mcp.tools:3000/mcp
+  #     transport: streamable-http   # or sse
+  #     allowed_tools: [searxng_web_search]
+  #     required_groups: []
+  #     sandbox: {...}               # required for tools that run code
   servers: []
+  # A web search server run by this release: mcp-searxng in front of a
+  # SearXNG in the same pod. Off by default, because turning it on lets
+  # the model send queries to public search engines - see
+  # docs/adr/0012-bundle-a-search-mcp-server.md. It needs `enabled` above.
+  search:
+    enabled: false
+    # Empty means everyone who can sign in.
+    requiredGroups: []
+    # web_url_read fetches a page the model names. Public addresses only:
+    # the server refuses private and cluster-internal ones.
+    allowedTools: [searxng_web_search, web_url_read]
+    image:
+      repository: isokoliuk/mcp-searxng
+      tag: "2.8.1"
+      pullPolicy: IfNotPresent
+    resources:
+      requests:
+        cpu: 50m
+        memory: 128Mi
+      limits:
+        memory: 256Mi
+    searxng:
+      image:
+        repository: searxng/searxng
+        tag: "2026.10.30-ffa88e3ba"
+        pullPolicy: IfNotPresent
+      resources:
+        requests:
+          cpu: 100m
+          memory: 256Mi
+        limits:
+          memory: 512Mi
 
 # --- Lab ----------------------------------------------------------------
 #

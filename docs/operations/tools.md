@@ -59,6 +59,50 @@ A server that cannot be reached when a question is asked is skipped for
 that question: its tools are not offered, and the model is not told it can
 use them. Chat tries it again on the next question.
 
+## In the Helm chart
+
+The chart writes `PRIMER_TOOLS` for Chat from `tools` in its values.
+`tools.servers` takes the same fields as the JSON above, in the same
+names, and Chat validates them:
+
+```yaml
+tools:
+  enabled: true
+  approvalTtlSeconds: 300
+  servers:
+    - name: docs
+      url: http://docs-mcp:8080/mcp
+      allowed_tools: [search_docs]
+```
+
+### Bundled search server
+
+The chart can run a web search server for you: mcp-searxng, with a
+SearXNG beside it in the same pod. It is off by default, because turning
+it on sends the model's queries, which are written from people's
+questions, to public search engines.
+
+```bash
+helm upgrade primer oci://ghcr.io/isaiah-harville/charts/primer \
+  --reuse-values \
+  --set tools.enabled=true \
+  --set tools.search.enabled=true
+```
+
+Chat is offered it as a server named `search` with two tools:
+`searxng_web_search` and `web_url_read`. Narrow `tools.search.allowedTools`
+to offer only search, and set `tools.search.requiredGroups` to limit it to
+some groups.
+
+- Only Chat can reach it. A NetworkPolicy admits Chat to its port and
+  nothing else, since the server has no authentication of its own.
+- `web_url_read` refuses private and cluster addresses, so the model
+  can't make it fetch something inside your network.
+- It needs outbound internet access. The chart's policies restrict
+  ingress only, so egress is yours to allow or restrict.
+
+[ADR 0012](../adr/0012-bundle-a-search-mcp-server.md) gives the reasons.
+
 ## The model has to support it
 
 The model's server must accept tool definitions and return tool calls.

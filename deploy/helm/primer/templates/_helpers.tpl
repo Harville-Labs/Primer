@@ -565,3 +565,31 @@ was told it was added.
 {{- end }}
 {{- end }}
 {{- end }}
+
+{{/*
+Chat's PRIMER_TOOLS, as JSON: the operator's servers as written, and the
+bundled search server when this release runs one.
+
+The operator's entries are passed through rather than re-described here in
+camelCase. Chat validates them at startup against its own model, and a
+second description of the same fields in the chart is the one that would
+fall behind when Chat gains one.
+*/}}
+{{- define "primer.toolsConfig" -}}
+{{- $tools := .Values.tools }}
+{{- $servers := list }}
+{{- range $tools.servers }}
+{{- if and $tools.search.enabled (eq .name "search") }}
+{{- fail "tools.servers names a server 'search', which is the name of the search server this release runs with tools.search.enabled. Rename yours, or turn the bundled one off." }}
+{{- end }}
+{{- $servers = append $servers . }}
+{{- end }}
+{{- if $tools.search.enabled }}
+{{- $servers = append $servers (dict
+  "name" "search"
+  "url" (printf "http://%s-search:3000/mcp" (include "primer.fullname" .))
+  "allowed_tools" $tools.search.allowedTools
+  "required_groups" $tools.search.requiredGroups) }}
+{{- end }}
+{{- dict "enabled" true "approval_ttl_seconds" $tools.approvalTtlSeconds "servers" $servers | toJson }}
+{{- end -}}
