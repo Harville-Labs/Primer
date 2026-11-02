@@ -44,3 +44,11 @@ def test_a_url_of_its_own_serves_no_chat() -> None:
     assert chat is not None and chat.images is None
     assert images is not None and not images.serves_chat
     assert images.id != chat.id
+
+
+def test_empty_variables_leave_images_off(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Compose passes an optional setting as "" rather than leaving it out."""
+    monkeypatch.setenv("PRIMER_IMAGES_BASE_URL", "")
+    monkeypatch.setenv("PRIMER_IMAGES_CAPABILITIES", "")
+
+    assert deployment_image_provider(Settings()) is None

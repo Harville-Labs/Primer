@@ -95,6 +95,39 @@ spec:
                   name: {{ .Values.inference.chat.existingSecret }}
                   key: {{ .Values.inference.chat.apiKeyKey }}
             {{- end }}
+            {{- /*
+            Only with Studio on: an image provider nobody can reach from
+            the web app is configuration that only looks like it does
+            something. Refused here for the same reasons Chat refuses it at
+            startup, so the message arrives at `helm install` instead of in
+            a crash loop.
+            */}}
+            {{- $images := .Values.inference.images }}
+            {{- if .Values.studio.enabled }}
+            {{- if and $images.baseUrl (not $images.capabilities) }}
+            {{- fail "inference.images.baseUrl is set but inference.images.capabilities is empty. Declare the models, operations and sizes the endpoint serves; see docs/operations/studio.md." }}
+            {{- end }}
+            {{- if $images.capabilities }}
+            {{- if not (or $images.baseUrl .Values.inference.chat.baseUrl) }}
+            {{- fail "inference.images.capabilities is set but there is no endpoint to make images with. Set inference.images.baseUrl, or inference.chat.baseUrl if one server does both." }}
+            {{- end }}
+            {{- with $images.baseUrl }}
+            - name: PRIMER_IMAGES_BASE_URL
+              value: {{ . | quote }}
+            {{- end }}
+            - name: PRIMER_IMAGES_CAPABILITIES
+              value: {{ toJson $images.capabilities | quote }}
+            - name: PRIMER_IMAGES_TIMEOUT_SECONDS
+              value: {{ $images.timeoutSeconds | quote }}
+            {{- if $images.existingSecret }}
+            - name: PRIMER_IMAGES_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $images.existingSecret }}
+                  key: {{ $images.apiKeyKey }}
+            {{- end }}
+            {{- end }}
+            {{- end }}
           ports:
             - name: http
               containerPort: 8000

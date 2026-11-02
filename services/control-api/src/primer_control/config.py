@@ -19,7 +19,11 @@ AuthMode = Literal["disabled", "oidc"]
 class Settings(BaseSettings):
     """Deployment configuration for the Control API."""
 
-    model_config = SettingsConfigDict(env_prefix="PRIMER_", extra="forbid")
+    #: An empty variable is an unset one. Compose can only pass an optional
+    #: setting through as `${VAR:-}`, which arrives as "" rather than absent,
+    #: and "" for Studio's retention days would be a parse error rather than
+    #: "not set".
+    model_config = SettingsConfigDict(env_prefix="PRIMER_", extra="forbid", env_ignore_empty=True)
 
     auth_mode: AuthMode = "disabled"
 

@@ -24,7 +24,7 @@ instead of silently keeping a default.
 | `PRIMER_STUDIO_MAX_IMAGES_PER_REQUEST` | `4` | Images one generation may ask for |
 | `PRIMER_STUDIO_GENERATIONS_PER_HOUR` | `30` | Per person. Failed generations count, since the provider still did the work |
 | `PRIMER_STUDIO_QUOTA_BYTES` | `1073741824` | Studio storage per person, uploads and results together |
-| `PRIMER_STUDIO_RETENTION_DAYS` | unset | Unset keeps images until their owner deletes them. Applied by `python -m primer_control.studio.retention`, run on a schedule |
+| `PRIMER_STUDIO_RETENTION_DAYS` | unset | Unset keeps images until their owner deletes them. Applied by `python -m primer_control.studio.retention`, run on a schedule. See [Studio](studio.md#retention) |
 | `PRIMER_STUDIO_TIMEOUT_SECONDS` | `900` | How long one generation may take, end to end |
 
 ## Ingestion workers
@@ -124,7 +124,7 @@ object.
 | `PRIMER_CHAT_SUPPORTS_PROMPT_LOGPROBS` | `false` | Declares that it scores supplied text, through `echo` on `/completions` |
 | `PRIMER_IMAGES_BASE_URL` | unset | An image endpoint of its own, listed as a provider that serves no chat. Unset means the chat endpoint makes images too |
 | `PRIMER_IMAGES_API_KEY` | unset | Only for an endpoint of its own; a shared one uses the chat key |
-| `PRIMER_IMAGES_CAPABILITIES` | unset | JSON declaring `models`, `operations`, `sizes`, `max_images` and `ask_for_base64`. For ComfyUI, `"api": "comfyui"` and `templates` instead of `models`. Nothing is made without it |
+| `PRIMER_IMAGES_CAPABILITIES` | unset | JSON declaring `models`, `operations`, `sizes`, `max_images` and `ask_for_base64`. For ComfyUI, `"api": "comfyui"` and `templates` instead of `models`. Nothing is made without it. See [Studio](studio.md) |
 | `PRIMER_IMAGES_TIMEOUT_SECONDS` | `300` | Per image request |
 | `PRIMER_CONTROL_URL` | `http://control-api:8000` | Cluster-internal |
 | `PRIMER_RETRIEVAL_URL` | `http://retrieval:8000` | Cluster-internal |

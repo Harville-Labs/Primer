@@ -50,6 +50,24 @@ spec:
             {{- end }}
             - name: PRIMER_TOOLS_ENABLED
               value: {{ .Values.tools.enabled | quote }}
+            {{- with .Values.studio }}
+            {{- if .enabled }}
+            - name: PRIMER_STUDIO_ENABLED
+              value: "true"
+            - name: PRIMER_STUDIO_GENERATIONS_PER_HOUR
+              value: {{ .generationsPerHour | int | quote }}
+            - name: PRIMER_STUDIO_MAX_IMAGES_PER_REQUEST
+              value: {{ .maxImagesPerRequest | int | quote }}
+            - name: PRIMER_STUDIO_QUOTA_BYTES
+              value: {{ .quotaBytes | int64 | quote }}
+            - name: PRIMER_STUDIO_MAX_UPLOAD_BYTES
+              value: {{ .maxUploadBytes | int64 | quote }}
+            - name: PRIMER_STUDIO_MAX_SIDE
+              value: {{ .maxSide | int | quote }}
+            - name: PRIMER_STUDIO_TIMEOUT_SECONDS
+              value: {{ .timeoutSeconds | quote }}
+            {{- end }}
+            {{- end }}
           ports:
             - name: http
               containerPort: 8000

@@ -19,7 +19,11 @@ from primer_chat.budget import CHARACTERS_PER_TOKEN
 class Settings(BaseSettings):
     """Deployment configuration for the Chat service."""
 
-    model_config = SettingsConfigDict(env_prefix="PRIMER_", extra="forbid")
+    #: An empty variable is an unset one. Compose can only pass an optional
+    #: setting through as `${VAR:-}`, which arrives as "" rather than absent,
+    #: and "" for Studio's capabilities would be a parse error rather than
+    #: "not set".
+    model_config = SettingsConfigDict(env_prefix="PRIMER_", extra="forbid", env_ignore_empty=True)
 
     database_url: str = Field(
         default="postgresql+asyncpg://primer:primer@localhost:5432/primer",

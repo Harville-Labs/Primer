@@ -163,8 +163,8 @@ sourceStore:
   # anything else it wants. Every key is passed through, because those names
   # belong to the storage backend rather than to Primer.
   #
-  # Mounted only into Control and the ingestion workers: nothing else opens a
-  # source object.
+  # Mounted only into Control, the ingestion workers, and Studio's retention
+  # job, which keeps its images in the same store: nothing else opens one.
   existingSecret: ""
 
 # Settings this chart does not model, added to every Primer workload. An
@@ -235,6 +235,34 @@ inference:
     # do not.
     supportsLogprobs: false
     supportsPromptLogprobs: false
+  # Where Studio's images are made: an image server you run, or a hosted
+  # API. Primer does not run one. Read only with `studio.enabled`;
+  # docs/operations/studio.md covers each backend.
+  images:
+    # An OpenAI-compatible /v1 endpoint (a hosted API, LocalAI, vLLM-Omni),
+    # or a ComfyUI base URL. Empty uses `inference.chat.baseUrl`, for one
+    # server that does both.
+    baseUrl: ""
+    # Only for an endpoint of its own. One shared with chat uses the chat
+    # key, because it is the same account.
+    existingSecret: ""
+    apiKeyKey: images-api-key
+    # What the endpoint can do, declared rather than probed: an images API
+    # does not say which operations or sizes it serves, and a guess shows
+    # people controls that fail. Empty offers no deployment image provider;
+    # admins can still add one on the settings page. For example:
+    #
+    #   capabilities:
+    #     models: [gpt-image-1]
+    #     operations: [generate, edit]
+    #     sizes: [1024x1024, 1536x1024]
+    #
+    # or, for ComfyUI, `api: comfyui` and the `templates` that
+    # docs/operations/studio.md describes.
+    capabilities: {}
+    # Longer than a chat answer's: a batch of large images on a busy GPU
+    # can take minutes.
+    timeoutSeconds: 300
   # Text Embeddings Inference, the server `inference.*.bundled` runs. One
   # pinned version for both: TEI returned wrong vectors for Qwen3 until
   # huggingface/text-embeddings-inference#648, plausible enough that nothing
@@ -522,6 +550,31 @@ lab:
     limits: { memory: 12Gi }
   nodeSelector: {}
   tolerations: []
+
+# --- Studio -------------------------------------------------------------
+#
+# Making and editing images, through `inference.images` or a provider an
+# admin adds. Off by default: a shared deployment that makes images needs a
+# content policy, and that is yours to decide before anyone can use it.
+studio:
+  enabled: false
+  # Per person. Failed generations count against the hourly limit, since
+  # the provider still did the work.
+  generationsPerHour: 30
+  maxImagesPerRequest: 4
+  # Uploads and results together.
+  quotaBytes: 1073741824
+  # The largest image someone may upload to edit; at most 25 MiB.
+  maxUploadBytes: 20971520
+  # Pixels on a side, checked before an image is decoded; at most 8192.
+  maxSide: 4096
+  # How long Control waits for one generation, end to end. Keep it above
+  # `inference.images.timeoutSeconds`.
+  timeoutSeconds: 900
+  # Days an image is kept. Empty keeps images until their owner deletes
+  # them, and renders no CronJob.
+  retentionDays: ""
+  retentionSchedule: "17 3 * * *"
 
 # --- Scale --------------------------------------------------------------
 #

@@ -1,0 +1,256 @@
+{
+  "api": "comfyui",
+  "sizes": [
+    "1024x1024",
+    "1152x896",
+    "896x1152"
+  ],
+  "max_images": 1,
+  "templates": [
+    {
+      "name": "sdxl",
+      "operations": [
+        "generate"
+      ],
+      "workflow": {
+        "3": {
+          "class_type": "KSampler",
+          "inputs": {
+            "seed": 0,
+            "steps": 25,
+            "cfg": 7.0,
+            "sampler_name": "euler",
+            "scheduler": "normal",
+            "denoise": 1.0,
+            "model": [
+              "4",
+              0
+            ],
+            "positive": [
+              "6",
+              0
+            ],
+            "negative": [
+              "7",
+              0
+            ],
+            "latent_image": [
+              "5",
+              0
+            ]
+          }
+        },
+        "4": {
+          "class_type": "CheckpointLoaderSimple",
+          "inputs": {
+            "ckpt_name": "sd_xl_base_1.0.safetensors"
+          }
+        },
+        "5": {
+          "class_type": "EmptyLatentImage",
+          "inputs": {
+            "width": 1024,
+            "height": 1024,
+            "batch_size": 1
+          }
+        },
+        "6": {
+          "class_type": "CLIPTextEncode",
+          "inputs": {
+            "text": "",
+            "clip": [
+              "4",
+              1
+            ]
+          }
+        },
+        "7": {
+          "class_type": "CLIPTextEncode",
+          "inputs": {
+            "text": "",
+            "clip": [
+              "4",
+              1
+            ]
+          }
+        },
+        "8": {
+          "class_type": "VAEDecode",
+          "inputs": {
+            "samples": [
+              "3",
+              0
+            ],
+            "vae": [
+              "4",
+              2
+            ]
+          }
+        },
+        "9": {
+          "class_type": "SaveImage",
+          "inputs": {
+            "filename_prefix": "primer",
+            "images": [
+              "8",
+              0
+            ]
+          }
+        }
+      },
+      "bindings": {
+        "prompt": {
+          "node": "6",
+          "input": "text"
+        },
+        "negative_prompt": {
+          "node": "7",
+          "input": "text"
+        },
+        "seed": {
+          "node": "3",
+          "input": "seed"
+        },
+        "steps": {
+          "node": "3",
+          "input": "steps"
+        },
+        "output": "9",
+        "width": {
+          "node": "5",
+          "input": "width"
+        },
+        "height": {
+          "node": "5",
+          "input": "height"
+        }
+      }
+    },
+    {
+      "name": "sdxl-restyle",
+      "operations": [
+        "edit"
+      ],
+      "workflow": {
+        "3": {
+          "class_type": "KSampler",
+          "inputs": {
+            "seed": 0,
+            "steps": 25,
+            "cfg": 7.0,
+            "sampler_name": "euler",
+            "scheduler": "normal",
+            "denoise": 0.6,
+            "model": [
+              "4",
+              0
+            ],
+            "positive": [
+              "6",
+              0
+            ],
+            "negative": [
+              "7",
+              0
+            ],
+            "latent_image": [
+              "11",
+              0
+            ]
+          }
+        },
+        "4": {
+          "class_type": "CheckpointLoaderSimple",
+          "inputs": {
+            "ckpt_name": "sd_xl_base_1.0.safetensors"
+          }
+        },
+        "6": {
+          "class_type": "CLIPTextEncode",
+          "inputs": {
+            "text": "",
+            "clip": [
+              "4",
+              1
+            ]
+          }
+        },
+        "7": {
+          "class_type": "CLIPTextEncode",
+          "inputs": {
+            "text": "",
+            "clip": [
+              "4",
+              1
+            ]
+          }
+        },
+        "8": {
+          "class_type": "VAEDecode",
+          "inputs": {
+            "samples": [
+              "3",
+              0
+            ],
+            "vae": [
+              "4",
+              2
+            ]
+          }
+        },
+        "9": {
+          "class_type": "SaveImage",
+          "inputs": {
+            "filename_prefix": "primer",
+            "images": [
+              "8",
+              0
+            ]
+          }
+        },
+        "10": {
+          "class_type": "LoadImage",
+          "inputs": {
+            "image": "example.png"
+          }
+        },
+        "11": {
+          "class_type": "VAEEncode",
+          "inputs": {
+            "pixels": [
+              "10",
+              0
+            ],
+            "vae": [
+              "4",
+              2
+            ]
+          }
+        }
+      },
+      "bindings": {
+        "prompt": {
+          "node": "6",
+          "input": "text"
+        },
+        "negative_prompt": {
+          "node": "7",
+          "input": "text"
+        },
+        "seed": {
+          "node": "3",
+          "input": "seed"
+        },
+        "steps": {
+          "node": "3",
+          "input": "steps"
+        },
+        "output": "9",
+        "image": {
+          "node": "10",
+          "input": "image"
+        }
+      }
+    }
+  ]
+}

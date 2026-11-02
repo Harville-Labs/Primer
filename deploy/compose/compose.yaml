@@ -351,6 +351,12 @@ services:
       # Set with the lab profile; Compose cannot tell Control which profiles are on.
       PRIMER_LAB_SERVICE_URL: ${PRIMER_LAB_SERVICE_URL:-}
       PRIMER_MAX_UPLOAD_BYTES: ${PRIMER_MAX_UPLOAD_BYTES:-104857600}
+      # Studio keeps its images in the source store. It is offered only once
+      # Chat has an image endpoint to call; see env.example.
+      PRIMER_STUDIO_ENABLED: ${PRIMER_STUDIO_ENABLED:-false}
+      PRIMER_STUDIO_GENERATIONS_PER_HOUR: ${PRIMER_STUDIO_GENERATIONS_PER_HOUR:-}
+      PRIMER_STUDIO_QUOTA_BYTES: ${PRIMER_STUDIO_QUOTA_BYTES:-}
+      PRIMER_STUDIO_RETENTION_DAYS: ${PRIMER_STUDIO_RETENTION_DAYS:-}
     volumes:
       - source-objects:/var/lib/primer/sources
     command:
@@ -445,6 +451,11 @@ services:
       # Declared, never probed. See env.example.
       PRIMER_CHAT_SUPPORTS_LOGPROBS: ${PRIMER_CHAT_SUPPORTS_LOGPROBS:-false}
       PRIMER_CHAT_SUPPORTS_PROMPT_LOGPROBS: ${PRIMER_CHAT_SUPPORTS_PROMPT_LOGPROBS:-false}
+      # An image server you run, or a hosted API. Primer only calls it.
+      PRIMER_IMAGES_BASE_URL: ${PRIMER_IMAGES_BASE_URL:-}
+      PRIMER_IMAGES_API_KEY: ${PRIMER_IMAGES_API_KEY:-}
+      PRIMER_IMAGES_CAPABILITIES: ${PRIMER_IMAGES_CAPABILITIES:-}
+      PRIMER_IMAGES_TIMEOUT_SECONDS: ${PRIMER_IMAGES_TIMEOUT_SECONDS:-}
     command:
       ["uvicorn", "primer_chat.app:create_app", "--factory",
        "--host", "0.0.0.0", "--port", "8000"]

@@ -1,0 +1,55 @@
+{{- with .Values.studio }}
+{{- if and .enabled .retentionDays }}
+{{/*
+Retention as a CronJob rather than a loop inside Control: Control runs
+several replicas, and every one of them would sweep the same rows. The
+retention period is only given to this job, since nothing else acts on it.
+*/}}
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "primer.fullname" $ }}-studio-retention
+  labels:
+    {{- include "primer.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: studio-retention
+spec:
+  schedule: {{ .retentionSchedule | quote }}
+  # A run that is still deleting when the next is due is left to finish;
+  # two at once would race for the same batch.
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        metadata:
+          labels:
+            {{- include "primer.selectorLabels" $ | nindent 12 }}
+            app.kubernetes.io/component: studio-retention
+        spec:
+          restartPolicy: Never
+          {{- include "primer.podIdentity" (dict "root" $ "component" "control") | nindent 10 }}
+          securityContext:
+            {{- toYaml $.Values.podSecurityContext | nindent 12 }}
+          containers:
+            - name: retention
+              image: {{ include "primer.image" (dict "root" $ "component" "api") }}
+              imagePullPolicy: {{ $.Values.image.api.pullPolicy }}
+              securityContext:
+                {{- toYaml $.Values.securityContext | nindent 16 }}
+              command: ["python", "-m", "primer_control.studio.retention"]
+              {{- include "primer.sourceStoreEnvFrom" $ | nindent 14 }}
+              env:
+                {{- include "primer.commonEnv" $ | nindent 16 }}
+                {{- include "primer.databaseEnv" $ | nindent 16 }}
+                - name: PRIMER_STUDIO_RETENTION_DAYS
+                  value: {{ .retentionDays | int | quote }}
+              resources:
+                {{- toYaml $.Values.control.resources | nindent 16 }}
+              volumeMounts:
+                {{- include "primer.scratchMounts" $ | nindent 16 }}
+          volumes:
+            {{- include "primer.scratchVolumes" $ | nindent 12 }}
+{{- end }}
+{{- end }}
