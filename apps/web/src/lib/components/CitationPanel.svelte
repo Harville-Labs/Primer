@@ -1,11 +1,12 @@
 <script lang="ts">
 	import { Badge, Card, Sheet } from '@sivir-ui/svelte';
-	import type { Citation } from '#lib/api/types.ts';
+	import type { Citation, DocumentSummary } from '#lib/api/types.ts';
 	import { describeCitation } from '#lib/export/markdown.ts';
 
 	interface Props {
 		citations: Citation[];
-		filenames?: Record<string, string>;
+		//: The cited documents by id, for their names and to show an image.
+		documents?: Map<string, DocumentSummary>;
 		/** Bound, so the parent opens it and Sheet closes it. */
 		open?: boolean;
 		/**
@@ -22,7 +23,7 @@
 		reveal?: { position: number; token: number } | null;
 	}
 
-	let { citations, filenames = {}, open = $bindable(false), reveal = null }: Props = $props();
+	let { citations, documents = new Map(), open = $bindable(false), reveal = null }: Props = $props();
 
 	let list = $state<HTMLElement | null>(null);
 	//: Which passage is marked, until another is asked for. It stays rather
@@ -48,8 +49,8 @@
 		return () => cancelAnimationFrame(frame);
 	});
 
-	function nameFor(citation: Citation): string | undefined {
-		return filenames[citation.document_version_id] ?? filenames[citation.document_id];
+	function documentFor(citation: Citation): DocumentSummary | undefined {
+		return documents.get(citation.document_id);
 	}
 </script>
 
@@ -76,6 +77,7 @@
 	<div bind:this={list} class="flex flex-col gap-3 overflow-y-auto overscroll-contain p-4">
 			{#each citations as citation, index (citation.chunk_id)}
 				{@const position = index + 1}
+				{@const source = documentFor(citation)}
 				<!--
 				  The marker in the answer and this card are the same thing
 				  seen twice, so the number is what ties them together and is
@@ -91,10 +93,21 @@
 							<div class="flex items-center gap-2">
 								<Badge variant={marked === position ? 'primary' : 'secondary'}>{position}</Badge>
 								<span class="text-sm font-medium">
-									{describeCitation(citation, nameFor(citation))}
+									{describeCitation(citation, source?.filename)}
 								</span>
 							</div>
 						</Card.Header>
+						{#if source?.media_type === 'image/png'}
+							<Card.Content>
+								<!-- Through SvelteKit's proxy, like a download: the browser never reaches Control. -->
+								<img
+									src="/libraries/{source.library_id}/documents/{source.id}/content"
+									alt={source.filename}
+									loading="lazy"
+									class="max-h-48 rounded-md border border-border bg-muted object-contain"
+								/>
+							</Card.Content>
+						{/if}
 						{#if citation.excerpt}
 							<Card.Content>
 								<!--

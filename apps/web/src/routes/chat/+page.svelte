@@ -13,6 +13,7 @@
 	import { page } from '$app/state';
 	import { untrack } from 'svelte';
 	import CitationPanel from '#lib/components/CitationPanel.svelte';
+	import { LibrarySources } from '#lib/library-sources.svelte.ts';
 	import LibraryLink from '#lib/components/LibraryLink.svelte';
 	import ModelPicker from '#lib/components/ModelPicker.svelte';
 	import ChatTurn from '#lib/components/ChatTurn.svelte';
@@ -62,6 +63,11 @@
 	//: following a marker rather than by asking for the sources.
 	let revealed = $state<{ position: number; token: number } | null>(null);
 	let revealToken = 0;
+	// Asked for each time the panel opens, so a document added since is named.
+	const sources = new LibrarySources();
+	$effect(() => {
+		if (sourcesOpen) sources.load(libraryId);
+	});
 
 	// The library is fixed when the conversation opens: follow-up questions
 	// carry only the conversation, so changing it now would change nothing.
@@ -517,5 +523,10 @@
 </div>
 
 {#if sourcesFor}
-	<CitationPanel citations={sourcesFor.citations} bind:open={sourcesOpen} reveal={revealed} />
+	<CitationPanel
+		citations={sourcesFor.citations}
+		documents={sources.byId}
+		bind:open={sourcesOpen}
+		reveal={revealed}
+	/>
 {/if}
