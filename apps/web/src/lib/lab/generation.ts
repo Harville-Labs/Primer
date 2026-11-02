@@ -171,9 +171,15 @@ export function editEffect(edit: Intervention): string {
 	}
 }
 
-/** A short name for what an edit touches: `L3 · neuron 412`. */
-export function editTarget(edit: Intervention, vectorLabel?: string): string {
+/**
+ * A short name for what an edit touches: `L3 · neuron 412`, or with a
+ * label, `L3 · feature 412 · French words`. The label is a steering
+ * vector's name, or a feature's, and a vector without one shows its id.
+ */
+export function editTarget(edit: Intervention, label?: string): string {
 	const site = SITE_NAMES[edit.site];
-	if (edit.vector_id) return `L${edit.layer} · steer ${vectorLabel ?? edit.vector_id.slice(0, 8)}`;
-	return edit.index == null ? `L${edit.layer} · ${site}` : `L${edit.layer} · ${site} ${edit.index}`;
+	if (edit.vector_id) return `L${edit.layer} · steer ${label ?? edit.vector_id.slice(0, 8)}`;
+	if (edit.index == null) return `L${edit.layer} · ${site}`;
+	const target = `L${edit.layer} · ${site} ${edit.index}`;
+	return label ? `${target} · ${label}` : target;
 }

@@ -163,6 +163,8 @@ export function topTokens(reading: InspectResponse): string[][] {
 export interface NeuronReading {
 	index: number;
 	activation: number;
+	/** The operator's name for a feature, where they gave it one. */
+	label?: string;
 }
 
 export function neuronsAt(reading: InspectResponse, at: Cell): NeuronReading[] {
@@ -181,7 +183,24 @@ export function featuresAt(reading: InspectResponse, at: Cell): NeuronReading[] 
 	if (!layer?.feature_indices) return null;
 	const indices = layer.feature_indices[at.token] ?? [];
 	const activations = layer.feature_activations?.[at.token] ?? [];
-	return indices.map((index, rank) => ({ index, activation: activations[rank] ?? 0 }));
+	return indices.map((index, rank) => ({
+		index,
+		activation: activations[rank] ?? 0,
+		label: layer.feature_labels?.[index],
+	}));
+}
+
+/**
+ * The operator's label for a feature, if this reading fired it and it has
+ * one. A reading carries labels only for the features it found, so a
+ * feature it did not fire has no label here even when the file names it.
+ */
+export function featureLabel(
+	reading: InspectResponse,
+	layer: number,
+	index: number,
+): string | undefined {
+	return reading.layers[layer]?.feature_labels?.[index];
 }
 
 /** The residual norm at every layer for one token, bottom layer first. */

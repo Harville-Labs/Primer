@@ -89,6 +89,8 @@ spec:
               value: {{ toJson $lab.repositoryPatterns | quote }}
             - name: PRIMER_LAB_SAES
               value: {{ toJson ($lab.saes | default dict) | quote }}
+            - name: PRIMER_LAB_FEATURE_LABELS
+              value: {{ toJson ($lab.featureLabels | default dict) | quote }}
             - name: PRIMER_LAB_MAX_MODEL_BYTES
               value: {{ $lab.maxModelBytes | int64 | quote }}
             {{- with $lab.hubEndpoint }}

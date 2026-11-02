@@ -195,6 +195,7 @@ def test_a_full_length_prompt_on_a_deep_model_stays_within_its_shape(tmp_path: P
             "neuron_activations",
             "feature_indices",
             "feature_activations",
+            "feature_labels",
         }
         assert len(layer["residual_norm"]) == 512
         for column, width in [
