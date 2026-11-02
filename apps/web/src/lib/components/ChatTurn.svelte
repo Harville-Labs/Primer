@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { Alert, Markdown, Message, Reasoning } from '@sivir-ui/svelte';
 	import ResponseActions from '#lib/components/ResponseActions.svelte';
+	import ToolCallCard from '#lib/components/ToolCallCard.svelte';
 	import type { StreamState } from '#lib/api/sse.ts';
 	import type { MessageSummary } from '#lib/api/types.ts';
 	import { citationFrom, linkCitations } from '#lib/citations.ts';
@@ -127,6 +128,14 @@
 			</Reasoning.Content>
 		</Reasoning.Root>
 	{/if}
+
+	{#each turn.stream.tools as call (call.id)}
+		<!--
+		  Above the answer, because the answer is written after them and from
+		  what they returned.
+		-->
+		<ToolCallCard {call} />
+	{/each}
 
 	<Message.Content>
 		<!--

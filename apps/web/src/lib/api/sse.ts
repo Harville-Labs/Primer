@@ -1,5 +1,5 @@
 import { createParser } from 'eventsource-parser';
-import type { Citation, MessageSummary } from './types';
+import type { Citation, MessageSummary, ToolCallSummary } from './types';
 
 /**
  * Reading Primer's event stream.
@@ -23,6 +23,12 @@ export interface StreamState {
 	 */
 	reasoning: string | null;
 	citations: Citation[];
+	/**
+	 * Tool calls the model asked for during this answer, in the order it
+	 * asked. The stream waits on each one until the user decides, so a call
+	 * in the `requested` phase is a question put to the reader.
+	 */
+	tools: ToolCallSummary[];
 	message: MessageSummary | null;
 	error: { code: string; detail: string | null } | null;
 	/** The highest event id seen, for resuming. */
@@ -37,6 +43,7 @@ export function emptyStream(): StreamState {
 		text: '',
 		reasoning: null,
 		citations: [],
+		tools: [],
 		message: null,
 		error: null,
 		lastEventId: -1,
@@ -96,11 +103,49 @@ export function reduce(state: StreamState, event: RawEvent): StreamState {
 			next.error = { code: String(event.code), detail: (event.detail as string) ?? null };
 			next.done = true;
 			return next;
+		case 'tool.requested':
+		case 'tool.decided':
+		case 'tool.completed':
+			next.tools = withCall(state.tools, event.call as ToolCallSummary);
+			return next;
+		case 'tool.running':
+			next.tools = patchCall(state.tools, String(event.call_id), { phase: 'running' });
+			return next;
+		case 'tool.output':
+			// Output arrives whole from the server today; appended rather than
+			// replaced so a server that streams it in pieces needs no change here.
+			next.tools = patchCall(state.tools, String(event.call_id), (call) => ({
+				output: (call.output ?? '') + String(event.text ?? ''),
+			}));
+			return next;
 		case 'heartbeat':
 			return next;
 		default:
 			return next;
 	}
+}
+
+/**
+ * The calls with this one in place of its earlier self, or added at the end.
+ *
+ * Replaced by id rather than appended, because a call's later events carry
+ * the whole call again and the newest copy is the true one.
+ */
+function withCall(calls: ToolCallSummary[], call: ToolCallSummary): ToolCallSummary[] {
+	const index = calls.findIndex((known) => known.id === call.id);
+	if (index === -1) return [...calls, call];
+	return calls.map((known, at) => (at === index ? call : known));
+}
+
+/** The calls with fields changed on one, as a new object so `$state` sees it. */
+function patchCall(
+	calls: ToolCallSummary[],
+	id: string,
+	change: Partial<ToolCallSummary> | ((call: ToolCallSummary) => Partial<ToolCallSummary>),
+): ToolCallSummary[] {
+	return calls.map((call) =>
+		call.id === id ? { ...call, ...(typeof change === 'function' ? change(call) : change) } : call,
+	);
 }
 
 /**

@@ -57,6 +57,8 @@ export type TokenScore = ChatSchemas['TokenScore'];
 export type Span = ChatSchemas['Span'];
 export type Passage = ChatSchemas['Passage'];
 export type PassagesResult = ChatSchemas['PassagesResult'];
+export type ToolCallSummary = ChatSchemas['ToolCallSummary'];
+export type ToolPhase = ChatSchemas['ToolPhase'];
 
 export type LabStatus = LabSchemas['LabStatus'];
 export type LabModelStatus = LabSchemas['LabModelStatus'];

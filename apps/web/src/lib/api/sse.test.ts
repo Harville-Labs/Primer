@@ -75,7 +75,7 @@ describe('SSE reduction', () => {
 	it('skips an event type it does not know', () => {
 		// A newer server must not make an older browser render nonsense.
 		let state = emptyStream();
-		state = reduce(state, { type: 'tool.requested', id: 0 });
+		state = reduce(state, { type: 'tool.someday', id: 0 });
 
 		expect(state.done).toBe(false);
 		expect(state.text).toBe('');
@@ -189,5 +189,74 @@ describe('a model that thinks aloud', () => {
 			{ id: 0, type: 'reasoning.delta', text: 'thought' },
 		].reduce(reduce, emptyStream());
 		expect(state.reasoning).toBe('thought');
+	});
+});
+
+describe('tool calls in a stream', () => {
+	const requested = {
+		id: 'call-1',
+		conversation_id: 'c',
+		server_name: 'search',
+		tool_name: 'web_search',
+		arguments: { query: 'otters' },
+		phase: 'requested',
+		requested_at: '2026-11-02T00:00:00Z',
+		expires_at: '2026-11-02T00:05:00Z',
+	} as const;
+
+	it('adds a requested call, and replaces it when it is decided', () => {
+		// Later events carry the whole call again. Appending them would
+		// show one call as two cards, the first still asking.
+		let state = emptyStream();
+		state = reduce(state, { type: 'tool.requested', id: 0, call: requested });
+		state = reduce(state, {
+			type: 'tool.decided',
+			id: 1,
+			call: { ...requested, phase: 'approved' },
+		});
+
+		expect(state.tools).toHaveLength(1);
+		expect(state.tools[0]?.phase).toBe('approved');
+	});
+
+	it('marks a call running and collects its output', () => {
+		let state = emptyStream();
+		state = reduce(state, { type: 'tool.requested', id: 0, call: requested });
+		state = reduce(state, { type: 'tool.running', id: 1, call_id: 'call-1' });
+		expect(state.tools[0]?.phase).toBe('running');
+
+		state = reduce(state, { type: 'tool.output', id: 2, call_id: 'call-1', text: '  1. otters' });
+		expect(state.tools[0]?.output).toBe('  1. otters');
+	});
+
+	it('keeps calls in the order they were asked for', () => {
+		let state = emptyStream();
+		state = reduce(state, { type: 'tool.requested', id: 0, call: requested });
+		state = reduce(state, {
+			type: 'tool.requested',
+			id: 1,
+			call: { ...requested, id: 'call-2' },
+		});
+		state = reduce(state, {
+			type: 'tool.completed',
+			id: 2,
+			call: { ...requested, phase: 'completed' },
+		});
+
+		expect(state.tools.map((call) => [call.id, call.phase])).toEqual([
+			['call-1', 'completed'],
+			['call-2', 'requested'],
+		]);
+	});
+
+	it('does not change the call objects an earlier state holds', () => {
+		// The transcript keeps states in `$state`; a write to an object it
+		// already holds would not reach the screen.
+		let state = emptyStream();
+		state = reduce(state, { type: 'tool.requested', id: 0, call: requested });
+		const before = state.tools[0];
+		state = reduce(state, { type: 'tool.running', id: 1, call_id: 'call-1' });
+
+		expect(before?.phase).toBe('requested');
 	});
 });
