@@ -5,6 +5,7 @@ import type { DeploymentCapabilities, LabStatus } from '#lib/api/types.ts';
 import { apiFor } from '#lib/server/api.ts';
 import { forwardingIdentity } from '#lib/server/forward.ts';
 import { answeredWithProblems } from '#lib/server/problem.ts';
+import { eventStream } from '#lib/server/stream.ts';
 import { PRIMER_LAB_URL } from '$app/env/private';
 
 /** The server's connection to Lab, as the user the request is from. */
@@ -59,29 +60,12 @@ export async function relay(
 	});
 }
 
-/**
- * Pass Lab's event stream to the browser as it arrives.
- *
- * Piped rather than read here: a stream collected on the server would reach
- * the browser all at once, when the generation was over. A refusal comes
- * before the stream does, and is answered as a problem like any other.
- */
+/** Pass Lab's event stream on. A refusal comes before it, and is answered as a problem. */
 export function relayStream(
 	event: RequestEvent,
 	call: (lab: LabApi) => Promise<Response>,
 ): Promise<Response> {
-	return answered(event, async (lab) => {
-		const upstream = await call(lab);
-		return new Response(upstream.body, {
-			headers: {
-				'Content-Type': 'text/event-stream',
-				'Cache-Control': 'no-cache',
-				// Several proxies buffer by default, which would hold every
-				// token until the generation finished.
-				'X-Accel-Buffering': 'no',
-			},
-		});
-	});
+	return answered(event, async (lab) => eventStream((await call(lab)).body));
 }
 
 async function answered(

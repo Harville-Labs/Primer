@@ -1,3 +1,4 @@
+import { eventStream } from '#lib/server/stream.ts';
 import { PRIMER_CHAT_URL } from '$app/env/private';
 import type { RequestHandler } from './$types';
 
@@ -59,14 +60,5 @@ export const POST: RequestHandler = async ({ request, fetch }) => {
 		});
 	}
 
-	return new Response(upstream.body, {
-		status: upstream.status,
-		headers: {
-			'Content-Type': 'text/event-stream',
-			'Cache-Control': 'no-cache',
-			// Several proxies buffer by default, which would hold every token
-			// until the answer finished.
-			'X-Accel-Buffering': 'no',
-		},
-	});
+	return eventStream(upstream.body);
 };
