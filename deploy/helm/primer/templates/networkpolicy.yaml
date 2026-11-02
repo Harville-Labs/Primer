@@ -311,6 +311,10 @@ spec:
 {{- if .Values.migrations.enabled }}
 {{- $migrations = list "migrate-control" "migrate-chat" }}
 {{- end }}
+{{- $studio := list }}
+{{- if and .Values.studio.enabled .Values.studio.retentionDays }}
+{{- $studio = list "studio-retention" }}
+{{- end }}
 {{- $lab := list }}
 {{- if .Values.lab.enabled }}
 {{- $lab = list "lab" }}
@@ -339,7 +343,7 @@ spec:
         - port: 5432
           protocol: TCP
       from:
-        {{- range $component := concat (list "control" "chat") $workers $migrations $lab }}
+        {{- range $component := concat (list "control" "chat") $workers $migrations $lab $studio }}
         - podSelector:
             matchLabels:
               {{- include "primer.selectorLabels" $ | nindent 14 }}
