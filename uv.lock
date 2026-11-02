@@ -2978,7 +2978,7 @@ wheels = [
 
 [[package]]
 name = "primer"
-version = "1.0.0"
+version = "1.0.1"
 source = { virtual = "." }
 
 [package.dev-dependencies]
@@ -3013,7 +3013,7 @@ docs = [
 
 [[package]]
 name = "primer-anomaly"
-version = "1.0.0"
+version = "1.0.1"
 source = { editable = "packages/anomaly" }
 dependencies = [
     { name = "numpy" },
@@ -3028,7 +3028,7 @@ requires-dist = [
 
 [[package]]
 name = "primer-chat"
-version = "1.0.0"
+version = "1.0.1"
 source = { editable = "services/chat" }
 dependencies = [
     { name = "alembic" },
@@ -3083,7 +3083,7 @@ tools = [{ name = "mcp-haystack" }]
 
 [[package]]
 name = "primer-contracts"
-version = "1.0.0"
+version = "1.0.1"
 source = { editable = "packages/contracts" }
 dependencies = [
     { name = "pydantic" },
@@ -3094,7 +3094,7 @@ requires-dist = [{ name = "pydantic" }]
 
 [[package]]
 name = "primer-control"
-version = "1.0.0"
+version = "1.0.1"
 source = { editable = "services/control-api" }
 dependencies = [
     { name = "alembic" },
@@ -3145,7 +3145,7 @@ server = [{ name = "uvicorn", extras = ["standard"] }]
 
 [[package]]
 name = "primer-ingestion"
-version = "1.0.0"
+version = "1.0.1"
 source = { editable = "services/ingestion" }
 dependencies = [
     { name = "celery" },
@@ -3196,7 +3196,7 @@ dev = [{ name = "python-pptx" }]
 
 [[package]]
 name = "primer-lab"
-version = "1.0.0"
+version = "1.0.1"
 source = { editable = "services/lab" }
 dependencies = [
     { name = "alembic" },
@@ -3259,7 +3259,7 @@ server = [{ name = "uvicorn", extras = ["standard"] }]
 
 [[package]]
 name = "primer-observability"
-version = "1.0.0"
+version = "1.0.1"
 source = { editable = "packages/observability" }
 dependencies = [
     { name = "opentelemetry-api" },
@@ -3278,7 +3278,7 @@ requires-dist = [
 
 [[package]]
 name = "primer-retrieval"
-version = "1.0.0"
+version = "1.0.1"
 source = { editable = "services/retrieval" }
 dependencies = [
     { name = "fastapi" },
@@ -3323,7 +3323,7 @@ server = [{ name = "uvicorn", extras = ["standard"] }]
 
 [[package]]
 name = "primer-service"
-version = "1.0.0"
+version = "1.0.1"
 source = { editable = "packages/service" }
 dependencies = [
     { name = "fastapi" },
@@ -3338,7 +3338,7 @@ requires-dist = [
 
 [[package]]
 name = "primer-storage"
-version = "1.0.0"
+version = "1.0.1"
 source = { editable = "packages/storage" }
 dependencies = [
     { name = "anyio" },
