@@ -19,10 +19,11 @@ disagree about which one is in force.
 from __future__ import annotations
 
 import uuid
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Request, Response, status
 from primer_contracts.errors import ErrorCode
+from primer_contracts.images import ImageCapabilities
 from primer_contracts.providers import (
     ProviderCheck,
     ProviderCreate,
@@ -83,6 +84,20 @@ def duplicate_name(name: str) -> ProblemError:
     )
 
 
+def serves_nothing() -> ProblemError:
+    """The same rule `ProviderCreate` holds, for a change made in parts."""
+    return ProblemError(
+        code=ErrorCode.VALIDATION_FAILED,
+        title="Provider would serve nothing",
+        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+        detail="A provider must serve chat, make images, or both. Keep one of them.",
+    )
+
+
+def declared(images: ImageCapabilities | None) -> dict[str, Any] | None:
+    return images.model_dump(mode="json") if images is not None else None
+
+
 def sealed_or_refused(box: SecretBox, api_key: str | None) -> str | None:
     """Encrypt a key, or explain why this deployment cannot hold one.
 
@@ -125,6 +140,8 @@ async def add_provider(
         enabled=payload.enabled,
         supports_logprobs=payload.supports_logprobs,
         supports_prompt_logprobs=payload.supports_prompt_logprobs,
+        serves_chat=payload.serves_chat,
+        images=declared(payload.images),
     )
     session.add(row)
     try:
@@ -162,6 +179,14 @@ async def update_provider(
         row.supports_logprobs = payload.supports_logprobs
     if payload.supports_prompt_logprobs is not None:
         row.supports_prompt_logprobs = payload.supports_prompt_logprobs
+    if payload.serves_chat is not None:
+        row.serves_chat = payload.serves_chat
+    if "images" in payload.model_fields_set:
+        # Null is a value here: it withdraws the declaration, where leaving
+        # the field out leaves it as it was.
+        row.images = declared(payload.images)
+    if not row.serves_chat and row.images is None:
+        raise serves_nothing()
     if payload.api_key is not None:
         # Three states, not two: an empty string removes the stored key,
         # which is the only way to unset one that has been set.

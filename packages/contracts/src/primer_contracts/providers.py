@@ -15,6 +15,10 @@ that has never opened the settings page still has exactly one provider and
 behaves as it always did, and the interface has one kind of thing to show
 rather than a special case beside a general one.
 
+A provider may also make images. That is declared on the provider rather
+than kept as a second list, because a hosted account usually serves both
+and one key should be entered once; see `primer_contracts.images`.
+
 No API key ever appears here. `api_key_set` is the only thing said about it,
 because a key that a page can display is a key that a screenshot, a cache, or
 a browser extension can carry away.
@@ -23,12 +27,13 @@ a browser extension can carry away.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Annotated, Literal
+from typing import Annotated, Literal, Self
 from uuid import UUID
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 
 from primer_contracts.base import WireModel
+from primer_contracts.images import ImageCapabilities
 
 ProviderName = Annotated[str, Field(min_length=1, max_length=80)]
 
@@ -59,6 +64,12 @@ class ProviderSummary(WireModel):
     #: honoured it, so asking once would prove nothing about the next model.
     supports_logprobs: bool = False
     supports_prompt_logprobs: bool = False
+    #: Whether its models are offered for questions. Off for an endpoint
+    #: that only makes images, whose `/models` would otherwise put an image
+    #: model in the chat picker.
+    serves_chat: bool = True
+    #: What it does with images, or null when it makes none.
+    images: ImageCapabilities | None = None
     #: Null for the deployment's own provider, which has no stored row.
     created_at: datetime | None = None
     updated_at: datetime | None = None
@@ -79,6 +90,14 @@ class ProviderCreate(WireModel):
     #: Scores supplied text: returns logprobs for the prompt it was sent,
     #: through `echo` on `/completions`. vLLM does; few others do.
     supports_prompt_logprobs: bool = False
+    serves_chat: bool = True
+    images: ImageCapabilities | None = None
+
+    @model_validator(mode="after")
+    def _serves_something(self) -> Self:
+        if not self.serves_chat and self.images is None:
+            raise ValueError("a provider must serve chat, make images, or both")
+        return self
 
     @field_validator("base_url")
     @classmethod
@@ -103,6 +122,10 @@ class ProviderUpdate(WireModel):
     plain optional string: absent leaves the stored key untouched, a string
     replaces it, and an empty string removes it. Without the third, a key
     could be set and never unset.
+
+    `images` has three as well, told apart by whether the field was sent:
+    absent leaves the declaration alone, null withdraws it, and a value
+    replaces it whole.
     """
 
     name: ProviderName | None = None
@@ -111,6 +134,8 @@ class ProviderUpdate(WireModel):
     enabled: bool | None = None
     supports_logprobs: bool | None = None
     supports_prompt_logprobs: bool | None = None
+    serves_chat: bool | None = None
+    images: ImageCapabilities | None = None
 
 
 class ProviderCheck(WireModel):

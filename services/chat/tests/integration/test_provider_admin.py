@@ -201,3 +201,66 @@ class TestLogprobDeclarations:
 
         assert stored["supports_logprobs"] is True
         assert stored["supports_prompt_logprobs"] is True
+
+
+IMAGES = {"models": ["flux"], "operations": ["generate"], "sizes": ["1024x1024"]}
+
+
+class TestImageDeclarations:
+    """A provider that makes images is a provider, declared on the same page."""
+
+    async def test_none_is_assumed(self, admin: GroupedUser) -> None:
+        created = (await add(admin)).json()
+
+        assert created["serves_chat"] is True
+        assert created["images"] is None
+
+    async def test_an_image_only_provider_keeps_its_declaration(self, admin: GroupedUser) -> None:
+        created = (await add(admin, serves_chat=False, images=IMAGES, api_key="sk-x")).json()
+        listed = (await admin.get("/api/v1/admin/providers")).json()
+        stored = next(entry for entry in listed if entry["id"] == created["id"])
+
+        assert stored["serves_chat"] is False
+        assert stored["images"]["models"] == ["flux"]
+        assert stored["images"]["max_images"] == 1
+        assert "sk-x" not in str(listed)
+
+    async def test_one_serving_nothing_is_refused(self, admin: GroupedUser) -> None:
+        assert (await add(admin, serves_chat=False)).status_code == 422
+
+    async def test_leaving_images_out_of_a_change_keeps_them(self, admin: GroupedUser) -> None:
+        created = (await add(admin, images=IMAGES)).json()
+
+        changed = await admin.patch(f"/api/v1/admin/providers/{created['id']}", {"name": "Renamed"})
+
+        assert changed.json()["images"]["models"] == ["flux"]
+
+    async def test_null_withdraws_them(self, admin: GroupedUser) -> None:
+        created = (await add(admin, images=IMAGES)).json()
+
+        changed = await admin.patch(f"/api/v1/admin/providers/{created['id']}", {"images": None})
+
+        assert changed.status_code == 200
+        assert changed.json()["images"] is None
+
+    async def test_a_change_that_would_leave_it_serving_nothing_is_refused(
+        self, admin: GroupedUser
+    ) -> None:
+        """Checked on the result, since each field alone looks fine."""
+        created = (await add(admin, serves_chat=False, images=IMAGES)).json()
+
+        changed = await admin.patch(f"/api/v1/admin/providers/{created['id']}", {"images": None})
+        listed = (await admin.get("/api/v1/admin/providers")).json()
+        stored = next(entry for entry in listed if entry["id"] == created["id"])
+
+        assert changed.status_code == 422
+        assert stored["images"] is not None
+
+    async def test_an_image_only_provider_offers_no_chat_models(self, admin: GroupedUser) -> None:
+        """Its `/models` would list image models as though they could answer."""
+        await add(admin, serves_chat=False, images=IMAGES)
+
+        listed = (await admin.get("/api/v1/models")).json()
+
+        assert listed["models"] == []
+        assert "Workstation" not in str(listed)

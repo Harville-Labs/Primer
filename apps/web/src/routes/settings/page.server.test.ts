@@ -66,3 +66,56 @@ describe('Declaring what a provider returns', () => {
 		});
 	});
 });
+
+describe('Declaring what a provider does with images', () => {
+	const declared = {
+		image_models: 'flux',
+		image_generate: 'true',
+		image_sizes: '1024x1024',
+	};
+
+	it('adds an image-only provider with its declaration', async () => {
+		const { sent, event } = post({
+			name: 'Omni',
+			base_url: 'http://gpu:8091/v1',
+			serves_chat: 'false',
+			...declared,
+		});
+
+		await actions.add(event as never);
+
+		expect(sent[0].body).toMatchObject({
+			serves_chat: false,
+			images: { models: ['flux'], operations: ['generate'], sizes: ['1024x1024'] },
+		});
+	});
+
+	it('refuses a provider that would serve nothing, before asking Chat', async () => {
+		const { sent, event } = post({ name: 'Omni', base_url: 'http://gpu/v1', serves_chat: 'false' });
+
+		const result = await actions.add(event as never);
+
+		expect(result).toMatchObject({ status: 400 });
+		expect(sent).toEqual([]);
+	});
+
+	it('changes only the declaration of an existing provider', async () => {
+		const { sent, event } = post({ id: 'p1', ...declared });
+
+		await actions.images(event as never);
+
+		expect(sent[0].method).toBe('PATCH');
+		expect(Object.keys(sent[0].body as object)).toEqual(['images']);
+	});
+
+	it('withdraws the declaration only when asked to', async () => {
+		// An emptied models field is a mistake far more often than a decision.
+		const emptied = post({ id: 'p1', image_models: '' });
+		expect(await actions.images(emptied.event as never)).toMatchObject({ status: 400 });
+		expect(emptied.sent).toEqual([]);
+
+		const withdrawn = post({ id: 'p1', withdraw: 'true' });
+		await actions.images(withdrawn.event as never);
+		expect(withdrawn.sent[0].body).toEqual({ images: null });
+	});
+});

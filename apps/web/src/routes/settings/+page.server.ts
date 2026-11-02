@@ -3,6 +3,7 @@ import { ApiError } from '#lib/api/client.ts';
 import type { DeploymentStatus, ProviderSummary } from '#lib/api/types.ts';
 import { apiFor } from '#lib/server/api.ts';
 import { chatFor } from '#lib/server/chat.ts';
+import { imageDeclaration } from '#lib/settings/images.ts';
 import type { Actions, PageServerLoad } from './$types';
 
 /**
@@ -50,6 +51,12 @@ export const actions: Actions = {
 		if (!name || !baseUrl) {
 			return fail(400, { error: 'A provider needs a name and a URL.' });
 		}
+		const declared = imageDeclaration(form);
+		if (!declared.ok) return fail(400, { error: declared.error });
+		const servesChat = form.get('serves_chat') !== 'false';
+		if (!servesChat && declared.images === null) {
+			return fail(400, { error: 'A provider that serves no chat needs image models.' });
+		}
 		try {
 			await chatFor(request, fetch).addProvider({
 				name,
@@ -60,6 +67,8 @@ export const actions: Actions = {
 				enabled: true,
 				supports_logprobs: form.get('supports_logprobs') === 'true',
 				supports_prompt_logprobs: form.get('supports_prompt_logprobs') === 'true',
+				serves_chat: servesChat,
+				images: declared.images,
 			});
 		} catch (cause) {
 			if (cause instanceof ApiError) return fail(cause.status, { error: cause.message });
@@ -92,6 +101,29 @@ export const actions: Actions = {
 		try {
 			await chatFor(request, fetch).updateProvider(String(form.get('id')), {
 				[flag]: form.get('value') === 'true',
+			});
+		} catch (cause) {
+			if (cause instanceof ApiError) return fail(cause.status, { error: cause.message });
+			throw cause;
+		}
+		return { updated: true };
+	},
+
+	images: async ({ request, fetch }) => {
+		const form = await request.formData();
+		// Withdrawing is its own button rather than an empty form, so clearing
+		// the models field by accident does not take a provider out of Studio.
+		const declared =
+			form.get('withdraw') === 'true'
+				? ({ ok: true, images: null } as const)
+				: imageDeclaration(form);
+		if (!declared.ok) return fail(400, { error: declared.error });
+		if (declared.images === null && form.get('withdraw') !== 'true') {
+			return fail(400, { error: 'Name at least one image model, or withdraw the declaration.' });
+		}
+		try {
+			await chatFor(request, fetch).updateProvider(String(form.get('id')), {
+				images: declared.images,
 			});
 		} catch (cause) {
 			if (cause instanceof ApiError) return fail(cause.status, { error: cause.message });

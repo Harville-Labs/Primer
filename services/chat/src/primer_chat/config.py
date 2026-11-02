@@ -7,7 +7,10 @@ be released independently.
 
 from __future__ import annotations
 
-from pydantic import Field, SecretStr
+from typing import Self
+
+from primer_contracts.images import ImageCapabilities
+from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from primer_chat.budget import CHARACTERS_PER_TOKEN
@@ -56,6 +59,22 @@ class Settings(BaseSettings):
         default=False,
         description="The endpoint scores supplied text, through echo on /completions (vLLM)",
     )
+
+    #: Where this deployment makes images, when it does. Unset means the
+    #: chat endpoint makes them too; a different URL becomes a provider of
+    #: its own that serves no chat. Either way nothing is made unless
+    #: `images_capabilities` declares what the endpoint can do.
+    images_base_url: str | None = Field(default=None)
+    #: Only for an image endpoint of its own. One shared with chat uses the
+    #: chat key, because it is the same account.
+    images_api_key: SecretStr | None = Field(default=None)
+    #: Set as JSON, for example
+    #: PRIMER_IMAGES_CAPABILITIES='{"models": ["gpt-image-1"],
+    #: "operations": ["generate", "edit"], "sizes": ["1024x1024"]}'
+    images_capabilities: ImageCapabilities | None = Field(default=None)
+    #: Longer than a chat answer's: a batch of large images on a busy GPU
+    #: can take minutes, and nothing streams back in the meantime.
+    images_timeout_seconds: float = Field(default=300.0, gt=0)
 
     retrieval_limit: int = Field(
         default=8,
@@ -121,6 +140,25 @@ class Settings(BaseSettings):
         gt=0,
         description="Idle keepalive, so a proxy does not close a slow stream",
     )
+
+    @model_validator(mode="after")
+    def _images_are_declared_somewhere(self) -> Self:
+        # Refused at startup rather than at the first request: a URL with
+        # nothing declared offers nothing, and an operator who set it meant
+        # something to be offered.
+        if self.images_base_url and self.images_capabilities is None:
+            raise ValueError(
+                "PRIMER_IMAGES_BASE_URL is set but PRIMER_IMAGES_CAPABILITIES is not. "
+                "Declare the models, operations and sizes the endpoint serves, as JSON."
+            )
+        if self.images_capabilities is not None and not (
+            self.images_base_url or self.chat_base_url
+        ):
+            raise ValueError(
+                "PRIMER_IMAGES_CAPABILITIES is set but there is no endpoint to make images "
+                "with. Set PRIMER_IMAGES_BASE_URL, or PRIMER_CHAT_BASE_URL if one server does both."
+            )
+        return self
 
     def context_tokens(self, model: str | None) -> int:
         """The window to fit a prompt into, for whichever model will answer."""

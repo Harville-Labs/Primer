@@ -113,6 +113,10 @@ object.
 | `PRIMER_CHAT_TIMEOUT_SECONDS` | `120` | Per request to the model |
 | `PRIMER_CHAT_SUPPORTS_LOGPROBS` | `false` | Declares that the endpoint returns logprobs for what it writes |
 | `PRIMER_CHAT_SUPPORTS_PROMPT_LOGPROBS` | `false` | Declares that it scores supplied text, through `echo` on `/completions` |
+| `PRIMER_IMAGES_BASE_URL` | unset | An image endpoint of its own, listed as a provider that serves no chat. Unset means the chat endpoint makes images too |
+| `PRIMER_IMAGES_API_KEY` | unset | Only for an endpoint of its own; a shared one uses the chat key |
+| `PRIMER_IMAGES_CAPABILITIES` | unset | JSON declaring `models`, `operations`, `sizes`, `max_images` and `ask_for_base64`. Nothing is made without it |
+| `PRIMER_IMAGES_TIMEOUT_SECONDS` | `300` | Per image request |
 | `PRIMER_CONTROL_URL` | `http://control-api:8000` | Cluster-internal |
 | `PRIMER_RETRIEVAL_URL` | `http://retrieval:8000` | Cluster-internal |
 | `PRIMER_RETRIEVAL_LIMIT` | `8` | Passages per question; bounds prompt size |

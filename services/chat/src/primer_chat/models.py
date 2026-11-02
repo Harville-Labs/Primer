@@ -121,6 +121,9 @@ class Provider(Base):
     supports_prompt_logprobs: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default="false"
     )
+    serves_chat: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
+    #: An `ImageCapabilities`, or null for a provider that makes no images.
+    images: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

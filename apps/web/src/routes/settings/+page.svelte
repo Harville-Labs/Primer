@@ -3,6 +3,8 @@
 	import { Check, Plus, TriangleAlert, Trash2, X } from '@lucide/svelte';
 	import { Alert, Badge, Button, Checkbox, Input } from '@sivir-ui/svelte';
 	import type { ActionData, PageData } from './$types';
+	import ImageFields from './ImageFields.svelte';
+	import ProviderImages from './ProviderImages.svelte';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
 
@@ -22,6 +24,7 @@
 	] as const;
 
 	let declaring = $state({ supports_logprobs: false, supports_prompt_logprobs: false });
+	let servesChat = $state(true);
 </script>
 
 <div class="mx-auto w-full max-w-4xl">
@@ -148,6 +151,9 @@
 								{#if !provider.enabled}
 									<Badge variant="warning">Disabled</Badge>
 								{/if}
+								{#if !provider.serves_chat}
+									<Badge variant="outline">Images only</Badge>
+								{/if}
 							</span>
 							<span class="mt-0.5 block truncate font-mono text-xs text-muted-foreground">
 								{provider.base_url}
@@ -204,6 +210,8 @@
 								{/if}
 							{/each}
 						</span>
+
+						<ProviderImages {provider} />
 
 						{#if provider.source !== 'deployment'}
 							<span class="flex items-center gap-1">
@@ -291,6 +299,17 @@
 							>echo</span
 						> on /completions, which vLLM supports.
 					</span>
+				</div>
+				<div class="mt-3 border-t border-border pt-3">
+					<div class="mb-2 flex flex-wrap items-center gap-4 text-xs">
+						<Checkbox bind:checked={servesChat} label="Serves chat" />
+						<input type="hidden" name="serves_chat" value={String(servesChat)} />
+						<span class="text-muted-foreground">
+							Name image models below if it also makes images for Studio. Clear this for a
+							server that only makes images.
+						</span>
+					</div>
+					<ImageFields />
 				</div>
 				{#if !canStoreKeys}
 					<p class="mt-2 flex items-center gap-1.5 text-xs text-warning">
