@@ -38,6 +38,27 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end -}}
 
 {{/*
+Lab's image: the CPU build, the CUDA build with `-cuda`, or the CUDA build
+with the graph builder installed beside Lab with `-graphs`. One place,
+because Lab and its migrations must run the same image. Graphs are refused
+without a GPU: a build is held under Lab's response time (ADR 0009), which
+a CPU does not finish a graph inside.
+*/}}
+{{- define "primer.labImage" -}}
+{{- $lab := .Values.lab -}}
+{{- $suffix := "" -}}
+{{- if $lab.graphs.enabled -}}
+{{- if not (gt (int $lab.gpu) 0) -}}
+{{- fail "lab.graphs.enabled needs lab.gpu above zero. A graph is built inside Lab's four-minute response limit, which a CPU cannot meet; give Lab a GPU or turn graphs off." -}}
+{{- end -}}
+{{- $suffix = "-graphs" -}}
+{{- else if gt (int $lab.gpu) 0 -}}
+{{- $suffix = "-cuda" -}}
+{{- end -}}
+{{- printf "%s%s" (include "primer.image" (dict "root" . "component" "lab")) $suffix -}}
+{{- end -}}
+
+{{/*
 Settings every service shares. Secrets are referenced, never inlined: a value
 in the manifest is a value in `kubectl get deployment -o yaml`, and anyone
 with read access to the namespace has it.

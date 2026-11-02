@@ -2,11 +2,13 @@ import { ApiError, asProblem } from './client';
 import type {
 	ActivationRequest,
 	ActivationVector,
+	AttributionGraph,
 	Experiment,
 	ExperimentCreate,
 	ExperimentRename,
 	ExperimentSummary,
 	GenerateRequest,
+	GraphRequest,
 	InspectRequest,
 	InspectResponse,
 	LabScanned,
@@ -100,6 +102,11 @@ export class LabApi {
 
 	inspect(payload: InspectRequest): Promise<InspectResponse> {
 		return this.post('/api/v1/lab/inspect', payload);
+	}
+
+	/** An attribution graph for a prompt. Minutes on a CPU, and the model is held throughout. */
+	graph(payload: GraphRequest): Promise<AttributionGraph> {
+		return this.post('/api/v1/lab/graph', payload);
 	}
 
 	activation(payload: ActivationRequest): Promise<ActivationVector> {

@@ -10,10 +10,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from test_chart import containers, env_of, named, of_kind, render
+from test_chart import containers, env_of, named, of_kind, refusal, render
 from test_chart_qdrant import admitted
 
 ENABLED = ("lab.enabled=true",)
+GRAPHS = ("lab.gpu=1", "lab.graphs.enabled=true")
 
 
 def lab(rendered: list[dict[str, Any]]) -> dict[str, Any]:
@@ -89,6 +90,15 @@ def test_lab_migrates_its_own_schema_in_its_own_image() -> None:
     assert job["metadata"]["annotations"]["helm.sh/hook"] == "pre-install,pre-upgrade"
 
 
+def test_lab_and_its_migrations_share_the_graphs_image() -> None:
+    """The suffix is decided once; a job on the plain CUDA image is a second Lab image to pull."""
+    rendered = render(*ENABLED, *GRAPHS)
+    (job,) = containers(named(rendered, "Job", "-migrate-lab"))
+
+    assert job["image"].endswith("-graphs")
+    assert job["image"] == containers(lab(rendered))[0]["image"]
+
+
 def test_how_long_experiments_are_kept_reaches_lab() -> None:
     assert env_of(lab(render(*ENABLED)))["PRIMER_LAB_EXPERIMENT_RETENTION_DAYS"] == "90"
     changed = lab(render(*ENABLED, "lab.experimentRetentionDays=14"))
@@ -156,3 +166,25 @@ def test_control_and_web_are_told_where_lab_is_only_when_it_is_on() -> None:
         f"http://{service}:8000"
     )
     assert env_of(named(on, "Deployment", "-web"))["PRIMER_LAB_URL"] == f"http://{service}:8000"
+
+
+def test_graphs_are_off_and_lab_is_told_of_no_transcoders() -> None:
+    """Without the graphs image there is no builder, so a 60 GB fetch would buy nothing."""
+    env = env_of(lab(render(*ENABLED, "lab.gpu=1")))
+
+    assert not {"PRIMER_LAB_TRANSCODERS", "PRIMER_LAB_MAX_TRANSCODER_BYTES"} & set(env)
+
+
+def test_graphs_switch_to_their_image_and_pass_the_transcoders() -> None:
+    container = containers(lab(render(*ENABLED, *GRAPHS)))[0]
+    env = env_of(lab(render(*ENABLED, *GRAPHS)))
+
+    assert container["image"].endswith("-graphs")
+    assert container["resources"]["limits"]["nvidia.com/gpu"] == 1
+    assert env["PRIMER_LAB_TRANSCODERS"] == '{"Qwen/Qwen3-4B":"mwhanna/qwen3-4b-transcoders"}'
+    assert env["PRIMER_LAB_MAX_TRANSCODER_BYTES"] == "70000000000"
+
+
+def test_graphs_without_a_gpu_are_refused() -> None:
+    """A CPU build outlasts the response limit, so the chart refuses it at install."""
+    assert "lab.graphs.enabled needs lab.gpu" in refusal(*ENABLED, "lab.graphs.enabled=true")

@@ -15,6 +15,9 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 QWEN_SCOPE_SAES = "Qwen/SAE-Res-Qwen3-1.7B-Base-W32K-L0_50"
 QWEN_SCOPE_MODELS = ("Qwen/Qwen3-1.7B", "Qwen/Qwen3-1.7B-Base")
+#: The transcoders circuit-tracer publishes for Qwen3-4B: one per layer,
+#: 36 files and about 60 GB in all.
+QWEN3_4B_TRANSCODERS = "mwhanna/qwen3-4b-transcoders"
 
 
 class Settings(BaseSettings):
@@ -56,6 +59,32 @@ class Settings(BaseSettings):
     lab_feature_labels: dict[Annotated[str, Field(pattern=REPOSITORY_PATTERN)], Path] = Field(
         default_factory=dict
     )
+    #: Transcoders for attribution graphs, by the model's repository. Fetched
+    #: once the model has loaded, and only where graphs can be built at all
+    #: (`lab_graph_python`). A transcoder repository is also held to
+    #: `lab_repository_patterns`, like a model. Set as JSON.
+    lab_transcoders: dict[
+        Annotated[str, Field(pattern=REPOSITORY_PATTERN)],
+        Annotated[str, Field(pattern=REPOSITORY_PATTERN)],
+    ] = Field(default_factory=lambda: {"Qwen/Qwen3-4B": QWEN3_4B_TRANSCODERS})
+    #: Separate from the model limit, because a set of transcoders is
+    #: several times the size of the model it explains.
+    lab_max_transcoder_bytes: int = Field(default=70_000_000_000, ge=1)
+    #: The interpreter of the graph builder's own environment. Unset, Lab
+    #: builds no attribution graphs and fetches no transcoders. See ADR 0009.
+    lab_graph_python: Path | None = None
+    #: Bounds on one graph. A graph's cost grows with the prompt and the
+    #: features kept, far faster than a forward pass's does.
+    lab_graph_max_prompt_tokens: int = Field(default=64, ge=1, le=512)
+    lab_graph_max_feature_nodes: int = Field(default=2048, ge=1, le=16384)
+    #: The most edges a graph returns, strongest first, so a response stays
+    #: something a browser can draw.
+    lab_graph_max_edges: int = Field(default=2000, ge=1, le=20000)
+    #: Held under five minutes, with the queue's grace, because that is how
+    #: long the web server's fetch waits for Lab's response to begin. A
+    #: longer limit would let Lab finish a graph nobody is waiting for. In
+    #: practice that means graphs are built on a GPU.
+    lab_graph_timeout_seconds: float = Field(default=240.0, gt=0, le=240)
     #: A mirror, for a deployment that cannot reach the public hub.
     lab_hub_endpoint: str | None = None
     lab_weights_dir: Path = Field(

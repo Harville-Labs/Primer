@@ -231,6 +231,37 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA lab TO primer_lab;
 Run this after the first migration has created the schema. The migration
 itself still needs the role that owns it.
 
+## Attribution graphs
+
+The Graph view in Neurons traces a prediction back to the prompt: which
+transcoder features moved the predicted token, which features moved those,
+and which words of the prompt it all started from. Pick a node to see what
+moved it and what it moved.
+
+Graphs need three things beyond Lab itself, and are off unless an operator
+provides them:
+
+- **A GPU.** A build replaces each layer's MLP with a transcoder and solves
+  for every feature's effect, which takes seconds on a GPU and longer on a
+  CPU than Lab gives one (`PRIMER_LAB_GRAPH_TIMEOUT_SECONDS`, at most 240).
+- **The `-graphs` image**, which has the graph builder installed beside Lab
+  in an environment of its own
+  ([ADR 0009](../adr/0009-lab-attribution-graphs-in-their-own-environment.md)).
+  The other images have no builder and offer no graphs.
+- **Transcoders for the model.** The default maps `Qwen/Qwen3-4B` to
+  `mwhanna/qwen3-4b-transcoders`, about 60GB, fetched into the weights
+  volume once the model loads. The view says while they download. Size the
+  volume for them beside the models: 100Gi for Qwen3-4B.
+
+A build loads a second copy of the model while it runs, so the GPU needs
+room for two: about 16GB for Qwen3-4B, plus the transcoders it has open.
+A build holds the run queue like any other run, so other runs wait for it.
+
+The prompt is read as plain text, without the chat template, and is at most
+`PRIMER_LAB_GRAPH_MAX_PROMPT_TOKENS` tokens, 64 by default. A prompt holding
+a special token such as `<|im_start|>` is refused: the graph would credit
+that token with most of what happened.
+
 ## Docker Compose
 
 Turn on the `lab` profile, and tell Control where Lab is so the web app
@@ -246,6 +277,13 @@ override, which builds the CUDA image and gives Lab the GPU:
 
 ```bash
 COMPOSE_PROFILES=lab PRIMER_LAB_SERVICE_URL=http://lab:8000 docker compose -f compose.yaml -f deploy/compose/compose.gpu.yaml up --wait
+```
+
+For [attribution graphs](#attribution-graphs), add the graphs override after
+the GPU one. It builds the `graphs` target, which holds the graph builder:
+
+```bash
+COMPOSE_PROFILES=lab PRIMER_LAB_SERVICE_URL=http://lab:8000 docker compose -f compose.yaml -f deploy/compose/compose.gpu.yaml -f deploy/compose/compose.graphs.yaml up --wait
 ```
 
 The weights live in the `lab-models` volume. `env.example` lists the
@@ -274,6 +312,25 @@ lab:
       operator: Exists
       effect: NoSchedule
 ```
+
+For [attribution graphs](#attribution-graphs), on the same GPU node, with
+room in the volume for the transcoders:
+
+```yaml
+lab:
+  enabled: true
+  model:
+    source: hub
+    repository: Qwen/Qwen3-4B
+  gpu: 1
+  persistence:
+    size: 100Gi
+  graphs:
+    enabled: true
+```
+
+That uses the `-graphs` image. The chart refuses `graphs.enabled` without
+`gpu`.
 
 The pod is replaced rather than rolled on an upgrade, so Lab is unavailable
 while the new one loads its model. Two pods would each need the volume and a

@@ -708,6 +708,23 @@
             "pattern": "^[^/]"
           }
         },
+        "graphs": {
+          "description": "Attribution graphs, built by the -graphs image on a GPU.",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "transcoders": {
+              "type": ["object", "null"],
+              "propertyNames": { "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,95}/[A-Za-z0-9][A-Za-z0-9._-]{0,95}$" },
+              "additionalProperties": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,95}/[A-Za-z0-9][A-Za-z0-9._-]{0,95}$"
+              }
+            },
+            "maxTranscoderBytes": { "type": "integer", "minimum": 1 }
+          }
+        },
         "hubEndpoint": {
           "type": "string",
           "pattern": "^$|^https?://"

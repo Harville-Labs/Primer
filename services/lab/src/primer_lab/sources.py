@@ -206,16 +206,16 @@ def hub_errors(repository: str, revision: str | None) -> Generator[None]:
         ) from error
 
 
-def check_size(settings: Settings, repository: str, listing: Listing, wanted: list[str]) -> None:
-    """Refuse a fetch the hub cannot size, or that is over the operator's limit."""
+def check_size(repository: str, listing: Listing, wanted: list[str], *, limit: int) -> None:
+    """Refuse a fetch the hub cannot size, or that is over the operator's `limit` in bytes."""
     sizes = [listing.files.get(name) for name in wanted]
     if any(size is None for size in sizes):
         raise ModelUnavailable(f"The hub did not report the size of every file in {repository}.")
     total = sum(size for size in sizes if size is not None)
-    if total > settings.lab_max_model_bytes:
+    if total > limit:
         raise ModelUnavailable(
             f"{repository} is {total / 1e9:.1f} GB, over this deployment's limit of "
-            f"{settings.lab_max_model_bytes / 1e9:.1f} GB."
+            f"{limit / 1e9:.1f} GB."
         )
 
 
@@ -228,4 +228,4 @@ def _check_listing(
             f"{repository} publishes no safetensors weights. Lab loads nothing else, because "
             "other checkpoint formats can run code when they are opened."
         )
-    check_size(settings, repository, listing, wanted)
+    check_size(repository, listing, wanted, limit=settings.lab_max_model_bytes)

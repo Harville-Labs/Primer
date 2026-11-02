@@ -26,7 +26,7 @@ rather than two.
 {{- $api := include "primer.image" (dict "root" . "component" "api") }}
 {{- $schemas := dict "control" (dict "directory" "control-api" "image" $api) "chat" (dict "directory" "chat" "image" $api) }}
 {{- if .Values.lab.enabled }}
-{{- $labImage := printf "%s%s" (include "primer.image" (dict "root" . "component" "lab")) (ternary "-cuda" "" (gt (int .Values.lab.gpu) 0)) }}
+{{- $labImage := include "primer.labImage" . }}
 {{- $_ := set $schemas "lab" (dict "directory" "lab" "image" $labImage) }}
 {{- end }}
 {{- range $service, $schema := $schemas }}
