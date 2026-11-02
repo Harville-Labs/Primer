@@ -6,7 +6,9 @@ import pytest
 from primer_storage import (
     DOCX_MEDIA_TYPE,
     FORMAT_NAMES,
+    IMAGE_EXTENSIONS,
     PDF_MEDIA_TYPE,
+    PNG_MEDIA_TYPE,
     PPTX_MEDIA_TYPE,
     SUPPORTED_EXTENSIONS,
     UnsupportedContent,
@@ -51,6 +53,29 @@ def test_mismatched_and_unknown_formats_are_rejected(
     with pytest.raises(UnsupportedContent) as raised:
         detect_media_type(prefix, filename)
     assert raised.value.code == code
+
+
+PNG_PREFIX = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR"
+
+
+def test_an_ordinary_upload_refuses_a_png() -> None:
+    """A library takes a picture only from Studio, which says so."""
+    with pytest.raises(UnsupportedContent) as raised:
+        detect_media_type(PNG_PREFIX, "photo.png")
+    assert raised.value.code == "unsupported_extension"
+
+
+def test_studio_may_store_a_png_and_only_a_real_one() -> None:
+    assert detect_media_type(PNG_PREFIX, "heron.png", IMAGE_EXTENSIONS) == PNG_MEDIA_TYPE
+    with pytest.raises(UnsupportedContent) as raised:
+        detect_media_type(b"%PDF-1.7", "disguised.png", IMAGE_EXTENSIONS)
+    assert raised.value.code == "content_mismatch"
+
+
+def test_a_png_named_as_text_is_not_text() -> None:
+    with pytest.raises(UnsupportedContent) as raised:
+        detect_media_type(PNG_PREFIX, "disguised.txt")
+    assert raised.value.code == "content_mismatch"
 
 
 def test_a_prefix_cut_mid_character_is_still_text() -> None:
