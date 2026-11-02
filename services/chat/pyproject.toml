@@ -19,6 +19,9 @@ dependencies = [
     "psycopg[binary]",
     "pydantic-settings",
     "sqlalchemy[asyncio]",
+    # ComfyUI reports progress and completion only over a WebSocket, and
+    # there is no maintained official client to take this from.
+    "websockets",
 ]
 
 [dependency-groups]

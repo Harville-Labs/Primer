@@ -210,6 +210,148 @@
         "title": "Citation",
         "type": "object"
       },
+      "ComfyBindings": {
+        "additionalProperties": false,
+        "description": "Where in a template each value a user chooses goes.\n\nAnything not bound keeps the value the template was exported with. A\ntemplate with no seed binding makes the same image every time, which an\noperator may want; one with no size binding makes the size it makes,\nso declare only that size for it.",
+        "properties": {
+          "height": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NodeInput"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "image": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NodeInput"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "mask": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NodeInput"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "negative_prompt": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NodeInput"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "output": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Output",
+            "type": "string"
+          },
+          "prompt": {
+            "$ref": "#/components/schemas/NodeInput"
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NodeInput"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "steps": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NodeInput"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "width": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NodeInput"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "prompt",
+          "output"
+        ],
+        "title": "ComfyBindings",
+        "type": "object"
+      },
+      "ComfyTemplate": {
+        "additionalProperties": false,
+        "description": "An operator's ComfyUI workflow, and what a user may change in it.\n\nUsers never submit workflows. ComfyUI custom nodes are arbitrary Python,\nso an arbitrary workflow is arbitrary code on the operator's GPU host;\nwhat a user sends fills the bound inputs of one of these and nothing\nelse.",
+        "properties": {
+          "bindings": {
+            "$ref": "#/components/schemas/ComfyBindings"
+          },
+          "name": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "operations": {
+            "items": {
+              "enum": [
+                "generate",
+                "edit",
+                "inpaint"
+              ],
+              "type": "string"
+            },
+            "maxItems": 3,
+            "minItems": 1,
+            "title": "Operations",
+            "type": "array"
+          },
+          "workflow": {
+            "additionalProperties": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "maxProperties": 500,
+            "minProperties": 1,
+            "propertyNames": {
+              "maxLength": 64,
+              "minLength": 1
+            },
+            "title": "Workflow",
+            "type": "object"
+          }
+        },
+        "required": [
+          "name",
+          "operations",
+          "workflow",
+          "bindings"
+        ],
+        "title": "ComfyTemplate",
+        "type": "object"
+      },
       "ConversationSummary": {
         "additionalProperties": false,
         "description": "A conversation, which belongs to one person and at most one library.\n\nA conversation with no library is ungrounded for its whole length: the\nlibrary is fixed when it starts, so citations in one turn and none in the\nnext cannot happen within a single thread.",
@@ -338,8 +480,11 @@
         "description": "What a provider has been declared to do with images.",
         "properties": {
           "api": {
-            "const": "openai",
             "default": "openai",
+            "enum": [
+              "openai",
+              "comfyui"
+            ],
             "title": "Api",
             "type": "string"
           },
@@ -388,6 +533,15 @@
             "maxItems": 20,
             "minItems": 1,
             "title": "Sizes",
+            "type": "array"
+          },
+          "templates": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ComfyTemplate"
+            },
+            "maxItems": 20,
+            "title": "Templates",
             "type": "array"
           }
         },
@@ -566,6 +720,19 @@
             "format": "uuid",
             "title": "Provider Id",
             "type": "string"
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "maximum": 4294967295.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seed"
           }
         },
         "required": [
@@ -689,6 +856,30 @@
           "created_at"
         ],
         "title": "MessageSummary",
+        "type": "object"
+      },
+      "NodeInput": {
+        "additionalProperties": false,
+        "description": "One input of one node in a workflow, which Primer fills.",
+        "properties": {
+          "input": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Input",
+            "type": "string"
+          },
+          "node": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Node",
+            "type": "string"
+          }
+        },
+        "required": [
+          "node",
+          "input"
+        ],
+        "title": "NodeInput",
         "type": "object"
       },
       "Passage": {
@@ -2014,6 +2205,41 @@
           }
         },
         "summary": "Providers that make images, and what each declares",
+        "tags": [
+          "images"
+        ]
+      }
+    },
+    "/api/v1/images/stream": {
+      "post": {
+        "description": "The same as `POST /images`, as server-sent events.\n\nAnything wrong with the request itself is an ordinary error response,\nchecked before the stream opens; only what happens at the backend\narrives as a `failed` event, since by then the status line is sent.",
+        "operationId": "stream_images_api_v1_images_stream_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImageRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Generate or edit images, reporting progress",
         "tags": [
           "images"
         ]

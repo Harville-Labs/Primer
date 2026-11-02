@@ -177,6 +177,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/images/stream": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Generate or edit images, reporting progress
+         * @description The same as `POST /images`, as server-sent events.
+         *
+         *     Anything wrong with the request itself is an ordinary error response,
+         *     checked before the stream opens; only what happens at the backend
+         *     arrives as a `failed` event, since by then the status line is sent.
+         */
+        post: operations["stream_images_api_v1_images_stream_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/libraries/{library_id}/passages": {
         parameters: {
             query?: never;
@@ -441,6 +465,49 @@ export interface components {
             locator?: components["schemas"]["SourceLocator"] | null;
         };
         /**
+         * ComfyBindings
+         * @description Where in a template each value a user chooses goes.
+         *
+         *     Anything not bound keeps the value the template was exported with. A
+         *     template with no seed binding makes the same image every time, which an
+         *     operator may want; one with no size binding makes the size it makes,
+         *     so declare only that size for it.
+         */
+        ComfyBindings: {
+            height?: components["schemas"]["NodeInput"] | null;
+            image?: components["schemas"]["NodeInput"] | null;
+            mask?: components["schemas"]["NodeInput"] | null;
+            negative_prompt?: components["schemas"]["NodeInput"] | null;
+            /** Output */
+            output: string;
+            prompt: components["schemas"]["NodeInput"];
+            seed?: components["schemas"]["NodeInput"] | null;
+            steps?: components["schemas"]["NodeInput"] | null;
+            width?: components["schemas"]["NodeInput"] | null;
+        };
+        /**
+         * ComfyTemplate
+         * @description An operator's ComfyUI workflow, and what a user may change in it.
+         *
+         *     Users never submit workflows. ComfyUI custom nodes are arbitrary Python,
+         *     so an arbitrary workflow is arbitrary code on the operator's GPU host;
+         *     what a user sends fills the bound inputs of one of these and nothing
+         *     else.
+         */
+        ComfyTemplate: {
+            bindings: components["schemas"]["ComfyBindings"];
+            /** Name */
+            name: string;
+            /** Operations */
+            operations: ("generate" | "edit" | "inpaint")[];
+            /** Workflow */
+            workflow: {
+                [key: string]: {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        /**
          * ConversationSummary
          * @description A conversation, which belongs to one person and at most one library.
          *
@@ -508,9 +575,9 @@ export interface components {
             /**
              * Api
              * @default openai
-             * @constant
+             * @enum {string}
              */
-            api: "openai";
+            api: "openai" | "comfyui";
             /**
              * Ask For Base64
              * @default false
@@ -527,6 +594,11 @@ export interface components {
             operations: ("generate" | "edit" | "inpaint")[];
             /** Sizes */
             sizes: string[];
+            /**
+             * Templates
+             * @default []
+             */
+            templates: components["schemas"]["ComfyTemplate"][];
         };
         /**
          * ImageProvider
@@ -599,6 +671,8 @@ export interface components {
              * Format: uuid
              */
             provider_id: string;
+            /** Seed */
+            seed?: number | null;
         };
         /**
          * MessageRole
@@ -662,6 +736,16 @@ export interface components {
             reasoning?: string | null;
             role: components["schemas"]["MessageRole"];
             state: components["schemas"]["MessageState"];
+        };
+        /**
+         * NodeInput
+         * @description One input of one node in a workflow, which Primer fills.
+         */
+        NodeInput: {
+            /** Input */
+            input: string;
+            /** Node */
+            node: string;
         };
         /**
          * Passage
@@ -1412,6 +1496,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ImageProvider"][];
+                };
+            };
+        };
+    };
+    stream_images_api_v1_images_stream_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImageRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

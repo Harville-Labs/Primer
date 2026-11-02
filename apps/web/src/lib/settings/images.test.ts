@@ -37,6 +37,7 @@ describe('Reading an image declaration from a form', () => {
 				sizes: ['1024x1024', '512x512'],
 				max_images: 4,
 				ask_for_base64: true,
+				templates: [],
 			},
 		});
 	});
