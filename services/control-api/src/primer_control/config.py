@@ -97,6 +97,14 @@ class Settings(BaseSettings):
         ge=1,
         description="Delete Studio images older than this; unset keeps them until deleted",
     )
+    #: Control never calls the vision model; ingestion does. This says one
+    #: is configured there, so a Studio image is offered to libraries only
+    #: where something will read it. Deployments set it from the same
+    #: values that configure the parse worker's model.
+    vision_enabled: bool = Field(
+        default=False,
+        description="Ingestion has a vision model to caption images added to libraries",
+    )
     studio_timeout_seconds: float = Field(
         default=900.0,
         gt=0,

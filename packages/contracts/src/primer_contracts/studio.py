@@ -29,6 +29,14 @@ StudioOrigin = Literal["upload", "generated"]
 #: Everything Control stores is re-encoded to this, whatever came in.
 STUDIO_MEDIA_TYPE = "image/png"
 
+#: The PNG text keywords a Studio image added to a library carries its
+#: recipe under. Control writes them and ingestion reads them, so the image
+#: is its own record of how it was made: the document needs nothing beside
+#: its bytes to be indexed, and a download keeps the recipe. Both are
+#: keywords the PNG specification registers, so other tools show them too.
+PNG_PROMPT_KEYWORD = "Description"
+PNG_MODEL_KEYWORD = "Source"
+
 
 class StudioProvenance(WireModel):
     """How a generated image was made, kept so it can be made again.
@@ -97,6 +105,12 @@ class StudioGeneration(WireModel):
         if self.mask is not None and len(self.mask) > MAX_INPUT_BYTES:
             raise ValueError(f"the mask is larger than {MAX_INPUT_BYTES} bytes")
         return self
+
+
+class StudioToLibrary(WireModel):
+    """Which library a Studio image is to become a document in."""
+
+    library_id: UUID
 
 
 class StudioProgress(ImageStreamEvent):

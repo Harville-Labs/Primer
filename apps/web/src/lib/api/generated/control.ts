@@ -449,6 +449,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/studio/images/{image_id}/library": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add a copy of a Studio image to a library
+         * @description Make the image a document, indexed by what a vision model says it shows.
+         *
+         *     A copy, not a reference: a library belongs to whoever may manage it,
+         *     and a Studio image to one person, who may delete it tomorrow. The copy
+         *     carries its prompt and model in the file, so the document still says
+         *     how it was made once the original is gone.
+         */
+        post: operations["add_to_library_api_v1_studio_images__image_id__library_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health/live": {
         parameters: {
             query?: never;
@@ -533,6 +558,11 @@ export interface components {
              * @default false
              */
             studio_available: boolean;
+            /**
+             * Studio Library Available
+             * @default false
+             */
+            studio_library_available: boolean;
             /**
              * Supported Extensions
              * @default []
@@ -844,6 +874,17 @@ export interface components {
             size: string;
             /** Steps */
             steps?: number | null;
+        };
+        /**
+         * StudioToLibrary
+         * @description Which library a Studio image is to become a document in.
+         */
+        StudioToLibrary: {
+            /**
+             * Library Id
+             * Format: uuid
+             */
+            library_id: string;
         };
         /**
          * StudioUsage
@@ -1680,6 +1721,41 @@ export interface operations {
                 };
                 content: {
                     "image/png": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_to_library_api_v1_studio_images__image_id__library_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                image_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StudioToLibrary"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentSummary"];
                 };
             };
             /** @description Validation Error */
