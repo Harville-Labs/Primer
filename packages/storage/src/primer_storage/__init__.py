@@ -20,6 +20,7 @@ from primer_storage.source_store import (
     accepted_formats,
     detect_media_type,
 )
+from primer_storage.studio_store import StudioStore
 
 __all__ = [
     "DOCX_MEDIA_TYPE",
@@ -32,6 +33,7 @@ __all__ = [
     "SourceStore",
     "SourceStoreError",
     "StoredSource",
+    "StudioStore",
     "UnsupportedContent",
     "accepted_formats",
     "detect_media_type",
