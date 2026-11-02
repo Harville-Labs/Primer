@@ -333,6 +333,249 @@
         "title": "HTTPValidationError",
         "type": "object"
       },
+      "ImageCapabilities": {
+        "additionalProperties": false,
+        "description": "What a provider has been declared to do with images.",
+        "properties": {
+          "api": {
+            "const": "openai",
+            "default": "openai",
+            "title": "Api",
+            "type": "string"
+          },
+          "ask_for_base64": {
+            "default": false,
+            "title": "Ask For Base64",
+            "type": "boolean"
+          },
+          "max_images": {
+            "default": 1,
+            "maximum": 10.0,
+            "minimum": 1.0,
+            "title": "Max Images",
+            "type": "integer"
+          },
+          "models": {
+            "items": {
+              "maxLength": 200,
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 20,
+            "minItems": 1,
+            "title": "Models",
+            "type": "array"
+          },
+          "operations": {
+            "items": {
+              "enum": [
+                "generate",
+                "edit",
+                "inpaint"
+              ],
+              "type": "string"
+            },
+            "maxItems": 3,
+            "minItems": 1,
+            "title": "Operations",
+            "type": "array"
+          },
+          "sizes": {
+            "items": {
+              "pattern": "^[1-9][0-9]{1,4}x[1-9][0-9]{1,4}$",
+              "type": "string"
+            },
+            "maxItems": 20,
+            "minItems": 1,
+            "title": "Sizes",
+            "type": "array"
+          }
+        },
+        "required": [
+          "models",
+          "operations",
+          "sizes"
+        ],
+        "title": "ImageCapabilities",
+        "type": "object"
+      },
+      "ImageProvider": {
+        "additionalProperties": false,
+        "description": "A provider that makes images, as any signed-in user may see it.\n\nNo URL and nothing about keys: that is for the settings page. What a\nuser needs is what to pick and what each choice allows.",
+        "properties": {
+          "capabilities": {
+            "$ref": "#/components/schemas/ImageCapabilities"
+          },
+          "provider_id": {
+            "format": "uuid",
+            "title": "Provider Id",
+            "type": "string"
+          },
+          "provider_name": {
+            "title": "Provider Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "provider_id",
+          "provider_name",
+          "capabilities"
+        ],
+        "title": "ImageProvider",
+        "type": "object"
+      },
+      "ImageRequest": {
+        "additionalProperties": false,
+        "description": "One generation or edit, as Control asks Chat for it.",
+        "properties": {
+          "count": {
+            "default": 1,
+            "maximum": 10.0,
+            "minimum": 1.0,
+            "title": "Count",
+            "type": "integer"
+          },
+          "image": {
+            "anyOf": [
+              {
+                "contentMediaType": "application/octet-stream",
+                "format": "base64",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image"
+          },
+          "mask": {
+            "anyOf": [
+              {
+                "contentMediaType": "application/octet-stream",
+                "format": "base64",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mask"
+          },
+          "model": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Model",
+            "type": "string"
+          },
+          "negative_prompt": {
+            "anyOf": [
+              {
+                "maxLength": 4000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Negative Prompt"
+          },
+          "operation": {
+            "enum": [
+              "generate",
+              "edit",
+              "inpaint"
+            ],
+            "title": "Operation",
+            "type": "string"
+          },
+          "prompt": {
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Prompt",
+            "type": "string"
+          },
+          "provider_id": {
+            "format": "uuid",
+            "title": "Provider Id",
+            "type": "string"
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "maximum": 4294967295.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seed"
+          },
+          "size": {
+            "pattern": "^[1-9][0-9]{1,4}x[1-9][0-9]{1,4}$",
+            "title": "Size",
+            "type": "string"
+          },
+          "steps": {
+            "anyOf": [
+              {
+                "maximum": 200.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Steps"
+          }
+        },
+        "required": [
+          "provider_id",
+          "model",
+          "operation",
+          "prompt",
+          "size"
+        ],
+        "title": "ImageRequest",
+        "type": "object"
+      },
+      "ImageResult": {
+        "additionalProperties": false,
+        "description": "The images a backend returned, as it returned them.\n\nNot yet trusted. Control decodes and re-encodes each before storing it,\nbecause the backend is the operator's choice but still outside Primer.",
+        "properties": {
+          "images": {
+            "items": {
+              "contentMediaType": "application/octet-stream",
+              "format": "base64",
+              "type": "string"
+            },
+            "maxItems": 10,
+            "minItems": 1,
+            "title": "Images",
+            "type": "array"
+          },
+          "model": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Model",
+            "type": "string"
+          },
+          "provider_id": {
+            "format": "uuid",
+            "title": "Provider Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "provider_id",
+          "model",
+          "images"
+        ],
+        "title": "ImageResult",
+        "type": "object"
+      },
       "MessageRole": {
         "enum": [
           "user",
@@ -571,11 +814,26 @@
             "title": "Enabled",
             "type": "boolean"
           },
+          "images": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ImageCapabilities"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "name": {
             "maxLength": 80,
             "minLength": 1,
             "title": "Name",
             "type": "string"
+          },
+          "serves_chat": {
+            "default": true,
+            "title": "Serves Chat",
+            "type": "boolean"
           },
           "supports_logprobs": {
             "default": false,
@@ -630,11 +888,26 @@
             "title": "Id",
             "type": "string"
           },
+          "images": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ImageCapabilities"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "name": {
             "maxLength": 80,
             "minLength": 1,
             "title": "Name",
             "type": "string"
+          },
+          "serves_chat": {
+            "default": true,
+            "title": "Serves Chat",
+            "type": "boolean"
           },
           "source": {
             "default": "configured",
@@ -678,7 +951,7 @@
       },
       "ProviderUpdate": {
         "additionalProperties": false,
-        "description": "A change to a provider. Absent fields are left alone.\n\n`api_key` has three states rather than two, which is why it is not a\nplain optional string: absent leaves the stored key untouched, a string\nreplaces it, and an empty string removes it. Without the third, a key\ncould be set and never unset.",
+        "description": "A change to a provider. Absent fields are left alone.\n\n`api_key` has three states rather than two, which is why it is not a\nplain optional string: absent leaves the stored key untouched, a string\nreplaces it, and an empty string removes it. Without the third, a key\ncould be set and never unset.\n\n`images` has three as well, told apart by whether the field was sent:\nabsent leaves the declaration alone, null withdraws it, and a value\nreplaces it whole.",
         "properties": {
           "api_key": {
             "anyOf": [
@@ -715,6 +988,16 @@
             ],
             "title": "Enabled"
           },
+          "images": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ImageCapabilities"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "name": {
             "anyOf": [
               {
@@ -727,6 +1010,17 @@
               }
             ],
             "title": "Name"
+          },
+          "serves_chat": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Serves Chat"
           },
           "supports_logprobs": {
             "anyOf": [
@@ -1656,6 +1950,72 @@
         "summary": "Continue a conversation",
         "tags": [
           "chat"
+        ]
+      }
+    },
+    "/api/v1/images": {
+      "post": {
+        "operationId": "make_images_api_v1_images_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImageRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Generate or edit images",
+        "tags": [
+          "images"
+        ]
+      }
+    },
+    "/api/v1/images/providers": {
+      "get": {
+        "operationId": "list_image_providers_api_v1_images_providers_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ImageProvider"
+                  },
+                  "title": "Response List Image Providers Api V1 Images Providers Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Providers that make images, and what each declares",
+        "tags": [
+          "images"
         ]
       }
     },

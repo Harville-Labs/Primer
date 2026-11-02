@@ -153,7 +153,7 @@ async def list_models(request: Request, session: Session) -> ChatModelList:
     """
     settings: Settings = request.app.state.settings
     store = ProviderStore(session, settings, request.app.state.secret_box)
-    return await catalog(await store.enabled(), preferred_model=settings.chat_model)
+    return await catalog(await store.chat(), preferred_model=settings.chat_model)
 
 
 async def route_for(
@@ -185,8 +185,8 @@ async def route_for(
     store = ProviderStore(session, settings, request.app.state.secret_box)
 
     if provider_id is not None:
-        provider = await store.find(provider_id)
-        if provider is None or not provider.enabled:
+        provider = await store.chat_provider(provider_id)
+        if provider is None:
             raise ProblemError(
                 code=ErrorCode.NOT_FOUND,
                 title="Provider not found",
@@ -206,7 +206,7 @@ async def route_for(
         # No provider either: that endpoint is configuration, not a row.
         return model, None, None
 
-    listed = await catalog(await store.enabled(), preferred_model=None)
+    listed = await catalog(await store.chat(), preferred_model=None)
     default = next((entry for entry in listed.models if entry.default), None)
     if default is None:
         raise ProblemError(

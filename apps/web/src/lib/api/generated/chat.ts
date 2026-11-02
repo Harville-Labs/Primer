@@ -143,6 +143,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/images": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Generate or edit images */
+        post: operations["make_images_api_v1_images_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/images/providers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Providers that make images, and what each declares */
+        get: operations["list_image_providers_api_v1_images_providers_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/libraries/{library_id}/passages": {
         parameters: {
             query?: never;
@@ -467,6 +501,106 @@ export interface components {
             detail?: components["schemas"]["ValidationError"][];
         };
         /**
+         * ImageCapabilities
+         * @description What a provider has been declared to do with images.
+         */
+        ImageCapabilities: {
+            /**
+             * Api
+             * @default openai
+             * @constant
+             */
+            api: "openai";
+            /**
+             * Ask For Base64
+             * @default false
+             */
+            ask_for_base64: boolean;
+            /**
+             * Max Images
+             * @default 1
+             */
+            max_images: number;
+            /** Models */
+            models: string[];
+            /** Operations */
+            operations: ("generate" | "edit" | "inpaint")[];
+            /** Sizes */
+            sizes: string[];
+        };
+        /**
+         * ImageProvider
+         * @description A provider that makes images, as any signed-in user may see it.
+         *
+         *     No URL and nothing about keys: that is for the settings page. What a
+         *     user needs is what to pick and what each choice allows.
+         */
+        ImageProvider: {
+            capabilities: components["schemas"]["ImageCapabilities"];
+            /**
+             * Provider Id
+             * Format: uuid
+             */
+            provider_id: string;
+            /** Provider Name */
+            provider_name: string;
+        };
+        /**
+         * ImageRequest
+         * @description One generation or edit, as Control asks Chat for it.
+         */
+        ImageRequest: {
+            /**
+             * Count
+             * @default 1
+             */
+            count: number;
+            /** Image */
+            image?: string | null;
+            /** Mask */
+            mask?: string | null;
+            /** Model */
+            model: string;
+            /** Negative Prompt */
+            negative_prompt?: string | null;
+            /**
+             * Operation
+             * @enum {string}
+             */
+            operation: "generate" | "edit" | "inpaint";
+            /** Prompt */
+            prompt: string;
+            /**
+             * Provider Id
+             * Format: uuid
+             */
+            provider_id: string;
+            /** Seed */
+            seed?: number | null;
+            /** Size */
+            size: string;
+            /** Steps */
+            steps?: number | null;
+        };
+        /**
+         * ImageResult
+         * @description The images a backend returned, as it returned them.
+         *
+         *     Not yet trusted. Control decodes and re-encodes each before storing it,
+         *     because the backend is the operator's choice but still outside Primer.
+         */
+        ImageResult: {
+            /** Images */
+            images: string[];
+            /** Model */
+            model: string;
+            /**
+             * Provider Id
+             * Format: uuid
+             */
+            provider_id: string;
+        };
+        /**
          * MessageRole
          * @enum {string}
          */
@@ -597,8 +731,14 @@ export interface components {
              * @default true
              */
             enabled: boolean;
+            images?: components["schemas"]["ImageCapabilities"] | null;
             /** Name */
             name: string;
+            /**
+             * Serves Chat
+             * @default true
+             */
+            serves_chat: boolean;
             /**
              * Supports Logprobs
              * @default false
@@ -634,8 +774,14 @@ export interface components {
              * Format: uuid
              */
             id: string;
+            images?: components["schemas"]["ImageCapabilities"] | null;
             /** Name */
             name: string;
+            /**
+             * Serves Chat
+             * @default true
+             */
+            serves_chat: boolean;
             /**
              * Source
              * @default configured
@@ -663,6 +809,10 @@ export interface components {
          *     plain optional string: absent leaves the stored key untouched, a string
          *     replaces it, and an empty string removes it. Without the third, a key
          *     could be set and never unset.
+         *
+         *     `images` has three as well, told apart by whether the field was sent:
+         *     absent leaves the declaration alone, null withdraws it, and a value
+         *     replaces it whole.
          */
         ProviderUpdate: {
             /** Api Key */
@@ -671,8 +821,11 @@ export interface components {
             base_url?: string | null;
             /** Enabled */
             enabled?: boolean | null;
+            images?: components["schemas"]["ImageCapabilities"] | null;
             /** Name */
             name?: string | null;
+            /** Serves Chat */
+            serves_chat?: boolean | null;
             /** Supports Logprobs */
             supports_logprobs?: boolean | null;
             /** Supports Prompt Logprobs */
@@ -1206,6 +1359,59 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    make_images_api_v1_images_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImageRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImageResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_image_providers_api_v1_images_providers_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImageProvider"][];
                 };
             };
         };

@@ -76,8 +76,8 @@ async def score(
     del principal
     settings: Settings = request.app.state.settings
     store = ProviderStore(session, settings, request.app.state.secret_box)
-    provider = await store.find(payload.provider_id)
-    if provider is None or not provider.enabled:
+    provider = await store.chat_provider(payload.provider_id)
+    if provider is None:
         raise ProblemError(
             code=ErrorCode.NOT_FOUND,
             title="Provider not found",
