@@ -14,9 +14,11 @@ from __future__ import annotations
 
 import logging
 import time
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any, Protocol
 
+from haystack.tools import Tool
 from primer_contracts.chat import ToolPhase
 
 from primer_chat.tool_config import ToolConfiguration
@@ -38,6 +40,12 @@ class ToolInvoker(Protocol):
     """What the runner needs from Haystack's MCP toolset."""
 
     def invoke(self, tool_name: str, arguments: dict[str, Any]) -> str: ...
+
+
+class ToolSource(ToolInvoker, Protocol):
+    """The configured servers: what they offer, and a way to call it."""
+
+    def tools(self) -> Sequence[Tool]: ...
 
 
 @dataclass(frozen=True)
@@ -122,7 +130,7 @@ def truncate(output: str) -> str:
     return output[:MAX_OUTPUT_CHARS] + "\n… (output truncated)"
 
 
-def build_invoker(configuration: ToolConfiguration) -> ToolInvoker | None:
+def build_invoker(configuration: ToolConfiguration) -> ToolSource | None:
     """Connect to the configured MCP servers, if any are configured.
 
     Imported lazily: a deployment with tools switched off should not pay for

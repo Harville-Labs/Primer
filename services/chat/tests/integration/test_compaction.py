@@ -11,15 +11,17 @@ conversation with a shorter memory, not a question that goes unanswered.
 from __future__ import annotations
 
 import uuid
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Sequence
 from typing import Any
 
 import pytest
 import pytest_asyncio
 from chat_support import ChatUser, FakeGenerator, deployment
+from haystack.dataclasses import ToolCall
+from haystack.tools import Tool
 from httpx2 import AsyncClient
 from primer_chat.config import Settings
-from primer_chat.generation import Endpoint
+from primer_chat.generation import Endpoint, ToolExchange
 from primer_chat.rag import SUMMARY_SYSTEM_PROMPT, HistoryTurn
 from primer_chat.reasoning import Channel, Fragment
 from primer_chat.repository import ChatRepository
@@ -65,7 +67,9 @@ class Summarizer(FakeGenerator):
         history: tuple[HistoryTurn, ...] = (),
         model: str | None = None,
         endpoint: Endpoint | None = None,
-    ) -> AsyncIterator[Fragment]:
+        tools: Sequence[Tool] = (),
+        exchanges: tuple[ToolExchange, ...] = (),
+    ) -> AsyncIterator[Fragment | ToolCall]:
         if system_prompt == SUMMARY_SYSTEM_PROMPT:
             self.summaries.append(user_prompt)
             if self.fail_summary:
@@ -73,7 +77,13 @@ class Summarizer(FakeGenerator):
             yield Fragment(Channel.ANSWER, self.summary)
             return
         async for fragment in super().stream(
-            system_prompt, user_prompt, history=history, model=model, endpoint=endpoint
+            system_prompt,
+            user_prompt,
+            history=history,
+            model=model,
+            endpoint=endpoint,
+            tools=tools,
+            exchanges=exchanges,
         ):
             yield fragment
 

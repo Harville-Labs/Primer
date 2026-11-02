@@ -20,6 +20,8 @@ from primer_chat.routes_scoring import router as scoring_router
 from primer_chat.routes_tools import router as tool_router
 from primer_chat.secrets import SecretBox
 from primer_chat.streaming import Responder
+from primer_chat.tool_runner import build_invoker
+from primer_chat.tool_turn import ToolDesk
 
 
 def create_app(
@@ -28,6 +30,7 @@ def create_app(
     control: LibraryAuthority | None = None,
     retrieval: PassageSource | None = None,
     generator: ChatGenerator | None = None,
+    tools: ToolDesk | None = None,
 ) -> FastAPI:
     """Build the Chat service.
 
@@ -61,6 +64,7 @@ def create_app(
         app.state.control,
         app.state.retrieval,
         generator or HaystackChatGenerator(settings),
+        tools or ToolDesk(settings.tools, build_invoker(settings.tools)),
     )
 
     @app.exception_handler(ProblemError)

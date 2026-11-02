@@ -28,7 +28,7 @@ from primer_chat.budget import truncate_to_tokens
 from primer_chat.config import Settings
 from primer_chat.generation import ChatGenerator
 from primer_chat.rag import SUMMARY_SYSTEM_PROMPT, HistoryTurn, build_summary_prompt
-from primer_chat.reasoning import Channel
+from primer_chat.reasoning import Channel, Fragment
 
 logger = logging.getLogger(__name__)
 
@@ -68,7 +68,9 @@ class Compactor:
                     async for fragment in self._generator.stream(
                         SUMMARY_SYSTEM_PROMPT, prompt, model=model
                     )
-                    if fragment.channel is Channel.ANSWER
+                    # No tools are offered here, so no call can come back;
+                    # the check is what the generator's type promises.
+                    if isinstance(fragment, Fragment) and fragment.channel is Channel.ANSWER
                 ]
             ).strip()
         except Exception:

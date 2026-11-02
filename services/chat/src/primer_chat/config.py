@@ -14,6 +14,7 @@ from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from primer_chat.budget import CHARACTERS_PER_TOKEN
+from primer_chat.tool_config import ToolConfiguration
 
 
 class Settings(BaseSettings):
@@ -72,6 +73,11 @@ class Settings(BaseSettings):
     #: Only for an image endpoint of its own. One shared with chat uses the
     #: chat key, because it is the same account.
     images_api_key: SecretStr | None = Field(default=None)
+    #: The MCP servers whose tools a model may ask to call, and who may
+    #: approve them. Set as JSON, for example PRIMER_TOOLS='{"enabled": true,
+    #: "servers": [{"name": "search", "url": "http://search-mcp:8080/mcp",
+    #: "allowed_tools": ["searxng_web_search"]}]}'. Off unless set.
+    tools: ToolConfiguration = Field(default_factory=ToolConfiguration)
     #: Set as JSON, for example
     #: PRIMER_IMAGES_CAPABILITIES='{"models": ["gpt-image-1"],
     #: "operations": ["generate", "edit"], "sizes": ["1024x1024"]}'

@@ -141,6 +141,7 @@ object.
 | `PRIMER_CHAT_CHARACTERS_PER_TOKEN` | `4.0` | How the prompt's size is estimated |
 | `PRIMER_CHAT_COMPACT_HISTORY` | `true` | Summarize turns instead of dropping them |
 | `PRIMER_CHAT_SUMMARY_TOKENS` | `512` | Room reserved for that summary |
+| `PRIMER_TOOLS` | off | JSON naming the MCP servers a model may call, and which of their tools. See [Tools](tools.md) |
 | `PRIMER_SERVICE_TOKEN` | unset | Must match the services' tokens |
 
 ### Offering more than one model

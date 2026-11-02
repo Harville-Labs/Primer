@@ -8,7 +8,7 @@ without one, and so swapping Haystack's client later touches one class.
 from __future__ import annotations
 
 import inspect
-from collections.abc import AsyncIterator, Iterator
+from collections.abc import AsyncIterator, Iterator, Sequence
 from dataclasses import dataclass
 from typing import Any, Protocol
 
@@ -16,7 +16,8 @@ import anyio
 import anyio.from_thread
 import anyio.to_thread
 from haystack.components.generators.chat import OpenAIChatGenerator
-from haystack.dataclasses import ChatMessage
+from haystack.dataclasses import ChatMessage, ToolCall
+from haystack.tools import Tool
 from haystack.utils import Secret
 from primer_contracts.chat import MessageRole
 
@@ -164,8 +165,30 @@ class Endpoint:
     api_key: str | None = None
 
 
+@dataclass(frozen=True)
+class ToolExchange:
+    """A call the model made this turn, and what came back from it.
+
+    Replayed after the question on the next request, so the model reads the
+    result as the answer to its own call rather than as something the user
+    said. `failed` marks a result that is an explanation of why nothing ran -
+    a refusal, an expiry, a tool that broke - so the model is not invited to
+    quote it as though it were what the tool found.
+    """
+
+    call: ToolCall
+    result: str
+    failed: bool = False
+
+
 class ChatGenerator(Protocol):
-    """Yields fragments as the model produces them, thinking and answer apart."""
+    """Yields fragments as the model produces them, thinking and answer apart.
+
+    When it is offered tools, it may also yield the calls the model made.
+    They come last, after every fragment of the reply that made them: an
+    OpenAI-compatible endpoint only says a call is complete when the reply
+    is.
+    """
 
     def stream(
         self,
@@ -175,7 +198,9 @@ class ChatGenerator(Protocol):
         history: tuple[HistoryTurn, ...] = (),
         model: str | None = None,
         endpoint: Endpoint | None = None,
-    ) -> AsyncIterator[Fragment]: ...
+        tools: Sequence[Tool] = (),
+        exchanges: tuple[ToolExchange, ...] = (),
+    ) -> AsyncIterator[Fragment | ToolCall]: ...
 
 
 class HaystackChatGenerator:
@@ -246,7 +271,9 @@ class HaystackChatGenerator:
         history: tuple[HistoryTurn, ...] = (),
         model: str | None = None,
         endpoint: Endpoint | None = None,
-    ) -> AsyncIterator[Fragment]:
+        tools: Sequence[Tool] = (),
+        exchanges: tuple[ToolExchange, ...] = (),
+    ) -> AsyncIterator[Fragment | ToolCall]:
         """Bridge Haystack's synchronous callback into an async iterator.
 
         Haystack streams by invoking a callback on a worker thread. The
@@ -260,7 +287,9 @@ class HaystackChatGenerator:
         apart. Both are handled, because which of the two a deployment gets
         is a property of how its endpoint was launched, not of Primer.
         """
-        send, receive = anyio.create_memory_object_stream[Fragment | None](max_buffer_size=64)
+        send, receive = anyio.create_memory_object_stream[Fragment | ToolCall | None](
+            max_buffer_size=64
+        )
         splitter = ReasoningSplitter()
 
         def on_chunk(chunk: object) -> None:
@@ -275,10 +304,18 @@ class HaystackChatGenerator:
                 anyio.from_thread.run(send.send, fragment)
 
         async def produce() -> None:
+            calls: list[ToolCall] = []
             try:
-                await anyio.to_thread.run_sync(
+                calls = await anyio.to_thread.run_sync(
                     lambda: self._run(
-                        system_prompt, user_prompt, history, on_chunk, model, endpoint
+                        system_prompt,
+                        user_prompt,
+                        history,
+                        on_chunk,
+                        model,
+                        endpoint,
+                        tools=tools,
+                        exchanges=exchanges,
                     )
                 )
             finally:
@@ -286,6 +323,8 @@ class HaystackChatGenerator:
                 # arrived belongs to the reader, not to the parser.
                 for fragment in splitter.finish():
                     await send.send(fragment)
+                for call in calls:
+                    await send.send(call)
                 await send.send(None)
 
         async with anyio.create_task_group() as group:
@@ -304,15 +343,25 @@ class HaystackChatGenerator:
         on_chunk: object,
         model: str | None,
         endpoint: Endpoint | None = None,
-    ) -> None:
-        self._for(model, endpoint).run(
+        *,
+        tools: Sequence[Tool] = (),
+        exchanges: tuple[ToolExchange, ...] = (),
+    ) -> list[ToolCall]:
+        result = self._for(model, endpoint).run(
             messages=[
                 ChatMessage.from_system(system_prompt),
                 *_replay(history),
                 ChatMessage.from_user(user_prompt),
+                *_exchanged(exchanges),
             ],
             streaming_callback=on_chunk,  # ty: ignore[invalid-argument-type]
+            # None rather than an empty list: some servers reject a request
+            # that carries `tools: []`, and a turn with nothing offered
+            # should look exactly like one from before tools existed.
+            tools=list(tools) or None,
         )
+        replies: list[ChatMessage] = result.get("replies", [])
+        return [call for reply in replies for call in reply.tool_calls]
 
 
 def _replay(history: tuple[HistoryTurn, ...]) -> list[ChatMessage]:
@@ -329,6 +378,23 @@ def _replay(history: tuple[HistoryTurn, ...]) -> list[ChatMessage]:
         else ChatMessage.from_assistant(turn.content)
         for turn in history
     ]
+
+
+def _exchanged(exchanges: tuple[ToolExchange, ...]) -> list[ChatMessage]:
+    """This turn's tool calls and their results, in the order they happened.
+
+    One assistant message per call, each followed by its result. A reply
+    that made two calls at once is replayed as two, which every
+    OpenAI-compatible server accepts and which keeps a call and its result
+    adjacent however many there were.
+    """
+    messages: list[ChatMessage] = []
+    for exchange in exchanges:
+        messages.append(ChatMessage.from_assistant(tool_calls=[exchange.call]))
+        messages.append(
+            ChatMessage.from_tool(exchange.result, origin=exchange.call, error=exchange.failed)
+        )
+    return messages
 
 
 class StaticGenerator:
@@ -356,6 +422,8 @@ class StaticGenerator:
         history: tuple[HistoryTurn, ...] = (),
         model: str | None = None,
         endpoint: Endpoint | None = None,
-    ) -> AsyncIterator[Fragment]:
+        tools: Sequence[Tool] = (),
+        exchanges: tuple[ToolExchange, ...] = (),
+    ) -> AsyncIterator[Fragment | ToolCall]:
         for fragment in self._fragments:
             yield fragment

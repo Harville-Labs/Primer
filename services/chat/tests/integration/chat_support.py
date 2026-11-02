@@ -10,14 +10,16 @@ from __future__ import annotations
 
 import json
 import uuid
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Sequence
 from typing import Any
 from uuid import UUID
 
+from haystack.dataclasses import ToolCall
+from haystack.tools import Tool
 from httpx2 import AsyncClient, Response
 from primer_chat.clients import LibraryForbidden
 from primer_chat.config import Settings
-from primer_chat.generation import Endpoint
+from primer_chat.generation import Endpoint, ToolExchange
 from primer_chat.rag import HistoryTurn
 from primer_chat.reasoning import Channel, Fragment
 from primer_contracts.identity import Principal
@@ -129,7 +131,12 @@ class FakeGenerator:
 
     model = "fake-model"
 
-    def __init__(self, fragments: list[str | Fragment] | None = None, fail: bool = False) -> None:
+    def __init__(
+        self,
+        fragments: list[str | Fragment] | None = None,
+        fail: bool = False,
+        calls: list[ToolCall] | None = None,
+    ) -> None:
         #: Plain strings are answer text, which is what almost every test
         #: wants. A test about a reasoning model passes `Fragment`s and says
         #: which channel each belongs to.
@@ -148,6 +155,13 @@ class FakeGenerator:
         #: Which model each call asked for, so a test can prove the choice
         #: reached the provider rather than stopping at the request.
         self.models: list[str | None] = []
+        #: Tool calls the model asks for on its first round, as a model
+        #: that wants to look something up before answering would.
+        self.calls = calls or []
+        #: The names offered and the exchanges fed back, call by call, so a
+        #: test can prove what the model saw of a tool and its result.
+        self.offered: list[tuple[str, ...]] = []
+        self.exchanges: list[tuple[ToolExchange, ...]] = []
 
     @property
     def answer(self) -> str:
@@ -169,10 +183,18 @@ class FakeGenerator:
         history: tuple[HistoryTurn, ...] = (),
         model: str | None = None,
         endpoint: Endpoint | None = None,
-    ) -> AsyncIterator[Fragment]:
+        tools: Sequence[Tool] = (),
+        exchanges: tuple[ToolExchange, ...] = (),
+    ) -> AsyncIterator[Fragment | ToolCall]:
         self.prompts.append((system_prompt, user_prompt))
         self.histories.append(tuple((turn.role.value, turn.content) for turn in history))
         self.models.append(model)
+        self.offered.append(tuple(tool.name for tool in tools))
+        self.exchanges.append(exchanges)
+        if self.calls and tools and not exchanges:
+            for call in self.calls:
+                yield call
+            return
         for index, fragment in enumerate(self.fragments):
             if self.fail and index == 1:
                 raise RuntimeError("the endpoint went away")
