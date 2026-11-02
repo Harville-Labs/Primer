@@ -34,6 +34,7 @@ export type DependencyStatus = ControlSchemas['DependencyStatus'];
 export type StudioImage = ControlSchemas['StudioImage'];
 export type StudioProvenance = ControlSchemas['StudioProvenance'];
 export type StudioGeneration = ControlSchemas['StudioGeneration'];
+export type StudioToLibrary = ControlSchemas['StudioToLibrary'];
 
 export type SourceLocator = ChatSchemas['SourceLocator'];
 export type Citation = ChatSchemas['Citation'];

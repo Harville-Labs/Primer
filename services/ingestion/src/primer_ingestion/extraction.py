@@ -13,14 +13,11 @@ the only shape that ever reaches Retrieval.
 
 from __future__ import annotations
 
-import logging
-from collections.abc import Callable, Generator, Sequence
+from collections.abc import Callable, Sequence
 from concurrent.futures import ThreadPoolExecutor
-from contextlib import contextmanager
 from typing import Any, Protocol
 from uuid import UUID
 
-import openai
 from haystack.components.generators.chat import OpenAIChatGenerator
 from haystack.dataclasses import ChatMessage
 from haystack.utils import Secret
@@ -29,9 +26,10 @@ from primer_contracts.graph import ChunkGraph, GraphEntity, GraphRelation, entit
 from pydantic import BaseModel, ValidationError
 
 from primer_ingestion.config import Settings
-from primer_ingestion.errors import PermanentStageError, StageError
+from primer_ingestion.errors import StageError
+from primer_ingestion.model_calls import model_failures
 
-logger = logging.getLogger(__name__)
+SETTINGS = "PRIMER_GRAPH_EXTRACTION"
 
 #: The passage arrives as the user turn and is described here as data, so
 #: that an uploaded document saying "ignore your instructions" is a sentence
@@ -144,36 +142,6 @@ class GraphExtractor(Protocol):
     def extract(self, chunks: Sequence[DocumentChunk]) -> list[ChunkGraph]: ...
 
 
-@contextmanager
-def extraction_model() -> Generator[None]:
-    """Report the extraction model's failures as the extraction model's.
-
-    A refusal on the request's merits - a wrong model name, a bad key - is
-    refused identically on every retry, so it is permanent. Everything else
-    is retried: what the client raises for a refused connection, a timeout
-    or an overloaded server is not a set worth enumerating, and the retry
-    budget bounds the cost of being wrong.
-    """
-    try:
-        yield
-    except openai.APIStatusError as error:
-        if error.status_code >= 500 or error.status_code in (408, 409, 429):
-            raise StageError(
-                "graph_extraction_unavailable",
-                f"The graph extraction model answered {error.status_code}.",
-            ) from error
-        raise PermanentStageError(
-            "graph_extraction_rejected",
-            f"The graph extraction model refused the request ({error.status_code}). "
-            "Check PRIMER_GRAPH_EXTRACTION_MODEL and PRIMER_GRAPH_EXTRACTION_API_KEY.",
-        ) from error
-    except Exception as error:
-        logger.warning("the graph extraction model could not be reached", exc_info=True)
-        raise StageError(
-            "graph_extraction_unavailable", "The graph extraction model could not be reached."
-        ) from error
-
-
 class ModelGraphExtractor:
     def __init__(
         self, run: Callable[[list[ChatMessage]], dict[str, Any]], concurrency: int
@@ -193,7 +161,7 @@ class ModelGraphExtractor:
             ChatMessage.from_system(SYSTEM_PROMPT),
             ChatMessage.from_user(chunk.embedding_text),
         ]
-        with extraction_model():
+        with model_failures("graph_extraction", "graph extraction model", SETTINGS):
             replies = self._run(messages)["replies"]
         text = replies[0].text if replies else None
         try:

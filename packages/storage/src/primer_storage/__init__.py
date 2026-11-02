@@ -9,7 +9,9 @@ from primer_storage.artifact_store import ArtifactStore
 from primer_storage.source_store import (
     DOCX_MEDIA_TYPE,
     FORMAT_NAMES,
+    IMAGE_EXTENSIONS,
     PDF_MEDIA_TYPE,
+    PNG_MEDIA_TYPE,
     PPTX_MEDIA_TYPE,
     SUPPORTED_EXTENSIONS,
     QuotaExceeded,
@@ -25,7 +27,9 @@ from primer_storage.studio_store import StudioStore
 __all__ = [
     "DOCX_MEDIA_TYPE",
     "FORMAT_NAMES",
+    "IMAGE_EXTENSIONS",
     "PDF_MEDIA_TYPE",
+    "PNG_MEDIA_TYPE",
     "PPTX_MEDIA_TYPE",
     "SUPPORTED_EXTENSIONS",
     "ArtifactStore",

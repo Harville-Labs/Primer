@@ -19,7 +19,9 @@ from dataclasses import dataclass
 
 from fastapi import status
 from PIL import Image, UnidentifiedImageError
+from PIL.PngImagePlugin import PngInfo
 from primer_contracts.errors import ErrorCode
+from primer_contracts.studio import PNG_MODEL_KEYWORD, PNG_PROMPT_KEYWORD
 from primer_service.errors import ProblemError
 
 #: What a person may upload. A provider's output is held to the same list:
@@ -82,3 +84,25 @@ def _has_alpha(image: Image.Image) -> bool:
     return image.mode in {"RGBA", "LA", "PA"} or (
         image.mode == "P" and "transparency" in image.info
     )
+
+
+def with_provenance(data: bytes, *, prompt: str | None, model: str | None) -> bytes:
+    """The stored PNG again, carrying the prompt and model that made it.
+
+    A copy leaving Studio for a library takes its recipe with it, because
+    the library keeps no link back: the Studio image can be deleted and the
+    document must still say what it is. Written as text chunks rather than
+    a second record so ingestion reads it from the bytes it was given.
+
+    Only Primer's own words go in. The bytes were written by `normalized`,
+    so there is nothing else in the file to carry over.
+    """
+    info = PngInfo()
+    if prompt:
+        info.add_itxt(PNG_PROMPT_KEYWORD, prompt)
+    if model:
+        info.add_itxt(PNG_MODEL_KEYWORD, model)
+    with Image.open(io.BytesIO(data)) as image:
+        out = io.BytesIO()
+        image.save(out, format="PNG", pnginfo=info)
+    return out.getvalue()

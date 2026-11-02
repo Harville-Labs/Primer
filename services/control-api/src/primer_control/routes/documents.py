@@ -27,7 +27,7 @@ from primer_contracts.ingestion import StageName
 from primer_service.db import get_session
 from primer_service.durable import DurableRoute
 from primer_service.errors import ProblemError
-from primer_storage import QuotaExceeded, SourceStore, SourceStoreError
+from primer_storage import QuotaExceeded, SourceStore, SourceStoreError, StoredSource
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from primer_control.identity import CurrentPrincipal
@@ -183,7 +183,20 @@ async def store_version(
         stored = await store.put(upload.chunks(), filename=filename)
     except SourceStoreError as error:
         raise as_problem(error) from error
+    return await record_version(
+        session, stored, filename=filename, library_id=library_id, document=document
+    )
 
+
+async def record_version(
+    session: AsyncSession,
+    stored: StoredSource,
+    *,
+    filename: str,
+    library_id: UUID,
+    document: Document | None = None,
+) -> DocumentRecord:
+    """The rows for bytes already stored: the document, its version, its job."""
     repository = DocumentRepository(session)
     await repository.ensure_source(stored)
     if document is None:

@@ -7,29 +7,42 @@ administrator's request: see `StudioAccess`.
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
 from datetime import datetime
 from typing import Annotated
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Query, Request, Response, status
 from fastapi.responses import StreamingResponse
-from primer_contracts.studio import STUDIO_MEDIA_TYPE, StudioImage
+from primer_contracts.documents import DocumentSummary
+from primer_contracts.studio import STUDIO_MEDIA_TYPE, StudioImage, StudioToLibrary
 from primer_service.db import get_session
 from primer_service.durable import DurableRoute
-from primer_storage import StudioStore
+from primer_storage import IMAGE_EXTENSIONS, SourceStore, SourceStoreError, StudioStore
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from primer_control.config import Settings
 from primer_control.identity import CurrentPrincipal, get_settings
+from primer_control.publisher import JobPublisher
 from primer_control.repositories.studio import StudioRepository, view_of
 from primer_control.repositories.users import UserRepository
+from primer_control.routes.documents import (
+    as_problem,
+    enqueue,
+    get_publisher,
+    get_source_store,
+    record_version,
+    require_library,
+    summarize,
+)
 from primer_control.studio.limits import (
     not_found,
     over_quota,
     require_studio,
+    require_studio_library,
     upload_too_large,
 )
-from primer_control.studio.pictures import normalized
+from primer_control.studio.pictures import normalized, with_provenance
 from primer_control.upload_stream import REQUEST_BODY, open_upload
 
 
@@ -53,6 +66,8 @@ router = APIRouter(
 Session = Annotated[AsyncSession, Depends(get_session)]
 Config = Annotated[Settings, Depends(studio_on)]
 Store = Annotated[StudioStore, Depends(get_studio_store)]
+Sources = Annotated[SourceStore, Depends(get_source_store)]
+Publisher = Annotated[JobPublisher, Depends(get_publisher)]
 
 MAX_PAGE = 100
 
@@ -175,3 +190,48 @@ async def delete_image(
     await repository.delete(image)
     background.add_task(store.remove, image_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post(
+    "/{image_id}/library",
+    status_code=status.HTTP_201_CREATED,
+    summary="Add a copy of a Studio image to a library",
+)
+async def add_to_library(
+    image_id: UUID,
+    body: StudioToLibrary,
+    principal: CurrentPrincipal,
+    session: Session,
+    settings: Config,
+    store: Store,
+    sources: Sources,
+    publisher: Publisher,
+    background: BackgroundTasks,
+) -> DocumentSummary:
+    """Make the image a document, indexed by what a vision model says it shows.
+
+    A copy, not a reference: a library belongs to whoever may manage it,
+    and a Studio image to one person, who may delete it tomorrow. The copy
+    carries its prompt and model in the file, so the document still says
+    how it was made once the original is gone.
+    """
+    require_studio_library(settings)
+    image = await StudioRepository(session).readable(principal.user_id, image_id)
+    if image is None:
+        raise not_found()
+    await require_library(body.library_id, principal.user_id, session, to_manage=True)
+
+    data = b"".join([chunk async for chunk in store.open_stream(image.id)])
+    tagged = with_provenance(data, prompt=image.prompt, model=image.model)
+    filename = f"primer-{image.id}.png"
+
+    async def once() -> AsyncIterator[bytes]:
+        yield tagged
+
+    try:
+        stored = await sources.put(once(), filename=filename, extensions=IMAGE_EXTENSIONS)
+    except SourceStoreError as error:
+        raise as_problem(error) from error
+    record = await record_version(session, stored, filename=filename, library_id=body.library_id)
+    enqueue(background, publisher, record)
+    return summarize(record)

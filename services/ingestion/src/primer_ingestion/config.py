@@ -163,6 +163,20 @@ class Settings(BaseSettings):
         description="Passages sent to the extraction model at once",
     )
 
+    #: Reads what a picture shows, for an image added to a library from
+    #: Studio. Off unless both are set, and without it Control does not offer
+    #: the action. Any OpenAI-compatible endpoint that accepts images.
+    vision_base_url: str | None = Field(
+        default=None,
+        description="OpenAI-compatible base URL of the model that describes images",
+    )
+    vision_model: str | None = Field(
+        default=None,
+        description="Vision model that describes images added to libraries; unset turns it off",
+    )
+    vision_api_key: SecretStr | None = Field(default=None)
+    vision_timeout_seconds: float = Field(default=120.0, gt=0)
+
     max_retries: int = Field(
         default=4,
         ge=0,

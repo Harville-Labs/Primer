@@ -77,6 +77,11 @@
             "title": "Studio Available",
             "type": "boolean"
           },
+          "studio_library_available": {
+            "default": false,
+            "title": "Studio Library Available",
+            "type": "boolean"
+          },
           "supported_extensions": {
             "default": [],
             "items": {
@@ -763,6 +768,22 @@
           "size"
         ],
         "title": "StudioProvenance",
+        "type": "object"
+      },
+      "StudioToLibrary": {
+        "additionalProperties": false,
+        "description": "Which library a Studio image is to become a document in.",
+        "properties": {
+          "library_id": {
+            "format": "uuid",
+            "title": "Library Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "library_id"
+        ],
+        "title": "StudioToLibrary",
         "type": "object"
       },
       "StudioUsage": {
@@ -2019,6 +2040,60 @@
           }
         },
         "summary": "Download a Studio image",
+        "tags": [
+          "studio"
+        ]
+      }
+    },
+    "/api/v1/studio/images/{image_id}/library": {
+      "post": {
+        "description": "Make the image a document, indexed by what a vision model says it shows.\n\nA copy, not a reference: a library belongs to whoever may manage it,\nand a Studio image to one person, who may delete it tomorrow. The copy\ncarries its prompt and model in the file, so the document still says\nhow it was made once the original is gone.",
+        "operationId": "add_to_library_api_v1_studio_images__image_id__library_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "image_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Image Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StudioToLibrary"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentSummary"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Add a copy of a Studio image to a library",
         "tags": [
           "studio"
         ]

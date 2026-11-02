@@ -14,7 +14,7 @@ const { POST: generate } = await import('./generations/+server');
  * than a page that loads and then fails.
  */
 
-function capabilities(studio: boolean): DeploymentCapabilities {
+function capabilities(studio: boolean, library = false): DeploymentCapabilities {
 	return {
 		auth_enabled: false,
 		ingestion_available: true,
@@ -22,14 +22,26 @@ function capabilities(studio: boolean): DeploymentCapabilities {
 		tools_available: false,
 		lab_available: false,
 		studio_available: studio,
+		studio_library_available: library,
 		is_admin: false,
 		max_upload_bytes: 1024,
 		supported_extensions: ['.pdf'],
 	};
 }
 
-function from(studio: boolean) {
-	return { parent: async () => ({ capabilities: capabilities(studio) }) } as never;
+const LIBRARIES = [
+	{ id: 'mine', owner_user_id: 'u-me' },
+	{ id: 'shared', owner_user_id: 'u-other' },
+];
+
+function from(studio: boolean, library = false) {
+	return {
+		parent: async () => ({
+			capabilities: capabilities(studio, library),
+			libraries: LIBRARIES,
+			principal: { user_id: 'u-me' },
+		}),
+	} as never;
 }
 
 /** A server-side fetch where Control answers capabilities, recording every URL asked for. */
@@ -52,11 +64,17 @@ describe('the Studio section', () => {
 	});
 
 	it('opens on Generate where Studio is on', async () => {
-		await expect(layout(from(true))).resolves.toBeUndefined();
+		await expect(layout(from(true))).resolves.toEqual({ libraryTargets: [] });
 		await expect(index(from(true))).rejects.toMatchObject({
 			status: 307,
 			location: '/studio/generate',
 		});
+	});
+
+	it('offers only the caller’s own libraries for an image, and only where something reads it', async () => {
+		const targets = (await layout(from(true, true))) as { libraryTargets: { id: string }[] };
+
+		expect(targets.libraryTargets.map((each) => each.id)).toEqual(['mine']);
 	});
 
 	it('refuses a generation with a 404 without Studio, and never asks Control to make one', async () => {

@@ -93,3 +93,43 @@ def test_the_retention_job_may_reach_the_bundled_database() -> None:
     ]
 
     assert "studio-retention" in admitted(policy)
+
+
+VISION = ("inference.vision.baseUrl=http://vision.example/v1", "inference.vision.model=qwen-vl")
+
+
+def test_a_vision_model_lets_studio_images_into_libraries() -> None:
+    """Control offers the action and the parse worker reads the image, together."""
+    manifests = render(*STUDIO, *VISION)
+    parse = env_of(named(manifests, "Deployment", "-worker-parse"))
+
+    assert env_of(named(manifests, "Deployment", "-control"))["PRIMER_VISION_ENABLED"] == "true"
+    assert parse["PRIMER_VISION_BASE_URL"] == "http://vision.example/v1"
+    assert parse["PRIMER_VISION_MODEL"] == "qwen-vl"
+
+
+def test_a_vision_model_without_studio_renders_nothing() -> None:
+    """Only Studio adds images to libraries, so neither side should think it can."""
+    manifests = render(*VISION)
+
+    assert "PRIMER_VISION_ENABLED" not in env_names(named(manifests, "Deployment", "-control"))
+    parse = env_names(named(manifests, "Deployment", "-worker-parse"))
+    assert parse
+    assert not {n for n in parse if n.startswith("PRIMER_VISION_")}
+
+
+def test_the_vision_key_comes_only_from_a_secret() -> None:
+    parse = named(
+        render(*STUDIO, *VISION, "inference.vision.existingSecret=primer-vision"),
+        "Deployment",
+        "-worker-parse",
+    )
+    [entry] = [e for e in containers(parse)[0]["env"] if e["name"] == "PRIMER_VISION_API_KEY"]
+
+    assert entry["valueFrom"]["secretKeyRef"] == {"name": "primer-vision", "key": "vision-api-key"}
+
+
+def test_a_vision_endpoint_without_a_model_is_refused() -> None:
+    message = refusal(*STUDIO, "inference.vision.baseUrl=http://vision.example/v1")
+
+    assert "inference.vision.model is required" in message

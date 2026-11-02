@@ -210,4 +210,28 @@ describe('the history', () => {
 		expect(generator.results).toEqual([]);
 		expect(generator.selected).toBeNull();
 	});
+
+	it('adds a copy of an image to a library, and says why when it cannot', async () => {
+		const { fetch, asked } = primer(
+			() => Response.json({ id: 'doc-1', filename: 'primer-kept.png' }, { status: 201 }),
+			() =>
+				Response.json(
+					{ code: 'library_not_found', title: 'Library not found', status: 404, detail: 'Gone.' },
+					{ status: 404 },
+				),
+		);
+		const kept = image('kept');
+		const generator = new Generator(OFFERS, [kept], { fetch });
+
+		expect(await generator.addToLibrary(kept, 'lib-1')).toMatchObject({ id: 'doc-1' });
+		expect(asked[0]).toMatchObject({
+			path: '/studio/images/kept/library',
+			method: 'POST',
+			body: { library_id: 'lib-1' },
+		});
+		expect(generator.failure).toBeNull();
+
+		expect(await generator.addToLibrary(kept, 'lib-gone')).toBeNull();
+		expect(generator.failure).toEqual({ title: 'Library not found', detail: 'Gone.' });
+	});
 });

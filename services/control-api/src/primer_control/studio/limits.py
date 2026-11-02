@@ -35,6 +35,22 @@ def require_studio(settings: Settings) -> None:
         )
 
 
+def require_studio_library(settings: Settings) -> None:
+    """404, like Studio itself: without a vision model there is no such route.
+
+    A picture added to a library with nothing to read it would be a document
+    that never finds anything, and failing it at ingestion is failing it
+    after someone has been told it was added.
+    """
+    if not settings.vision_enabled:
+        raise ProblemError(
+            code=ErrorCode.NOT_FOUND,
+            title="Images cannot be added to libraries",
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="This deployment has no vision model to read images added to a library.",
+        )
+
+
 def over_quota(used: int, adding: int, settings: Settings) -> ProblemError | None:
     """The refusal for storing `adding` more bytes, or None when they fit."""
     if used + adding <= settings.studio_quota_bytes:

@@ -1,7 +1,7 @@
 <script lang="ts">
-	import { Download, Pencil, RotateCcw, Trash2 } from '@lucide/svelte';
-	import { Badge, Button } from '@sivir-ui/svelte';
-	import type { StudioImage } from '#lib/api/types.ts';
+	import { Download, LibraryBig, Pencil, RotateCcw, Trash2 } from '@lucide/svelte';
+	import { Badge, Button, Select } from '@sivir-ui/svelte';
+	import type { DocumentSummary, LibrarySummary, StudioImage } from '#lib/api/types.ts';
 	import { lineage, type Offer } from '#lib/studio/offer.ts';
 
 	/** One image: how it was made, what it was made from, and what can be done with it. */
@@ -16,9 +16,38 @@
 		onedit: () => void;
 		ondelete: () => void;
 		onselect: (image: StudioImage) => void;
+		//: Libraries a copy may go to. Empty hides the action.
+		targets: LibrarySummary[];
+		onaddtolibrary: (libraryId: string) => Promise<DocumentSummary | null>;
 	}
 
-	let { image, offers, known, reusable, onreuse, onedit, ondelete, onselect }: Props = $props();
+	let {
+		image,
+		offers,
+		known,
+		reusable,
+		onreuse,
+		onedit,
+		ondelete,
+		onselect,
+		targets,
+		onaddtolibrary,
+	}: Props = $props();
+
+	let targetId = $state('');
+	let adding = $state(false);
+	//: Where this image was last added, by image, so picking another clears it.
+	let added = $state<{ imageId: string; library: LibrarySummary } | null>(null);
+	let target = $derived(targets.find((each) => each.id === targetId) ?? targets[0] ?? null);
+
+	async function addToLibrary() {
+		const library = target;
+		if (!library || adding) return;
+		adding = true;
+		const document = await onaddtolibrary(library.id);
+		adding = false;
+		if (document) added = { imageId: image.id, library };
+	}
 
 	let made = $derived(image.provenance ?? null);
 	let provider = $derived(
@@ -68,6 +97,31 @@
 			Delete
 		</Button>
 	</div>
+
+	{#if targets.length > 0}
+		<div class="flex items-center gap-2">
+			<Select.Root bind:value={targetId}>
+				<Select.Trigger class="h-8 min-w-0 flex-1 text-xs" aria-label="Library">
+					<span class="truncate">{target?.name}</span>
+				</Select.Trigger>
+				<Select.Content>
+					{#each targets as each (each.id)}
+						<Select.Item value={each.id} class="text-xs">{each.name}</Select.Item>
+					{/each}
+				</Select.Content>
+			</Select.Root>
+			<Button variant="secondary" size="sm" onclick={addToLibrary} disabled={adding}>
+				<LibraryBig size={13} aria-hidden="true" />
+				Add to library
+			</Button>
+		</div>
+		{#if added?.imageId === image.id}
+			<p role="status" class="text-xs text-muted-foreground">
+				A copy is in <a class="underline" href="/libraries/{added.library.id}">{added.library.name}</a>.
+				It can be searched and cited once it has been read.
+			</p>
+		{/if}
+	{/if}
 
 	{#if made}
 		<dl class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-xs">

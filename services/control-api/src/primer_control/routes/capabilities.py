@@ -53,6 +53,9 @@ async def capabilities(principal: CurrentPrincipal, settings: Config) -> Deploym
         # Chat makes the images, so Studio switched on without it would be
         # a gallery with no way to fill it but uploads.
         studio_available=settings.studio_enabled and bool(settings.chat_service_url),
+        studio_library_available=settings.studio_enabled
+        and settings.vision_enabled
+        and bool(settings.broker_url),
         max_upload_bytes=settings.max_upload_bytes,
         supported_extensions=tuple(sorted(SUPPORTED_EXTENSIONS)),
         # Reported rather than left for the browser to work out: it cannot

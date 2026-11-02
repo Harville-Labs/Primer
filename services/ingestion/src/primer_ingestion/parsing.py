@@ -31,11 +31,13 @@ from docling.document_converter import DocumentConverter, PdfFormatOption
 from docling_core.transforms.chunker import BaseChunker
 from docling_core.types.doc import DoclingDocument
 from primer_contracts.chunks import DocumentChunk
-from primer_storage import DOCX_MEDIA_TYPE, PDF_MEDIA_TYPE, PPTX_MEDIA_TYPE
+from primer_storage import DOCX_MEDIA_TYPE, PDF_MEDIA_TYPE, PNG_MEDIA_TYPE, PPTX_MEDIA_TYPE
 
 from primer_ingestion.chunking import DocumentContext, build_chunker, to_chunks
 from primer_ingestion.config import Settings
 from primer_ingestion.errors import PermanentStageError, StageError, UnsupportedDocument
+from primer_ingestion.images import Captioner, build_captioner, image_document
+from primer_ingestion.images import conversion_key as image_conversion_key
 from primer_ingestion.pictures import PictureReader, build_picture_reader, read_pictures
 
 logger = logging.getLogger(__name__)
@@ -137,11 +139,13 @@ class DocumentParser:
         settings: Settings,
         converter: DocumentConverter | None = None,
         chunker: BaseChunker | None = None,
+        captioner: Captioner | None = None,
     ) -> None:
         self._settings = settings
         self._given_converter = converter
         self._given_chunker = chunker
         self._given_picture_reader: PictureReader | None = None
+        self._captioner = captioner or build_captioner(settings)
 
     @property
     def converter(self) -> DocumentConverter:
@@ -197,8 +201,28 @@ class DocumentParser:
         what comes out of the same bytes. Device and thread count do not,
         and leaving them out lets a GPU worker reuse what a CPU one made.
         """
+        if media_type == PNG_MEDIA_TYPE:
+            self._require_captioner()
+            # Not Docling at all: the description is the vision model's, so
+            # a different model is a different conversion.
+            return image_conversion_key(self._settings.vision_model or "")
         ocr = "ocr" if self._settings.enable_ocr else "no-ocr"
         return f"{self.format_for(media_type).value}-docling-{DOCLING_VERSION}-{ocr}"
+
+    def _require_captioner(self) -> Captioner:
+        """The vision model, or a permanent refusal naming what to set.
+
+        Control offers the action only where one is configured, so this is a
+        deployment whose parse worker and Control disagree, or one whose
+        model was removed after images were added.
+        """
+        if self._captioner is None:
+            raise UnsupportedDocument(
+                "vision_unconfigured",
+                "Reading images needs a vision model. "
+                "Set PRIMER_VISION_BASE_URL and PRIMER_VISION_MODEL on the parse worker.",
+            )
+        return self._captioner
 
     def parse_and_chunk(
         self, source: Path, context: DocumentContext, *, media_type: str
@@ -219,8 +243,14 @@ class DocumentParser:
         process; the hard stop is the worker's task time limit, which kills
         the process and lets the job's lease expire.
         """
-        input_format = self.format_for(media_type)
+        if media_type == PNG_MEDIA_TYPE:
+            document = image_document(
+                source.read_bytes(), self._require_captioner(), name=context.filename
+            )
+            self._check_deadline(started, "describe the image")
+            return document
 
+        input_format = self.format_for(media_type)
         with working_copy(source, EXTENSIONS[input_format]) as copy:
             try:
                 result = self.converter.convert(copy, raises_on_error=False)

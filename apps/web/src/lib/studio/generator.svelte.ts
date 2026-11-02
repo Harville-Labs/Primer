@@ -1,5 +1,10 @@
 import { parseEvents } from '#lib/api/sse.ts';
-import type { ImageOperation, StudioGeneration, StudioImage } from '#lib/api/types.ts';
+import type {
+	DocumentSummary,
+	ImageOperation,
+	StudioGeneration,
+	StudioImage,
+} from '#lib/api/types.ts';
 import { asFailure, type Failure, problemOf } from '#lib/lab/failure.ts';
 import { type Offer, offerOf } from './offer';
 
@@ -223,6 +228,26 @@ export class Generator {
 			if (this.selectedId === image.id) this.selectedId = null;
 		} catch (failure) {
 			this.failure = asFailure(failure);
+		}
+	}
+
+	/**
+	 * Add a copy of an image to a library, where it is read like a document.
+	 * The document, so the page can say where it went; null when refused,
+	 * with the reason in `failure`.
+	 */
+	async addToLibrary(image: StudioImage, libraryId: string): Promise<DocumentSummary | null> {
+		try {
+			const response = await this.fetch(`/studio/images/${image.id}/library`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ library_id: libraryId }),
+			});
+			if (!response.ok) throw await problemOf(response);
+			return (await response.json()) as DocumentSummary;
+		} catch (failure) {
+			this.failure = asFailure(failure);
+			return null;
 		}
 	}
 }

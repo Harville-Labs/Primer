@@ -13,7 +13,7 @@ half-written source that ingestion could pick up.
 from __future__ import annotations
 
 import hashlib
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncIterator, Callable, Mapping
 from dataclasses import dataclass
 from functools import partial
 from pathlib import Path, PurePosixPath
@@ -29,6 +29,7 @@ PREFIX_BYTES = 8192
 PDF_MEDIA_TYPE = "application/pdf"
 DOCX_MEDIA_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 PPTX_MEDIA_TYPE = "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+PNG_MEDIA_TYPE = "image/png"
 
 #: Text PDF, DOCX, PPTX, Markdown, and plain text. A document whose text can
 #: only be recovered by OCR is accepted here and resolved later by the
@@ -47,6 +48,13 @@ SUPPORTED_EXTENSIONS = {
     ".txt": "text/plain",
 }
 
+#: What a library takes from Studio, and only from Studio. A picture is
+#: indexed by what a vision model says it shows, which is worth doing for an
+#: image whose recipe Primer recorded and is not a promise to make about any
+#: photograph someone uploads - so ordinary uploads still refuse it, and
+#: the one caller that may store one names this table instead.
+IMAGE_EXTENSIONS = {".png": PNG_MEDIA_TYPE}
+
 #: OOXML formats are ZIP containers and share a signature, so the extension
 #: is what distinguishes them. That is safe here only because the signature
 #: still has to agree: a text file named .pptx is rejected either way.
@@ -55,8 +63,9 @@ OOXML_MEDIA_TYPES = frozenset({DOCX_MEDIA_TYPE, PPTX_MEDIA_TYPE})
 PDF_SIGNATURE = b"%PDF-"
 #: DOCX is a ZIP container; this is the local file header every one starts with.
 ZIP_SIGNATURE = b"PK\x03\x04"
+PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
 
-BINARY_SIGNATURES = (PDF_SIGNATURE, ZIP_SIGNATURE)
+BINARY_SIGNATURES = (PDF_SIGNATURE, ZIP_SIGNATURE, PNG_SIGNATURE)
 
 
 class SourceStoreError(Exception):
@@ -127,7 +136,9 @@ def accepted_formats() -> str:
     return f"{', '.join(names[:-1])} and {names[-1]}"
 
 
-def detect_media_type(prefix: bytes, filename: str) -> str:
+def detect_media_type(
+    prefix: bytes, filename: str, extensions: Mapping[str, str] = SUPPORTED_EXTENSIONS
+) -> str:
     """Resolve the media type from the bytes, cross-checked against the name.
 
     Both must agree. Trusting the extension alone would let a caller hand the
@@ -135,7 +146,7 @@ def detect_media_type(prefix: bytes, filename: str) -> str:
     a library fill with files whose names promise something they are not.
     """
     extension = PurePosixPath(filename).suffix.lower()
-    declared = SUPPORTED_EXTENSIONS.get(extension)
+    declared = extensions.get(extension)
     if declared is None:
         raise UnsupportedContent(
             "unsupported_extension",
@@ -145,6 +156,11 @@ def detect_media_type(prefix: bytes, filename: str) -> str:
     if declared == PDF_MEDIA_TYPE:
         if not prefix.startswith(PDF_SIGNATURE):
             raise UnsupportedContent("content_mismatch", "The file is not a PDF.")
+        return declared
+
+    if declared == PNG_MEDIA_TYPE:
+        if not prefix.startswith(PNG_SIGNATURE):
+            raise UnsupportedContent("content_mismatch", "The file is not a PNG.")
         return declared
 
     if declared in OOXML_MEDIA_TYPES:
@@ -186,8 +202,17 @@ class SourceStore:
         except Exception:  # noqa: BLE001 - a leftover temporary object is not a request failure
             return
 
-    async def put(self, stream: AsyncIterator[bytes], *, filename: str) -> StoredSource:
+    async def put(
+        self,
+        stream: AsyncIterator[bytes],
+        *,
+        filename: str,
+        extensions: Mapping[str, str] = SUPPORTED_EXTENSIONS,
+    ) -> StoredSource:
         """Store a stream and return the source object it resolved to.
+
+        `extensions` is what may be stored: what a person can upload, unless
+        the caller says otherwise.
 
         The quota is enforced while reading, not afterwards, so an oversized
         upload stops costing bandwidth and disk as soon as it crosses the
@@ -220,7 +245,7 @@ class SourceStore:
 
             if size == 0:
                 raise UnsupportedContent("empty_upload", "The file is empty.")
-            media_type = detect_media_type(prefix, filename)
+            media_type = detect_media_type(prefix, filename, extensions)
 
             sha256 = digest.hexdigest()
             final = self._key("sources", sha256)

@@ -76,6 +76,10 @@ class DeploymentCapabilities(WireModel):
     lab_available: bool = False
     #: Studio is off by default; an operator turns it on with a policy in mind.
     studio_available: bool = False
+    #: Whether a Studio image can be added to a library. It is indexed by
+    #: what a vision model says it shows, so without one there is nothing
+    #: to search it by, and the action is not offered.
+    studio_library_available: bool = False
     max_upload_bytes: int = Field(ge=0)
     supported_extensions: tuple[str, ...] = ()
     #: Whether the caller may reach the deployment's own settings. Reported
