@@ -17,6 +17,15 @@ instead of silently keeping a default.
 | `PRIMER_SUBJECT_HEADER` | `X-Forwarded-User` | Set by the proxy |
 | `PRIMER_JOB_LEASE_SECONDS` | `300` | Before another worker may re-claim |
 | `PRIMER_MAX_JOB_ATTEMPTS` | `5` | Hard bound, independent of workers |
+| `PRIMER_CHAT_SERVICE_URL` | unset | Chat, which Studio asks to make images. Unset turns Studio off whatever `PRIMER_STUDIO_ENABLED` says |
+| `PRIMER_STUDIO_ENABLED` | `false` | Off until you have a policy for generated images |
+| `PRIMER_STUDIO_MAX_UPLOAD_BYTES` | `20971520` | Largest image someone may upload to edit; at most 25 MiB |
+| `PRIMER_STUDIO_MAX_SIDE` | `4096` | Pixels on a side, checked before an image is decoded; at most 8192 |
+| `PRIMER_STUDIO_MAX_IMAGES_PER_REQUEST` | `4` | Images one generation may ask for |
+| `PRIMER_STUDIO_GENERATIONS_PER_HOUR` | `30` | Per person. Failed generations count, since the provider still did the work |
+| `PRIMER_STUDIO_QUOTA_BYTES` | `1073741824` | Studio storage per person, uploads and results together |
+| `PRIMER_STUDIO_RETENTION_DAYS` | unset | Unset keeps images until their owner deletes them. Applied by `python -m primer_control.studio.retention`, run on a schedule |
+| `PRIMER_STUDIO_TIMEOUT_SECONDS` | `900` | How long one generation may take, end to end |
 
 ## Ingestion workers
 

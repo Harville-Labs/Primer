@@ -29,6 +29,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/studio/usage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * How much Studio storage each person uses
+         * @description Counts and bytes per person. Never the images: see `StudioAccess`.
+         */
+        get: operations["studio_usage_api_v1_admin_studio_usage_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/capabilities": {
         parameters: {
             query?: never;
@@ -345,6 +365,90 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/studio/generations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Generate or edit images into your Studio, reporting progress */
+        post: operations["generate_api_v1_studio_generations_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/studio/images": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List your Studio images, newest first */
+        get: operations["list_images_api_v1_studio_images_get"];
+        put?: never;
+        /**
+         * Upload an image to edit
+         * @description Store an uploaded image as a PNG with its metadata removed.
+         *
+         *     Read whole rather than streamed to the store, unlike a document: it has
+         *     to be decoded before anything is kept, and the limit that bounds it is
+         *     one image, not a book.
+         */
+        post: operations["upload_image_api_v1_studio_images_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/studio/images/{image_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One Studio image and how it was made */
+        get: operations["get_image_api_v1_studio_images__image_id__get"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete a Studio image
+         * @description Delete the row now and the bytes once that is committed.
+         *
+         *     In that order because bytes left behind by a failed removal are a file
+         *     nobody can reach and no quota counts, where a row whose bytes went first
+         *     is a gallery entry that will not load.
+         */
+        delete: operations["delete_image_api_v1_studio_images__image_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/studio/images/{image_id}/content": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Download a Studio image */
+        get: operations["download_image_api_v1_studio_images__image_id__content_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health/live": {
         parameters: {
             query?: never;
@@ -424,6 +528,11 @@ export interface components {
             lab_available: boolean;
             /** Max Upload Bytes */
             max_upload_bytes: number;
+            /**
+             * Studio Available
+             * @default false
+             */
+            studio_available: boolean;
             /**
              * Supported Extensions
              * @default []
@@ -635,6 +744,127 @@ export interface components {
              */
             skipped: number;
         };
+        /**
+         * StudioGeneration
+         * @description One request to make images, as a person sends it.
+         *
+         *     The same fields as Chat's `ImageRequest`, except that the image to edit
+         *     is named by id rather than sent: it is one of the person's own Studio
+         *     images, which is what lets the result record where it came from.
+         */
+        StudioGeneration: {
+            /**
+             * Count
+             * @default 1
+             */
+            count: number;
+            /** Mask */
+            mask?: string | null;
+            /** Model */
+            model: string;
+            /** Negative Prompt */
+            negative_prompt?: string | null;
+            /**
+             * Operation
+             * @enum {string}
+             */
+            operation: "generate" | "edit" | "inpaint";
+            /** Prompt */
+            prompt: string;
+            /**
+             * Provider Id
+             * Format: uuid
+             */
+            provider_id: string;
+            /** Seed */
+            seed?: number | null;
+            /** Size */
+            size: string;
+            /** Source Id */
+            source_id?: string | null;
+            /** Steps */
+            steps?: number | null;
+        };
+        /** StudioImage */
+        StudioImage: {
+            /** Byte Size */
+            byte_size: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Height */
+            height: number;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Media Type */
+            media_type: string;
+            /**
+             * Origin
+             * @enum {string}
+             */
+            origin: "upload" | "generated";
+            /** Parent Id */
+            parent_id?: string | null;
+            provenance?: components["schemas"]["StudioProvenance"] | null;
+            /** Width */
+            width: number;
+        };
+        /**
+         * StudioProvenance
+         * @description How a generated image was made, kept so it can be made again.
+         *
+         *     The seed is the one the provider used when it said, which is not always
+         *     the one asked for: Primer chooses one for a template that binds a seed.
+         */
+        StudioProvenance: {
+            /** Model */
+            model: string;
+            /** Negative Prompt */
+            negative_prompt?: string | null;
+            /**
+             * Operation
+             * @enum {string}
+             */
+            operation: "generate" | "edit" | "inpaint";
+            /** Prompt */
+            prompt: string;
+            /**
+             * Provider Id
+             * Format: uuid
+             */
+            provider_id: string;
+            /** Seed */
+            seed?: number | null;
+            /** Size */
+            size: string;
+            /** Steps */
+            steps?: number | null;
+        };
+        /**
+         * StudioUsage
+         * @description One person's use of Studio, as an administrator may see it.
+         *
+         *     Counts and sizes only. An administrator decides limits and needs to know
+         *     who is near them; nothing about that needs the images or the prompts.
+         */
+        StudioUsage: {
+            /** Byte Size */
+            byte_size: number;
+            /** Email */
+            email?: string | null;
+            /** Image Count */
+            image_count: number;
+            /**
+             * User Id
+             * Format: uuid
+             */
+            user_id: string;
+        };
         /** ValidationError */
         ValidationError: {
             /** Context */
@@ -673,6 +903,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DeploymentStatus"];
+                };
+            };
+        };
+    };
+    studio_usage_api_v1_admin_studio_usage_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StudioUsage"][];
                 };
             };
         };
@@ -1257,6 +1507,188 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Principal"];
+                };
+            };
+        };
+    };
+    generate_api_v1_studio_generations_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StudioGeneration"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_images_api_v1_studio_images_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                /** @description Only images made before this time, to page back */
+                before?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StudioImage"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    upload_image_api_v1_studio_images_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /** @description The source file to ingest */
+                    file: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StudioImage"];
+                };
+            };
+        };
+    };
+    get_image_api_v1_studio_images__image_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                image_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StudioImage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_image_api_v1_studio_images__image_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                image_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    download_image_api_v1_studio_images__image_id__content_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                image_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/png": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

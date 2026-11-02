@@ -23,11 +23,15 @@ from urllib.parse import urlsplit, urlunsplit
 import httpx2
 from fastapi import APIRouter, Depends, Request, status
 from primer_contracts.deployment import DependencyStatus, DeploymentStatus
+from primer_contracts.studio import StudioUsage
+from primer_service.db import get_session
 from primer_service.durable import DurableRoute
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from primer_control.config import Settings
 from primer_control.health import DependencyRegistry
 from primer_control.identity import CurrentAdmin
+from primer_control.repositories.studio import StudioRepository
 
 router = APIRouter(prefix="/api/v1/admin", tags=["admin"], route_class=DurableRoute)
 
@@ -119,6 +123,15 @@ async def deployment_status(
         admin_group=settings.admin_group,
         dependencies=tuple(reported),
     )
+
+
+@router.get("/studio/usage", summary="How much Studio storage each person uses")
+async def studio_usage(
+    admin: CurrentAdmin, session: Annotated[AsyncSession, Depends(get_session)]
+) -> list[StudioUsage]:
+    """Counts and bytes per person. Never the images: see `StudioAccess`."""
+    del admin
+    return await StudioRepository(session).usage()
 
 
 def _url_for(name: str, settings: Settings) -> str | None:

@@ -7,7 +7,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from primer_service.db import Database
 from primer_service.errors import ProblemError, problem_response, rendered, validation_problem
-from primer_storage import SourceStore
+from primer_storage import SourceStore, StudioStore
 
 from primer_control import __version__
 from primer_control.config import Settings
@@ -22,6 +22,8 @@ from primer_control.routes import identity as identity_routes
 from primer_control.routes import internal_authz as internal_authz_routes
 from primer_control.routes import internal_ingestion as internal_ingestion_routes
 from primer_control.routes import libraries as library_routes
+from primer_control.routes import studio as studio_routes
+from primer_control.routes import studio_generations as studio_generation_routes
 
 
 def create_app(
@@ -30,6 +32,7 @@ def create_app(
     database: Database | None = None,
     source_store: SourceStore | None = None,
     publisher: JobPublisher | None = None,
+    studio_store: StudioStore | None = None,
 ) -> FastAPI:
     """Build the Control API.
 
@@ -50,6 +53,12 @@ def create_app(
         max_bytes=settings.max_upload_bytes,
         chunk_bytes=settings.upload_chunk_bytes,
     )
+    app.state.studio_store = studio_store or StudioStore(
+        settings.source_store_url, chunk_bytes=settings.upload_chunk_bytes
+    )
+    #: Generations in progress, held so a run outlives the request that
+    #: started it and is not collected while it waits on Chat.
+    app.state.studio_runs = set()
     app.state.publisher = publisher or build_publisher(settings.broker_url)
     registry = dependencies or DependencyRegistry()
     registry.register_async("database", app.state.database.check)
@@ -76,6 +85,8 @@ def create_app(
     app.include_router(library_routes.router)
     app.include_router(document_routes.router)
     app.include_router(capability_routes.router)
+    app.include_router(studio_routes.router)
+    app.include_router(studio_generation_routes.router)
     app.include_router(admin_routes.router)
     app.include_router(internal_ingestion_routes.router)
     app.include_router(internal_authz_routes.router)
