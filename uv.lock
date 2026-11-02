@@ -3101,6 +3101,8 @@ dependencies = [
     { name = "asyncpg" },
     { name = "celery" },
     { name = "fastapi" },
+    { name = "httpx2" },
+    { name = "pillow" },
     { name = "primer-contracts" },
     { name = "primer-observability" },
     { name = "primer-service" },
@@ -3113,7 +3115,6 @@ dependencies = [
 
 [package.dev-dependencies]
 dev = [
-    { name = "httpx2" },
     { name = "testcontainers" },
 ]
 server = [
@@ -3126,6 +3127,8 @@ requires-dist = [
     { name = "asyncpg" },
     { name = "celery" },
     { name = "fastapi" },
+    { name = "httpx2" },
+    { name = "pillow" },
     { name = "primer-contracts", editable = "packages/contracts" },
     { name = "primer-observability", editable = "packages/observability" },
     { name = "primer-service", editable = "packages/service" },
@@ -3137,10 +3140,7 @@ requires-dist = [
 ]
 
 [package.metadata.requires-dev]
-dev = [
-    { name = "httpx2" },
-    { name = "testcontainers", extras = ["postgres"] },
-]
+dev = [{ name = "testcontainers", extras = ["postgres"] }]
 server = [{ name = "uvicorn", extras = ["standard"] }]
 
 [[package]]

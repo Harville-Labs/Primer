@@ -325,3 +325,88 @@ class DocumentIndex(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
+
+
+STUDIO_ORIGINS = ("upload", "generated")
+
+
+class StudioGeneration(Base):
+    """One request to make images, kept whether or not it produced any.
+
+    Recorded when it starts, so the hourly limit counts what was asked of a
+    backend rather than what came back. A limit that counted only successes
+    would let a failing backend be asked without end.
+    """
+
+    __tablename__ = "studio_generations"
+    __table_args__ = (Index("ix_studio_generations_owner_created", "owner_user_id", "created_at"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    owner_user_id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey(f"{CONTROL_SCHEMA}.users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    #: The error code when it failed, and null while it runs or once it is done.
+    error_code: Mapped[str | None] = mapped_column(String(64))
+
+
+class StudioImage(Base):
+    """An image in someone's Studio, and how it was made.
+
+    Provenance is columns rather than a JSON blob, because it is what a
+    person searches and filters by later, and what a retention or audit
+    query reads without parsing.
+    """
+
+    __tablename__ = "studio_images"
+    __table_args__ = (
+        CheckConstraint(
+            "origin IN (" + ", ".join(f"'{origin}'" for origin in STUDIO_ORIGINS) + ")",
+            name="origin_known",
+        ),
+        Index("ix_studio_images_owner_created", "owner_user_id", "created_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    owner_user_id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey(f"{CONTROL_SCHEMA}.users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    origin: Mapped[str] = mapped_column(String(16), nullable=False)
+    media_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    width: Mapped[int] = mapped_column(Integer, nullable=False)
+    height: Mapped[int] = mapped_column(Integer, nullable=False)
+    byte_size: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    #: Set null rather than cascading: deleting the photo an edit was made
+    #: from should not delete the edit.
+    parent_id: Mapped[uuid.UUID | None] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey(f"{CONTROL_SCHEMA}.studio_images.id", ondelete="SET NULL"),
+    )
+    generation_id: Mapped[uuid.UUID | None] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey(f"{CONTROL_SCHEMA}.studio_generations.id", ondelete="SET NULL"),
+    )
+    # Provenance, null for an upload. No foreign key to the provider: it
+    # lives in Chat's schema, and outlives no image it made.
+    provider_id: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True))
+    model: Mapped[str | None] = mapped_column(String(200))
+    operation: Mapped[str | None] = mapped_column(String(16))
+    prompt: Mapped[str | None] = mapped_column(String(4000))
+    negative_prompt: Mapped[str | None] = mapped_column(String(4000))
+    size: Mapped[str | None] = mapped_column(String(16))
+    seed: Mapped[int | None] = mapped_column(BigInteger)
+    steps: Mapped[int | None] = mapped_column(Integer)

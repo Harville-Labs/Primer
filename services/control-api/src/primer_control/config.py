@@ -61,6 +61,44 @@ class Settings(BaseSettings):
         description="Deployment-wide switch for MCP tools; off is the safe default",
     )
 
+    studio_enabled: bool = Field(
+        default=False,
+        description="Deployment-wide switch for Studio; off until an operator has a policy for it",
+    )
+    studio_max_upload_bytes: int = Field(
+        default=20 * 1024 * 1024,
+        ge=1,
+        le=25 * 1024 * 1024,
+        description="Largest image a person may upload to edit, before it is decoded",
+    )
+    studio_max_side: int = Field(
+        default=4096,
+        ge=64,
+        # 8192 squared is under Pillow's decompression-bomb threshold, so the
+        # two limits never disagree about an image this one allows.
+        le=8192,
+        description="Widest or tallest image accepted or stored, in pixels",
+    )
+    studio_max_images_per_request: int = Field(default=4, ge=1, le=10)
+    studio_generations_per_hour: int = Field(
+        default=30, ge=1, description="Generations one person may start in an hour"
+    )
+    studio_quota_bytes: int = Field(
+        default=1024 * 1024 * 1024,
+        ge=1,
+        description="Studio storage one person may use, uploads and results together",
+    )
+    studio_retention_days: int | None = Field(
+        default=None,
+        ge=1,
+        description="Delete Studio images older than this; unset keeps them until deleted",
+    )
+    studio_timeout_seconds: float = Field(
+        default=900.0,
+        gt=0,
+        description="How long Control waits for Chat to finish one generation",
+    )
+
     internal_api_token: SecretStr | None = Field(
         default=None,
         description="Shared credential for the cluster-internal worker API; unset denies it",

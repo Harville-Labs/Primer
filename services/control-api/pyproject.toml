@@ -13,6 +13,8 @@ dependencies = [
     "primer-service",
     "primer-storage",
     "psycopg[binary]",
+    "httpx2",
+    "pillow",
     "pydantic-settings",
     "python-multipart",
     "sqlalchemy[asyncio]",
@@ -20,7 +22,6 @@ dependencies = [
 
 [dependency-groups]
 dev = [
-    "httpx2",
     "testcontainers[postgres]",
 ]
 server = [
