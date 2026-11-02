@@ -245,6 +245,11 @@ difference is the whole content of the message someone reads.
   and a top-k.
 - **Tools are operator-controlled, user-approved, and isolated** through
   ephemeral MCP sandbox providers. Never expose the host shell.
+- **Studio makes images through a backend the operator brings**: the
+  OpenAI images API or ComfyUI. Capabilities are declared, never inferred;
+  users fill operator templates and never submit ComfyUI workflows; content
+  policy is the operator's. See
+  [ADR 0010](docs/adr/0010-studio-image-generation.md).
 - The vector store is chosen per deployment and stays behind Haystack's
   document-store integrations.
 
