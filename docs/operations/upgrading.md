@@ -4,6 +4,29 @@ Most upgrades are a new image tag and [the migrations](migrations.md). The
 exceptions are listed here, newest first: changes where something already
 running has to be dealt with before the new version will start.
 
+## The chart runs a Neo4j by default
+
+**Affects:** a chart install that leaves `graph.neo4j.enabled` and
+`graph.url` unset, and one that sets `graph.url`.
+
+An upgrade now starts a one-replica Neo4j with a 10Gi volume, makes its
+password, and applies the graph schema once Neo4j answers. With
+`inference.chat.model` set, the index worker extracts a graph with the chat
+model as it indexes. Nothing already indexed has a graph until its library
+is reindexed.
+
+An install that sets `graph.url` is refused until it turns the bundled one
+off, since one of the two would be ignored:
+
+```yaml
+graph:
+  neo4j:
+    enabled: false
+```
+
+To keep running without a graph, set the same thing and leave `graph.url`
+unset.
+
 ## The embedder and reranker are bundled
 
 **Affects:** a chart install that sets `inference.embeddings.baseUrl` or

@@ -70,7 +70,11 @@ def test_a_bundled_postgresql_still_needs_a_secret() -> None:
 
 def test_sql_migrations_run_after_install_and_before_upgrade() -> None:
     """The server does not exist before install; afterwards, the schema leads the code."""
-    jobs = of_kind(render(*BUNDLED), "Job")
+    jobs = [
+        job
+        for job in of_kind(render(*BUNDLED), "Job")
+        if containers(job)[0]["command"][0] == "alembic"
+    ]
 
     assert len(jobs) == 2
     for job in jobs:

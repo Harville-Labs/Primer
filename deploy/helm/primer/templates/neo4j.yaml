@@ -89,8 +89,7 @@ spec:
             - name: PRIMER_GRAPH_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "primer.graphSecret" . }}
-                  key: {{ .Values.graph.passwordKey }}
+                  {{- include "primer.graphPasswordRef" . | nindent 18 }}
             # Read on first start only. Changing the Secret afterwards does
             # not change the password; docs/operations/kubernetes.md says how.
             - name: NEO4J_AUTH
