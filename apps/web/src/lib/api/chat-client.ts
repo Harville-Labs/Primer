@@ -12,6 +12,7 @@ import type {
 	ProviderUpdate,
 	ScoredText,
 	ScoreRequest,
+	ToolCallSummary,
 } from './types';
 
 /**
@@ -183,4 +184,17 @@ export class ChatApi {
 		const library = encodeURIComponent(libraryId);
 		return this.request(`/api/v1/libraries/${library}/passages?limit=${limit}`);
 	}
+
+	/**
+	 * Approve or deny a tool call the model asked for. Chat refuses a call
+	 * in another user's conversation, and one already decided or expired.
+	 * The id is encoded: it comes from the browser.
+	 */
+	decideTool(callId: string, decision: ToolDecision): Promise<ToolCallSummary> {
+		const call = encodeURIComponent(callId);
+		return this.request(`/api/v1/tool-requests/${call}/${decision}`, { method: 'POST' });
+	}
 }
+
+/** What a user can say to a tool call. These are Chat's own route names. */
+export type ToolDecision = 'approve' | 'deny';
