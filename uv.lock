@@ -3044,6 +3044,7 @@ dependencies = [
     { name = "psycopg", extra = ["binary"] },
     { name = "pydantic-settings" },
     { name = "sqlalchemy", extra = ["asyncio"] },
+    { name = "websockets" },
 ]
 
 [package.dev-dependencies]
@@ -3072,6 +3073,7 @@ requires-dist = [
     { name = "psycopg", extras = ["binary"] },
     { name = "pydantic-settings" },
     { name = "sqlalchemy", extras = ["asyncio"] },
+    { name = "websockets" },
 ]
 
 [package.metadata.requires-dev]

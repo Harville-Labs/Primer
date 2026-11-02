@@ -11,7 +11,11 @@
 	let { provider }: { provider: ProviderSummary } = $props();
 </script>
 
-{#if provider.source === 'deployment'}
+{#if provider.source === 'deployment' || provider.images?.api === 'comfyui'}
+	<!--
+	  A ComfyUI provider's templates are not editable here yet, so it gets no
+	  form: saving the OpenAI fields would replace its templates with nothing.
+	-->
 	{#if provider.images}
 		<Badge variant="secondary" title={provider.images.models.join(', ')}>
 			<Image size={12} aria-hidden="true" />

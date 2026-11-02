@@ -74,6 +74,7 @@ export function imageDeclaration(form: FormData): ImageDeclaration {
 			sizes,
 			max_images: max,
 			ask_for_base64: form.get('image_base64') === 'true',
+			templates: [],
 		},
 	};
 }
