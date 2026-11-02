@@ -189,6 +189,9 @@ jobs:
             --app-version "${{ needs.version.outputs.version }}" \
             --destination dist
 
+      # As an install comes up out of the box, with the bundled embedder. An
+      # embedding baseUrl here as well is refused by the chart, which is
+      # what failed v1.0.1's first run.
       - name: Check the packaged chart renders
         run: |
           helm template primer "dist/primer-${{ needs.version.outputs.version }}.tgz" \
@@ -199,8 +202,6 @@ jobs:
             --set auth.oidc.existingSecret=primer-oidc \
             --set inference.chat.baseUrl=http://model/v1 \
             --set inference.chat.model=chat-model \
-            --set inference.embeddings.baseUrl=http://model/v1 \
-            --set inference.embeddings.model=embed-model \
             | grep -q "primer-api:${{ needs.version.outputs.version }}"
 
       - name: Log in to GHCR
