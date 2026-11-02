@@ -14,6 +14,7 @@ from primer_chat.config import Settings
 from primer_chat.generation import ChatGenerator, HaystackChatGenerator
 from primer_chat.routes import router
 from primer_chat.routes_admin import router as admin_router
+from primer_chat.routes_passages import router as passages_router
 from primer_chat.routes_scoring import router as scoring_router
 from primer_chat.routes_tools import router as tool_router
 from primer_chat.secrets import SecretBox
@@ -50,10 +51,14 @@ def create_app(
         if settings.settings_encryption_key
         else None
     )
+    # Kept beside the responder for the routes that read a library without
+    # answering from it, so both ask the same Control and the same Retrieval.
+    app.state.control = control or ControlClient(settings)
+    app.state.retrieval = retrieval or RetrievalClient(settings)
     app.state.responder = Responder(
         settings,
-        control or ControlClient(settings),
-        retrieval or RetrievalClient(settings),
+        app.state.control,
+        app.state.retrieval,
         generator or HaystackChatGenerator(settings),
     )
 
@@ -87,4 +92,5 @@ def create_app(
     app.include_router(tool_router)
     app.include_router(admin_router)
     app.include_router(scoring_router)
+    app.include_router(passages_router)
     return app

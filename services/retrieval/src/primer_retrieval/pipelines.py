@@ -16,6 +16,7 @@ from haystack.document_stores.types import DocumentStore
 from haystack.utils import Secret
 from haystack_integrations.components.retrievers.qdrant import QdrantEmbeddingRetriever
 from primer_contracts.chunks import DocumentChunk
+from primer_contracts.indexing import Passage
 from primer_contracts.retrieval import RetrievedChunk, SourceLocator
 
 from primer_retrieval.config import Settings
@@ -196,6 +197,25 @@ def _for_storage(chunk: DocumentChunk, embedding: list[float]) -> Document:
             "section": chunk.locator.section,
         },
     )
+
+
+def to_passage(document: Document) -> Passage:
+    """Translate a stored passage into Primer's contract, unranked."""
+    meta = document.meta
+    return Passage(
+        chunk_id=UUID(str(document.id)),
+        document_id=UUID(str(meta[DOCUMENT_ID])),
+        filename=str(meta.get("filename") or ""),
+        ordinal=int(meta.get("ordinal") or 0),
+        content=document.content or "",
+        locator=SourceLocator(page=meta.get("page"), section=meta.get("section")),
+    )
+
+
+def reading_order(document: Document) -> tuple[str, str, int]:
+    """By file, then by position in it. The document id splits two files of one name."""
+    meta = document.meta
+    return (str(meta.get("filename") or ""), str(meta[DOCUMENT_ID]), int(meta.get("ordinal") or 0))
 
 
 def to_retrieved(document: Document) -> RetrievedChunk:

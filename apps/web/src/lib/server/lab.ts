@@ -1,6 +1,7 @@
 import { error, json, type RequestEvent } from '@sveltejs/kit';
+import { ApiError } from '#lib/api/client.ts';
 import { LabApi } from '#lib/api/lab-client.ts';
-import type { DeploymentCapabilities } from '#lib/api/types.ts';
+import type { DeploymentCapabilities, LabStatus } from '#lib/api/types.ts';
 import { apiFor } from '#lib/server/api.ts';
 import { forwardingIdentity } from '#lib/server/forward.ts';
 import { answeredWithProblems } from '#lib/server/problem.ts';
@@ -20,6 +21,26 @@ export function labFor(request: Request, fetch: typeof globalThis.fetch): LabApi
  */
 export function requireLab(capabilities: DeploymentCapabilities): void {
 	if (!capabilities.lab_available) error(404, 'This deployment has no Lab.');
+}
+
+/**
+ * Which model Lab has resident, for a screen that reads it.
+ *
+ * A Lab that does not answer is not a page that will not load: the screen
+ * still renders, says Lab is unreachable in Lab's own words, and the first
+ * run tries again. Lab can take minutes to load its model, and an error
+ * page for that would hide the explanation behind a retry button.
+ */
+export async function residentStatus(
+	request: Request,
+	fetch: typeof globalThis.fetch,
+): Promise<{ status: LabStatus | null; statusProblem: { title: string; detail: string } | null }> {
+	try {
+		return { status: await labFor(request, fetch).status(), statusProblem: null };
+	} catch (failure) {
+		if (!(failure instanceof ApiError)) throw failure;
+		return { status: null, statusProblem: { title: failure.title, detail: failure.message } };
+	}
 }
 
 /**

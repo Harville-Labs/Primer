@@ -17,7 +17,7 @@ from primer_contracts.base import WireModel
 from primer_contracts.chunks import DocumentChunk
 from primer_contracts.graph import ChunkGraph
 from primer_contracts.identity import Principal
-from primer_contracts.retrieval import RetrievedChunk
+from primer_contracts.retrieval import RetrievedChunk, SourceLocator
 
 
 class IndexRequest(WireModel):
@@ -131,6 +131,45 @@ class SearchRequest(WireModel):
 
 class SearchResult(WireModel):
     chunks: tuple[RetrievedChunk, ...] = ()
+
+
+#: The most passages one listing returns. A scan reads each of them through
+#: a model, so a library larger than this is scanned in part, and the
+#: listing says how much was left out rather than reading all of it.
+MAX_PASSAGES = 2000
+
+
+class PassagesRequest(WireModel):
+    """List one library's passages, within a known set of active generations.
+
+    Scoped exactly as a search is, and for the same reason: the generation
+    list is required, so a caller that forgot it is refused, not answered
+    with everything.
+    """
+
+    principal: Principal
+    library_id: UUID
+    generation_ids: tuple[UUID, ...] = Field(min_length=1)
+    limit: int = Field(default=500, ge=1, le=MAX_PASSAGES)
+
+
+class Passage(WireModel):
+    """A passage as it is stored, with what is needed to point back to it."""
+
+    chunk_id: UUID
+    document_id: UUID
+    filename: str
+    #: Its position in the document, from zero.
+    ordinal: int
+    content: str
+    locator: SourceLocator | None = None
+
+
+class PassagesResult(WireModel):
+    #: In reading order: by file, then by position within it.
+    passages: tuple[Passage, ...] = ()
+    #: How many the library holds, of which `passages` is the first part.
+    total: int = 0
 
 
 class DeleteRequest(WireModel):

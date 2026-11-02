@@ -162,6 +162,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/lab/scan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Score a batch of passages for surprise and with a probe
+         * @description Scores each passage as plain text: its mean and peak surprisal, and optionally what one of your probes makes of it at its last token. A passage longer than this Lab reads is scored from its start and marked truncated. Lab is given text, not a library: list a library's passages through the libraries API, then send them here.
+         */
+        post: operations["scan_api_v1_lab_scan_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/lab/score": {
         parameters: {
             query?: never;
@@ -351,12 +371,12 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "neurons" | "anomalies";
+            kind: "neurons" | "anomalies" | "scan";
             model: components["schemas"]["LabModelStatus"];
             /** Probes */
             probes: components["schemas"]["Probe"][];
             /** Run */
-            run: components["schemas"]["NeuronsRun"] | components["schemas"]["AnomaliesRun"];
+            run: components["schemas"]["NeuronsRun"] | components["schemas"]["AnomaliesRun"] | components["schemas"]["ScanRun"];
             /** Title */
             title: string;
             /** Vectors */
@@ -365,7 +385,7 @@ export interface components {
         /** ExperimentCreate */
         ExperimentCreate: {
             /** Run */
-            run: components["schemas"]["NeuronsRun"] | components["schemas"]["AnomaliesRun"];
+            run: components["schemas"]["NeuronsRun"] | components["schemas"]["AnomaliesRun"] | components["schemas"]["ScanRun"];
             /** Title */
             title: string;
         };
@@ -395,7 +415,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "neurons" | "anomalies";
+            kind: "neurons" | "anomalies" | "scan";
             model: components["schemas"]["LabModelStatus"];
             /** Title */
             title: string;
@@ -631,6 +651,20 @@ export interface components {
             reference: components["schemas"]["HubModel"] | components["schemas"]["LocalModel"];
             saes?: components["schemas"]["SaeStatus"] | null;
         };
+        /** LabScanRequest */
+        LabScanRequest: {
+            /** Passages */
+            passages: components["schemas"]["ScanPassage"][];
+            /** Probe Id */
+            probe_id?: string | null;
+        };
+        /** LabScanned */
+        LabScanned: {
+            model: components["schemas"]["LabModelStatus"];
+            /** Passages */
+            passages: components["schemas"]["ScannedPassage"][];
+            probe?: components["schemas"]["Probe"] | null;
+        };
         /** LabScoreRequest */
         LabScoreRequest: {
             /**
@@ -775,6 +809,29 @@ export interface components {
             threshold: number;
         };
         /**
+         * Passage
+         * @description A passage as it is stored, with what is needed to point back to it.
+         */
+        Passage: {
+            /**
+             * Chunk Id
+             * Format: uuid
+             */
+            chunk_id: string;
+            /** Content */
+            content: string;
+            /**
+             * Document Id
+             * Format: uuid
+             */
+            document_id: string;
+            /** Filename */
+            filename: string;
+            locator?: components["schemas"]["SourceLocator"] | null;
+            /** Ordinal */
+            ordinal: number;
+        };
+        /**
          * Probe
          * @description A probe Lab holds for its owner until the model changes, with how well it did.
          */
@@ -869,6 +926,80 @@ export interface components {
             /** Width */
             width?: number | null;
         };
+        /** ScanFinding */
+        ScanFinding: {
+            passage: components["schemas"]["Passage"];
+            scored: components["schemas"]["ScannedPassage"];
+        };
+        /** ScanPassage */
+        ScanPassage: {
+            /** Id */
+            id: string;
+            /** Text */
+            text: string;
+        };
+        /** ScanResult */
+        ScanResult: {
+            /** Findings */
+            findings: components["schemas"]["ScanFinding"][];
+            model: components["schemas"]["LabModelStatus"];
+            probe?: components["schemas"]["Probe"] | null;
+            /** Scanned */
+            scanned: number;
+            /** Total */
+            total: number;
+        };
+        /**
+         * ScanRun
+         * @description A scan of a library's passages, from the Scan tab, with what it found.
+         *
+         *     Its findings keep the passages' text, which is the point of saving one:
+         *     it can be read again without the library or the model. That text is
+         *     the library owner's, now held in Lab for the retention period too.
+         */
+        ScanRun: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "scan";
+            request: components["schemas"]["ScanSettings"];
+            result?: components["schemas"]["ScanResult"] | null;
+        };
+        /**
+         * ScanSettings
+         * @description What a saved scan was of, as the web app asked for it.
+         *
+         *     The library is recorded so the saved scan can say what it was of and
+         *     link back; Lab never reads it. Opening the passages again goes through
+         *     the libraries API, which asks again whether the person may.
+         */
+        ScanSettings: {
+            /**
+             * Library Id
+             * Format: uuid
+             */
+            library_id: string;
+            /** Library Name */
+            library_name: string;
+            /** Probe Id */
+            probe_id?: string | null;
+        };
+        /** ScannedPassage */
+        ScannedPassage: {
+            /** Id */
+            id: string;
+            /** Mean Bits */
+            mean_bits: number | null;
+            /** Peak Bits */
+            peak_bits: number | null;
+            /** Probe */
+            probe: number | null;
+            /** Tokens */
+            tokens: number;
+            /** Truncated */
+            truncated: boolean;
+        };
         /** SequenceScore */
         SequenceScore: {
             estimate: components["schemas"]["EntropyEstimate"];
@@ -883,6 +1014,19 @@ export interface components {
              * @description How many logprobs each truncated entropy saw.
              */
             top_k?: number | null;
+        };
+        /**
+         * SourceLocator
+         * @description Where a passage sits inside its source document.
+         *
+         *     Locators are user-meaningful positions only. Filesystem or object-store
+         *     paths are deliberately absent from citation-facing contracts.
+         */
+        SourceLocator: {
+            /** Page */
+            page?: number | null;
+            /** Section */
+            section?: string | null;
         };
         /**
          * Span
@@ -1355,6 +1499,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Probe"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    scan_api_v1_lab_scan_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LabScanRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LabScanned"];
                 };
             };
             /** @description Validation Error */

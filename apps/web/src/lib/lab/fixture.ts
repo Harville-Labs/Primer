@@ -2,6 +2,7 @@ import type {
 	ChatModel,
 	InspectResponse,
 	LabModelStatus,
+	Passage,
 	Probe,
 	SequenceScore,
 } from '#lib/api/types.ts';
@@ -146,5 +147,17 @@ export function sequence(
 			truncated_entropy_bits: 1,
 		})),
 		...overrides,
+	};
+}
+
+/** A library's passage, as Chat lists it for a scan. */
+export function passage(id: string, page: number | null = 1): Passage {
+	return {
+		chunk_id: id,
+		document_id: 'doc',
+		filename: 'paper.pdf',
+		ordinal: 0,
+		content: `passage ${id}`,
+		locator: page === null ? null : { page, section: null },
 	};
 }

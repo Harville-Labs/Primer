@@ -28,6 +28,8 @@ from primer_contracts.indexing import (
     GraphIndexResult,
     IndexRequest,
     IndexResult,
+    PassagesRequest,
+    PassagesResult,
     PurgeRequest,
     SearchRequest,
     SearchResult,
@@ -53,9 +55,11 @@ from primer_retrieval.pipelines import (
     build_retriever,
     build_text_embedder,
     chunks_filter,
+    reading_order,
     scope_filter,
     superseded_filter,
     to_documents,
+    to_passage,
     to_retrieved,
 )
 from primer_retrieval.reranking import Reranker, reorder
@@ -321,6 +325,28 @@ def above_floor(hits: list[Any], settings: Settings) -> list[Any]:
     if settings.min_score is None:
         return hits
     return [hit for hit in hits if (hit.score or 0.0) >= settings.min_score]
+
+
+@router.post("/passages", summary="List one library's passages, in reading order")
+def passages(payload: PassagesRequest, state: State) -> PassagesResult:
+    """Every passage in a library's active generations, up to a limit.
+
+    For scanning a library rather than searching it, so there is no query
+    and nothing is ranked. Read through the same scope filter as a search.
+
+    The whole scope is read and sorted here, then cut, because a filter
+    read in Qdrant has no order to cut by: taking the first `limit` it
+    returned would scan a different part of a large library each time.
+    Vectors are not read back, so the cost is the passages' text.
+    """
+    found = sorted(
+        state.store.filter_documents(scope_filter(payload.library_id, payload.generation_ids)),
+        key=reading_order,
+    )
+    return PassagesResult(
+        passages=tuple(to_passage(document) for document in found[: payload.limit]),
+        total=len(found),
+    )
 
 
 @router.post("/delete", summary="Remove one generation's chunks")

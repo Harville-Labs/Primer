@@ -15,7 +15,7 @@ from nnterp import StandardizedTransformer
 from primer_service.db import Database
 from primer_service.errors import ProblemError, problem_response, rendered, validation_problem
 
-from primer_lab import __version__, editing, experiments, probes, saved, scoring
+from primer_lab import __version__, editing, experiments, probes, saved, scan, scoring
 from primer_lab.config import Settings
 from primer_lab.host import ModelHost
 from primer_lab.loader import ModelFactory, resolve_device
@@ -137,4 +137,5 @@ def create_app(
     app.include_router(scoring.router)
     app.include_router(probes.router)
     app.include_router(experiments.router)
+    app.include_router(scan.router)
     return app
