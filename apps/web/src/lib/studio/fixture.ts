@@ -84,3 +84,25 @@ export function provenance(overrides: Partial<StudioProvenance> = {}): StudioPro
 		...overrides,
 	};
 }
+
+/** An SSE body, one event a frame, the way Control writes it. */
+export function stream(...events: object[]): Response {
+	const body = events.map((event) => `data: ${JSON.stringify(event)}\n\n`).join('');
+	return new Response(body, { headers: { 'Content-Type': 'text/event-stream' } });
+}
+
+/** The page's own endpoints, answering from a list and keeping every request. */
+export function primer(...answers: (() => Response)[]) {
+	const asked: { path: string; method: string; body: unknown }[] = [];
+	const fetch = (async (input: RequestInfo | URL, init: RequestInit = {}) => {
+		asked.push({
+			path: String(input),
+			method: init.method ?? 'GET',
+			body: typeof init.body === 'string' ? JSON.parse(init.body) : (init.body ?? null),
+		});
+		const answer = answers.shift();
+		if (!answer) throw new Error(`nothing answers ${String(input)}`);
+		return answer();
+	}) as typeof globalThis.fetch;
+	return { fetch, asked };
+}

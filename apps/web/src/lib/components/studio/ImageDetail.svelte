@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Download, RotateCcw, Trash2 } from '@lucide/svelte';
+	import { Download, Pencil, RotateCcw, Trash2 } from '@lucide/svelte';
 	import { Badge, Button } from '@sivir-ui/svelte';
 	import type { StudioImage } from '#lib/api/types.ts';
 	import { lineage, type Offer } from '#lib/studio/offer.ts';
@@ -13,11 +13,12 @@
 		//: False when what made it is no longer offered, so reusing would not make it again.
 		reusable: boolean;
 		onreuse: () => void;
+		onedit: () => void;
 		ondelete: () => void;
 		onselect: (image: StudioImage) => void;
 	}
 
-	let { image, offers, known, reusable, onreuse, ondelete, onselect }: Props = $props();
+	let { image, offers, known, reusable, onreuse, onedit, ondelete, onselect }: Props = $props();
 
 	let made = $derived(image.provenance ?? null);
 	let provider = $derived(
@@ -45,6 +46,10 @@
 		>
 			<Download size={13} aria-hidden="true" />
 			Download
+		</Button>
+		<Button variant="secondary" size="sm" onclick={onedit}>
+			<Pencil size={13} aria-hidden="true" />
+			Edit
 		</Button>
 		{#if made}
 			<Button

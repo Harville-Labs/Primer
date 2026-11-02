@@ -17,6 +17,8 @@ export interface Offer {
 	/** The model to name in the request. For ComfyUI, the template's name. */
 	model: string;
 	api: 'openai' | 'comfyui';
+	/** Those of the operations a tab asked for that this one declares; never empty. */
+	operations: ImageOperation[];
 	sizes: string[];
 	maxCount: number;
 	/**
@@ -30,7 +32,9 @@ export interface Offer {
 	steps: boolean;
 }
 
-export function offersFor(providers: ImageProvider[], operation: ImageOperation): Offer[] {
+/** What can do any of `wanted`, each saying which of them it does. */
+export function offersFor(providers: ImageProvider[], wanted: ImageOperation[]): Offer[] {
+	const of = (declared: ImageOperation[]) => wanted.filter((each) => declared.includes(each));
 	return providers.flatMap(({ provider_id, provider_name, capabilities }): Offer[] => {
 		const common = {
 			providerId: provider_id,
@@ -39,12 +43,13 @@ export function offersFor(providers: ImageProvider[], operation: ImageOperation)
 		};
 		if (capabilities.api === 'comfyui') {
 			return capabilities.templates
-				.filter((template) => template.operations.includes(operation))
+				.filter((template) => of(template.operations).length > 0)
 				.map((template) => ({
 					...common,
 					key: `${provider_id}:${template.name}`,
 					model: template.name,
 					api: 'comfyui' as const,
+					operations: of(template.operations),
 					// ComfyUI runs a workflow once per request.
 					maxCount: 1,
 					negativePrompt: Boolean(template.bindings.negative_prompt),
@@ -52,12 +57,14 @@ export function offersFor(providers: ImageProvider[], operation: ImageOperation)
 					steps: Boolean(template.bindings.steps),
 				}));
 		}
-		if (!capabilities.operations.includes(operation)) return [];
+		const operations = of(capabilities.operations);
+		if (operations.length === 0) return [];
 		return capabilities.models.map((model) => ({
 			...common,
 			key: `${provider_id}:${model}`,
 			model,
 			api: 'openai' as const,
+			operations,
 			maxCount: capabilities.max_images,
 			negativePrompt: false,
 			seed: false,

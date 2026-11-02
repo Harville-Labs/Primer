@@ -242,7 +242,9 @@ difference is the whole content of the message someone reads.
   protocols. One deliberate exception: Lab encodes SAE features itself, in
   `services/lab/src/primer_lab/saes.py`, rather than through sae-lens,
   which would add about thirty packages to the Lab image for an affine map
-  and a top-k.
+  and a top-k. Another: Studio's mask brush, in
+  `apps/web/src/lib/studio/mask.ts`, rather than Konva or Fabric, which
+  would ship a whole scene graph for a brush, an eraser, and undo.
 - **Tools are operator-controlled, user-approved, and isolated** through
   ephemeral MCP sandbox providers. Never expose the host shell.
 - **Studio makes images through a backend the operator brings**: the
