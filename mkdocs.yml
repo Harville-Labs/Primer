@@ -93,6 +93,7 @@ nav:
           - Lab attribution graphs: adr/0009-lab-attribution-graphs-in-their-own-environment.md
           - Studio image generation: adr/0010-studio-image-generation.md
           - Neo4j bundled by default: adr/0011-bundle-neo4j-by-default.md
+          - Bundled search server: adr/0012-bundle-a-search-mcp-server.md
   - Operations:
       - Configuration: operations/configuration.md
       - Connecting model providers: operations/providers.md
