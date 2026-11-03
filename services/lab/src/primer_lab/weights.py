@@ -22,6 +22,10 @@ import json
 from pathlib import Path
 
 from transformers.models.auto.configuration_auto import CONFIG_MAPPING_NAMES
+from transformers.models.auto.modeling_auto import (
+    MODEL_FOR_CAUSAL_LM_MAPPING_NAMES,
+    MODEL_FOR_IMAGE_TEXT_TO_TEXT_MAPPING_NAMES,
+)
 
 #: Formats that are, or may be, Python pickles.
 PICKLE_SUFFIXES = frozenset({".bin", ".pt", ".pth", ".pkl", ".pickle", ".ckpt"})
@@ -60,6 +64,18 @@ def check_config(config_path: Path) -> str:
             f"{config_path.name} names model_type {architecture!r}, which this version of "
             "transformers does not implement. Lab only loads architectures it does, because "
             "the alternative is running the checkpoint's own Python."
+        )
+    if (
+        architecture not in MODEL_FOR_CAUSAL_LM_MAPPING_NAMES
+        and architecture not in MODEL_FOR_IMAGE_TEXT_TO_TEXT_MAPPING_NAMES
+    ):
+        # Lab reads a model as it predicts the next token. An encoder, or
+        # an encoder-decoder like T5, has no class that does, and would
+        # fail inside nnsight with a message written for a Python caller.
+        raise WeightsRefused(
+            f"{config_path.name} names model_type {architecture!r}, which transformers "
+            "cannot load as a model that generates text. Lab inspects language models, and "
+            "multimodal models that answer in text."
         )
     return architecture
 

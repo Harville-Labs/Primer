@@ -118,6 +118,7 @@ def test_who_may_choose_a_model_reaches_lab() -> None:
 def test_the_default_model_is_given_its_saes_and_an_operator_can_turn_them_off() -> None:
     default = env_of(lab(render(*ENABLED)))["PRIMER_LAB_SAES"]
     assert '"Qwen/Qwen3-1.7B":"Qwen/SAE-Res-Qwen3-1.7B-Base-W32K-L0_50"' in default
+    assert '"Qwen/Qwen3.5-2B":"Qwen/SAE-Res-Qwen3.5-2B-Base-W32K-L0_50"' in default
 
     # `null` from --set deletes the key; Lab must still be told "none", since
     # an absent variable would mean its own default, which is Qwen-Scope.

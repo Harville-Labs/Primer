@@ -105,8 +105,9 @@ async def generate(
         edits = resolve_edits(
             body.interventions,
             num_layers=resident.loaded.num_layers,
-            hidden_size=model.config.hidden_size,
-            mlp_width=model.config.intermediate_size,
+            without_attention=resident.loaded.without_attention,
+            hidden_size=resident.loaded.text_config.hidden_size,
+            mlp_width=resident.loaded.text_config.intermediate_size,
             saes=resident.ready_saes,
             vectors=resident.vectors.owned_by(principal.user_id),
         )

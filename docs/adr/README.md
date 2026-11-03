@@ -14,3 +14,4 @@
 | [0010](0010-studio-image-generation.md) | Make images in Studio, through a backend the operator brings | Accepted |
 | [0011](0011-bundle-neo4j-by-default.md) | Run a Neo4j in every chart release by default | Accepted |
 | [0012](0012-bundle-a-search-mcp-server.md) | Offer a bundled web search MCP server, off by default | Accepted |
+| [0013](0013-lab-loads-multimodal-checkpoints.md) | Load a multimodal checkpoint as the model it is | Accepted |
