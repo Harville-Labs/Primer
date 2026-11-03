@@ -564,12 +564,14 @@ lab:
   # hub's file list first. Keep it below the volume's size.
   maxModelBytes: 20000000000
   # The SAEs read for each model, by repository, for the Neurons tab's
-  # feature view. Users cannot choose these. Qwen-Scope is about 15GB, is
-  # licensed for scientific research only, and is opened as a weights-only
-  # pickle (ADR 0007). `saes: null` turns the feature view off.
+  # feature view. Users cannot choose these. Each Qwen-Scope set is about
+  # 13-15GB, is licensed for scientific research only, and is opened as a
+  # weights-only pickle (ADR 0007). `saes: null` turns the feature view off.
   saes:
     Qwen/Qwen3-1.7B: Qwen/SAE-Res-Qwen3-1.7B-Base-W32K-L0_50
     Qwen/Qwen3-1.7B-Base: Qwen/SAE-Res-Qwen3-1.7B-Base-W32K-L0_50
+    Qwen/Qwen3.5-2B: Qwen/SAE-Res-Qwen3.5-2B-Base-W32K-L0_50
+    Qwen/Qwen3.5-2B-Base: Qwen/SAE-Res-Qwen3.5-2B-Base-W32K-L0_50
   # Labels for SAE features, by the SAE repository they describe: a JSON
   # Lines file, as a path inside the weights volume. Read at startup, and
   # a malformed file stops Lab starting. Nothing is fetched to label them.
