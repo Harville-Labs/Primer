@@ -3,6 +3,7 @@
 	import {
 		Activity,
 		ChevronRight,
+		CircleHelp,
 		FlaskConical,
 		Library,
 		MessageSquare,
@@ -27,6 +28,7 @@
 	import ConversationList from '#lib/components/ConversationList.svelte';
 	import ThemeToggle from '#lib/components/ThemeToggle.svelte';
 	import { canScore } from '#lib/lab/anomalies.ts';
+	import { type LabTool, labTools } from '#lib/lab/tools.ts';
 
 	interface Props {
 		libraries: LibrarySummary[];
@@ -98,20 +100,17 @@
 		untrack(() => (expanded = sectionsFor(path)));
 	});
 
-	// Neurons reads Lab's resident model; Anomalies can score a chat
-	// endpoint too, so it is offered wherever there is one. Scan reads a
-	// library through Chat and scores it with Lab, so it needs both.
+	const LAB_ICONS: Record<LabTool, typeof ScanLine> = {
+		neurons: ScanLine,
+		anomalies: Activity,
+		scan: ScanSearch,
+	};
 	let lab = $derived(
-		[
-			{ href: '/lab/neurons', label: 'Neurons', icon: ScanLine, show: capabilities.lab_available },
-			{ href: '/lab/anomalies', label: 'Anomalies', icon: Activity, show: true },
-			{
-				href: '/lab/scan',
-				label: 'Scan',
-				icon: ScanSearch,
-				show: capabilities.lab_available && capabilities.chat_available,
-			},
-		].filter((tab) => tab.show)
+		labTools(capabilities).map((entry) => ({
+			href: entry.href,
+			label: entry.label,
+			icon: LAB_ICONS[entry.tool],
+		}))
 	);
 
 	const studio = [
@@ -330,6 +329,29 @@
 									</li>
 								{/each}
 							</ul>
+							{#if section.href === '/lab'}
+								{@const current = inSection('/lab/about')}
+								<!--
+								  Set apart from the tools above it, because it is
+								  not one: it is how they work, for whoever opens
+								  Lab without knowing what a residual stream is.
+								-->
+								<div aria-hidden="true" class="mx-2.5 my-1 border-t border-border"></div>
+								<a
+									href="/lab/about"
+									onclick={onnavigate}
+									aria-current={current ? 'page' : undefined}
+									class="flex items-center gap-2 rounded-md px-2.5 py-1.5 text-sm
+										transition-colors focus-visible:outline-none
+										focus-visible:shadow-[var(--focus-ring)]
+										{current
+										? 'bg-secondary font-medium text-foreground'
+										: 'text-muted-foreground hover:bg-muted hover:text-foreground'}"
+								>
+									<CircleHelp size={13} aria-hidden="true" class="shrink-0" />
+									What is this?
+								</a>
+							{/if}
 						{/if}
 					</div>
 				{/if}

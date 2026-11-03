@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import type { DeploymentCapabilities } from '#lib/api/types.ts';
 import {
 	canScore,
 	distanceShares,
@@ -10,22 +9,7 @@ import {
 	stripRows,
 	surprisalShares,
 } from './anomalies';
-import { chatModel, PROBE, RESIDENT, sequence } from './fixture';
-
-function capabilities(lab: boolean, chat: boolean): DeploymentCapabilities {
-	return {
-		auth_enabled: false,
-		ingestion_available: true,
-		chat_available: chat,
-		tools_available: false,
-		lab_available: lab,
-		studio_available: false,
-		studio_library_available: false,
-		is_admin: false,
-		max_upload_bytes: 1024,
-		supported_extensions: ['.pdf'],
-	};
-}
+import { capabilities, chatModel, PROBE, RESIDENT, sequence } from './fixture';
 
 describe('what the tab can score with', () => {
 	it('is offered on a deployment with Chat and no Lab', () => {

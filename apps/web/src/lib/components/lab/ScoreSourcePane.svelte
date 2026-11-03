@@ -21,7 +21,7 @@
 	let generating = $derived(scorer.effectiveMode === 'generate');
 </script>
 
-<div class="flex h-full min-h-0 flex-col gap-5 px-4 py-4">
+<div class="flex h-full min-h-0 flex-col gap-6 px-4 py-4">
 	<section aria-labelledby="source-heading" class="flex flex-col gap-2">
 		<h2
 			id="source-heading"
