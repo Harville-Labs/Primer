@@ -1,13 +1,15 @@
 <script lang="ts">
-	import { Bookmark, Grid3x3, PanelLeft, PanelRight, Rows3, Sparkles } from '@lucide/svelte';
-	import { Button, Sheet, ToggleGroup } from '@sivir-ui/svelte';
+	import { Bookmark, Grid3x3, Rows3, Sparkles } from '@lucide/svelte';
+	import { Button, ToggleGroup } from '@sivir-ui/svelte';
 	import { onMount } from 'svelte';
 	import ActivationHeatmap from '#lib/components/lab/ActivationHeatmap.svelte';
 	import ComparePane from '#lib/components/lab/ComparePane.svelte';
 	import EditsPanel from '#lib/components/lab/EditsPanel.svelte';
 	import ExperimentsSheet from '#lib/components/lab/ExperimentsSheet.svelte';
 	import GraphPane from '#lib/components/lab/GraphPane.svelte';
+	import LabEmpty from '#lib/components/lab/LabEmpty.svelte';
 	import LabPromptPane from '#lib/components/lab/LabPromptPane.svelte';
+	import LabShell from '#lib/components/lab/LabShell.svelte';
 	import NeuronInspector from '#lib/components/lab/NeuronInspector.svelte';
 	import SteerSheet from '#lib/components/lab/SteerSheet.svelte';
 	import type { Experiment, NeuronsRun } from '#lib/api/types.ts';
@@ -40,7 +42,6 @@
 	let pane = $state<'grid' | 'compare' | 'graph'>('grid');
 
 	let promptOpen = $state(false);
-	let detailOpen = $state(false);
 	let peek = $state<Cell | null>(null);
 	// Null until the reader picks, so the default can follow the prompt's
 	// length: a long prompt is unreadable cell by cell, a short one is the
@@ -125,148 +126,123 @@
 	<NeuronInspector {inspector} onedit={(edit) => edits.add({ ...edit, op: 'zero' })} />
 {/snippet}
 
-<!--
-  Three panes wide on a desktop - the prompt, the grid, what the selected
-  cell holds - because the grid is only worth reading with the other two in
-  view. Below the breakpoint the grid keeps the screen and the other two
-  come in from the edges, rather than stacking into a column where the grid
-  is a thumbnail.
--->
-<div
-	class="flex h-full min-h-0 overflow-hidden rounded-xl border border-border bg-card
-		shadow-[var(--elevation-float)]"
->
-	<aside class="hidden w-72 shrink-0 overflow-y-auto border-r border-border bg-muted/30 lg:block">
-		{@render promptPane()}
-	</aside>
+{#snippet views()}
+	<ToggleGroup.Root
+		type="single"
+		value={pane}
+		onValueChange={(value) => {
+			if (value === 'grid' || value === 'compare') pane = value;
+			if (value === 'graph') {
+				// Start from the prompt being read, which is usually the one to trace.
+				if (!grapher.prompt) grapher.prompt = inspector.prompt;
+				pane = value;
+			}
+		}}
+	>
+		<ToggleGroup.Item value="grid" class="text-xs">Grid</ToggleGroup.Item>
+		<ToggleGroup.Item value="compare" class="text-xs">Compare</ToggleGroup.Item>
+		{#if graphTokens !== null && model}
+			<ToggleGroup.Item value="graph" class="text-xs">Graph</ToggleGroup.Item>
+		{/if}
+	</ToggleGroup.Root>
+{/snippet}
 
-	<section aria-label="Activations" class="flex min-w-0 flex-1 flex-col">
-		<div class="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-border px-4 py-2.5">
-			<Button
-				variant="ghost"
-				size="icon"
-				class="lg:hidden"
-				onclick={() => (promptOpen = true)}
-			>
-				<PanelLeft size={15} aria-hidden="true" />
-				<span class="sr-only">Prompt and model</span>
-			</Button>
+{#snippet actions()}
+	{#if retentionDays !== null && model}
+		<Button
+			variant="ghost"
+			size="icon"
+			onclick={() => (savedOpen = true)}
+			title="Save this run, or open one saved before"
+		>
+			<Bookmark size={15} aria-hidden="true" />
+			<span class="sr-only">Saved experiments</span>
+		</Button>
+	{/if}
+{/snippet}
 
-			<div class="flex items-baseline gap-2">
-				<h1 class="text-sm font-semibold tracking-[-0.01em]">Neurons</h1>
-				{#if reading && pane === 'grid'}
-					<span class="font-mono text-[11px] tabular-nums text-muted-foreground">
-						{reading.layers.length} layers × {reading.tokens.length} tokens
-					</span>
-				{/if}
-			</div>
+{#snippet gridStatus()}
+	<span class="tabular-nums">
+		{#if reading}
+			{reading.layers.length} layers × {reading.tokens.length} tokens
+		{:else}
+			No reading yet
+		{/if}
+	</span>
 
-			<ToggleGroup.Root
-				type="single"
-				value={pane}
-				onValueChange={(value) => {
-					if (value === 'grid' || value === 'compare') pane = value;
-					if (value === 'graph') {
-						// Start from the prompt being read, which is usually the one to trace.
-						if (!grapher.prompt) grapher.prompt = inspector.prompt;
-						pane = value;
-					}
-				}}
-			>
-				<ToggleGroup.Item value="grid" class="text-xs">Grid</ToggleGroup.Item>
-				<ToggleGroup.Item value="compare" class="text-xs">Compare</ToggleGroup.Item>
-				{#if graphTokens !== null && model}
-					<ToggleGroup.Item value="graph" class="text-xs">Graph</ToggleGroup.Item>
-				{/if}
-			</ToggleGroup.Root>
+	<div class="ml-auto flex items-center gap-3">
+		<ToggleGroup.Root
+			type="single"
+			value={inspector.signal}
+			onValueChange={(value) => {
+				if (typeof value === 'string') inspector.signal = value as Signal;
+			}}
+		>
+			{#each SIGNALS as each (each.value)}
+				<ToggleGroup.Item value={each.value} class="text-xs">
+					{each.label}
+				</ToggleGroup.Item>
+			{/each}
+		</ToggleGroup.Root>
 
-			{#if pane === 'grid'}
-			<ToggleGroup.Root
-				type="single"
-				value={inspector.signal}
-				onValueChange={(value) => {
-					if (typeof value === 'string') inspector.signal = value as Signal;
-				}}
-				class="ml-auto"
-			>
-				{#each SIGNALS as each (each.value)}
-					<ToggleGroup.Item value={each.value} class="text-xs">
-						{each.label}
-					</ToggleGroup.Item>
-				{/each}
-			</ToggleGroup.Root>
-
-			<!--
-			  The scale, drawn with the same colour function as the cells, so
-			  it cannot disagree with them in either theme.
-			-->
-			<div class="hidden items-center gap-2 font-mono text-[10px] text-muted-foreground sm:flex"
-				title={signal.hint}
-			>
-				<span>{signed ? '−' : '0'}</span>
-				<span
-					aria-hidden="true"
-					class="h-2 w-28 rounded-full border border-border"
-					style:background-image={signed
-						? 'linear-gradient(90deg, var(--color-lab-negative), var(--color-card), var(--color-lab-positive))'
-						: 'linear-gradient(90deg, var(--color-card), var(--color-lab-positive))'}
-				></span>
-				<span>{signed ? '+' : '1'}</span>
-			</div>
-
-			<Button
-				variant="ghost"
-				size="icon"
-				disabled={!reading}
-				onclick={() => (denseChoice = !dense)}
-				title={dense ? 'Show each cell’s top token' : 'Fit more tokens on screen'}
-			>
-				{#if dense}<Rows3 size={15} aria-hidden="true" />{:else}<Grid3x3
-						size={15}
-						aria-hidden="true"
-					/>{/if}
-				<span class="sr-only">{dense ? 'Show labels' : 'Compact cells'}</span>
-			</Button>
-			{/if}
-
-			{#if retentionDays !== null && model}
-				<Button
-					variant="ghost"
-					size="icon"
-					class={pane === 'grid' ? '' : 'ml-auto'}
-					onclick={() => (savedOpen = true)}
-					title="Save this run, or open one saved before"
-				>
-					<Bookmark size={15} aria-hidden="true" />
-					<span class="sr-only">Saved experiments</span>
-				</Button>
-			{/if}
-
-			<Button
-				variant="ghost"
-				size="icon"
-				class="lg:hidden"
-				onclick={() => (detailOpen = true)}
-			>
-				<PanelRight size={15} aria-hidden="true" />
-				<span class="sr-only">Selected cell</span>
-			</Button>
+		<!--
+		  The scale, drawn with the same colour function as the cells, so
+		  it cannot disagree with them in either theme.
+		-->
+		<div class="hidden items-center gap-2 text-[10px] sm:flex" title={signal.hint}>
+			<span>{signed ? '−' : '0'}</span>
+			<span
+				aria-hidden="true"
+				class="h-2 w-24 rounded-full border border-border"
+				style:background-image={signed
+					? 'linear-gradient(90deg, var(--color-lab-negative), var(--color-card), var(--color-lab-positive))'
+					: 'linear-gradient(90deg, var(--color-card), var(--color-lab-positive))'}
+			></span>
+			<span>{signed ? '+' : '1'}</span>
 		</div>
 
-		{#if pane === 'compare'}
-			<div class="min-h-0 flex-1 bg-card">
-				<ComparePane {generator} />
-			</div>
-		{:else if pane === 'graph' && graphTokens !== null && model}
-			<div class="min-h-0 flex-1 bg-card">
-				<GraphPane
-					{grapher}
-					numLayers={model.num_layers}
-					maxPromptTokens={graphTokens}
-					transcoders={model.transcoders ?? null}
-				/>
-			</div>
-		{:else}
+		<Button
+			variant="ghost"
+			size="icon"
+			disabled={!reading}
+			onclick={() => (denseChoice = !dense)}
+			title={dense ? 'Show each cell’s top token' : 'Fit more tokens on screen'}
+		>
+			{#if dense}<Rows3 size={15} aria-hidden="true" />{:else}<Grid3x3
+					size={15}
+					aria-hidden="true"
+				/>{/if}
+			<span class="sr-only">{dense ? 'Show labels' : 'Compact cells'}</span>
+		</Button>
+	</div>
+{/snippet}
+
+<LabShell
+	tool="neurons"
+	label="Activations"
+	leftLabel="Prompt and model"
+	left={promptPane}
+	rightLabel="Selected cell"
+	right={detailPane}
+	{views}
+	{actions}
+	status={pane === 'grid' ? gridStatus : undefined}
+	bind:leftOpen={promptOpen}
+>
+	{#if pane === 'compare'}
+		<div class="min-h-0 flex-1 bg-card">
+			<ComparePane {generator} />
+		</div>
+	{:else if pane === 'graph' && graphTokens !== null && model}
+		<div class="min-h-0 flex-1 bg-card">
+			<GraphPane
+				{grapher}
+				numLayers={model.num_layers}
+				maxPromptTokens={graphTokens}
+				transcoders={model.transcoders ?? null}
+			/>
+		</div>
+	{:else}
 		<div class="relative min-h-0 flex-1 overflow-auto overscroll-contain bg-card">
 			{#if reading}
 				<div class="p-4 transition-opacity {inspector.running ? 'opacity-60' : ''}">
@@ -283,26 +259,16 @@
 					/>
 				</div>
 			{:else}
-				<div class="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
-					<span
-						aria-hidden="true"
-						class="grid size-12 place-items-center rounded-xl border border-border"
-						style:background-image="linear-gradient(135deg, var(--color-card), color-mix(in oklab, var(--color-lab-positive) 35%, var(--color-card)))"
-					>
-						<Sparkles size={18} class="text-[var(--color-lab-positive)]" />
-					</span>
-					<p class="text-sm font-medium">Watch a prediction form</p>
-					<p class="max-w-sm text-xs leading-relaxed text-muted-foreground">
-						Run a prompt to see every layer's reading of every token: what the model would say
-						next if it stopped there, how loud the residual stream is, and which neurons fire.
-						Arrow keys move through the grid.
-					</p>
-				</div>
+				<LabEmpty icon={Sparkles} title="Watch a prediction form" about="/lab/about/neurons">
+					Run a prompt to see every layer's reading of every token: what the model would say next
+					if it stopped there, how loud the residual stream is, and which neurons fire. Arrow keys
+					move through the grid.
+				</LabEmpty>
 			{/if}
 		</div>
 
 		<div
-			class="flex h-8 items-center gap-3 border-t border-border px-4 font-mono text-[11px]
+			class="flex h-8 shrink-0 items-center gap-3 border-t border-border px-4 font-mono text-[11px]
 				text-muted-foreground"
 			aria-live="off"
 		>
@@ -316,13 +282,8 @@
 				<span>Hover to peek · click or use the arrow keys to select</span>
 			{/if}
 		</div>
-		{/if}
-	</section>
-
-	<aside class="hidden w-80 shrink-0 overflow-y-auto border-l border-border bg-muted/30 lg:block">
-		{@render detailPane()}
-	</aside>
-</div>
+	{/if}
+</LabShell>
 
 {#if model}
 	<SteerSheet
@@ -347,15 +308,3 @@
 		onopen={reopen}
 	/>
 {/if}
-
-<Sheet.Root bind:open={promptOpen}>
-	<Sheet.Content side="left" class="w-80 overflow-y-auto p-0">
-		{@render promptPane()}
-	</Sheet.Content>
-</Sheet.Root>
-
-<Sheet.Root bind:open={detailOpen}>
-	<Sheet.Content side="right" class="w-80 overflow-y-auto p-0">
-		{@render detailPane()}
-	</Sheet.Content>
-</Sheet.Root>

@@ -28,7 +28,7 @@
 	let runnable = $derived(Boolean(model) && !inspector.running);
 </script>
 
-<div class="flex h-full min-h-0 flex-col gap-5 px-4 py-4">
+<div class="flex h-full min-h-0 flex-col gap-6 px-4 py-4">
 	<section aria-labelledby="model-heading" class="flex flex-col gap-2">
 		<h2
 			id="model-heading"

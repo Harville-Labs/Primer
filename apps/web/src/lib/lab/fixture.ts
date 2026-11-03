@@ -1,6 +1,7 @@
 import type {
 	BuiltGraph,
 	ChatModel,
+	DeploymentCapabilities,
 	InspectResponse,
 	LabModelStatus,
 	Passage,
@@ -93,6 +94,22 @@ export function reading(overrides: Partial<InspectResponse> = {}): InspectRespon
 			},
 		],
 		...overrides,
+	};
+}
+
+/** A deployment with Lab, Chat, both, or neither, and nothing else that Lab reads. */
+export function capabilities(lab: boolean, chat: boolean): DeploymentCapabilities {
+	return {
+		auth_enabled: false,
+		ingestion_available: true,
+		chat_available: chat,
+		tools_available: false,
+		lab_available: lab,
+		studio_available: false,
+		studio_library_available: false,
+		is_admin: false,
+		max_upload_bytes: 1024,
+		supported_extensions: ['.pdf'],
 	};
 }
 
