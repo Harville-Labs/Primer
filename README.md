@@ -22,7 +22,10 @@ reranker, and answers with whichever chat model you point it at.
 
 <div align="center">
 
-![Primer system architecture](docs/assets/diagrams/architecture.svg)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/diagrams/architecture-dark.svg">
+  <img alt="Primer system architecture" src="docs/assets/diagrams/architecture.svg">
+</picture>
 
 </div>
 
@@ -37,6 +40,46 @@ reranker, and answers with whichever chat model you point it at.
 | **Your models** | Any OpenAI-compatible endpoint — vLLM, Ollama, llama.cpp, or a hosted API. |
 | **Chat on its own** | Use it as a plain chat interface, and link a library when you want the answer grounded and cited. |
 | **Tools, only with consent** | MCP tools run in the operator's own servers, and only after a person approves that specific call. Primer never touches the host shell. |
+
+## What it looks like
+
+An answer cites the passages it came from, and each marker opens the passage
+it names.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/screenshots/chat-dark.png">
+  <img alt="A cited answer to a question about a library" src="docs/assets/screenshots/chat-light.png">
+</picture>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/screenshots/sources-dark.png">
+  <img alt="The sources panel, open at the second citation" src="docs/assets/screenshots/sources-light.png">
+</picture>
+
+A library lists its documents, where each one is in indexing, and who else
+can read it.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/screenshots/library-dark.png">
+  <img alt="A library of eight documents, shared with one other person" src="docs/assets/screenshots/library-light.png">
+</picture>
+
+Lab, when it is enabled, opens up a model Primer runs itself: what each layer
+would predict, which neurons fire, and which tokens surprised it. Each tool
+has a page explaining how it works.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/screenshots/lab-neurons-dark.png">
+  <img alt="The Neurons grid: the logit lens at every layer and token" src="docs/assets/screenshots/lab-neurons-light.png">
+</picture>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/screenshots/lab-about-dark.png">
+  <img alt="The page explaining how Anomalies works" src="docs/assets/screenshots/lab-about-light.png">
+</picture>
+
+The screenshots were taken against stand-in services with invented documents,
+so the text in them is illustrative.
 
 ## Local quick start
 
@@ -110,7 +153,7 @@ images built from the commit tagged `v1.4.0`. Charts come only from releases.
 
 ## How it fits together
 
-Four processes, each owning one thing.
+Each process owns one thing.
 
 - **Control API** — what exists, and who may see it. Every authorization
   decision is made here and nowhere else.
@@ -123,7 +166,13 @@ Four processes, each owning one thing.
   library and a generation; there is no unscoped search to get wrong. With
   a graph, search fuses the vector ranking with the passages connected to
   what the question names.
-- **Web** — SvelteKit, and the only thing a browser talks to.
+- **Chat** — conversations and answers. It searches through Retrieval,
+  calls the chat model, runs approved tool calls against MCP servers, and
+  makes images through the operator's image backend.
+- **Lab** — optional. Loads a small model of its own so a person can look
+  inside it: the logit lens, neurons, features, and surprisal.
+- **Web** — SvelteKit, and the only thing a browser talks to. It calls
+  Control, Chat, and Lab with the identity the proxy established.
 
 Reindexing writes a new *generation* and swaps it in atomically, so a rebuild
 is invisible until it is complete rather than half-answering questions while
