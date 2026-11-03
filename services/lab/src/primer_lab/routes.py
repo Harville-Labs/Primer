@@ -262,8 +262,8 @@ async def inspect(
         chat_template=prompt.chat_template,
         tokens=reading.tokens,
         vocabulary=reading.vocabulary,
-        hidden_size=model.config.hidden_size,
-        mlp_width=model.config.intermediate_size,
+        hidden_size=resident.loaded.text_config.hidden_size,
+        mlp_width=resident.loaded.text_config.intermediate_size,
         layers=reading.layers,
     )
 
@@ -289,6 +289,8 @@ async def activation(
             raise refused(
                 f"No such {name}", f"The {name} must be below {bound} for this model and prompt."
             )
+    if body.site == "attn_out" and (reason := resident.loaded.without_attention(body.layer)):
+        raise refused("No attention at that layer", reason)
     model = resident.loaded.model
     values = await run_queued(
         request,

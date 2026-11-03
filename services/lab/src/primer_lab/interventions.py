@@ -74,6 +74,7 @@ def resolve(
     interventions: list[Intervention],
     *,
     num_layers: int,
+    without_attention: Callable[[int], str | None],
     hidden_size: int,
     mlp_width: int,
     saes: SaeSet | None,
@@ -93,6 +94,8 @@ def resolve(
                 f"{where}: there is no layer {item.layer}. This model's layers are "
                 f"0 to {num_layers - 1}."
             )
+        if item.site == "attn_out" and (reason := without_attention(item.layer)):
+            raise InterventionRefused(f"{where}: {reason}")
         sae, k = None, 0
         if item.site == "sae_feature":
             if saes is None:
@@ -287,7 +290,8 @@ def _step(model: Any, chunk: list[int], offset: int, cache: Any, context: _Conte
 
 
 def stop_tokens(model: Any) -> set[int]:
-    configured = model.config.eos_token_id
+    # A multimodal model's end-of-sequence token is in its text config.
+    configured = model.config.get_text_config().eos_token_id
     ids = set(configured if isinstance(configured, list) else [configured])
     return {i for i in ids | {model.tokenizer.eos_token_id} if i is not None}
 
@@ -323,7 +327,9 @@ def generate(
         special=special,
     )
     stops = stop_tokens(model)
-    cache = DynamicCache()
+    # Built from the config so each layer gets the cache its kind needs: a
+    # linear-attention layer keeps a recurrent state, not keys and values.
+    cache = DynamicCache(config=model.config)
     chunk, offset = list(prompt), 0
     tokens: list[int] = []
     first: torch.Tensor | None = None

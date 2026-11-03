@@ -140,3 +140,32 @@ def test_a_repository_needing_remote_code_is_refused_after_only_its_config(
 def test_a_missing_repository_says_so(weights_dir, hub):
     with pytest.raises(ModelUnavailable, match="no public repository called nobody/none"):
         resolve(settings_for(weights_dir), HubModel(repository="nobody/none"), hub)
+
+
+def test_an_architecture_that_generates_no_text_is_refused_after_only_its_config(
+    weights_dir, hub, tmp_path, tiny_model
+):
+    """T5 is implemented by transformers, so the remote-code check passes it,
+    but it has no class that predicts the next token as Lab reads one.
+    Better to say so than download it."""
+    source = published(hub, tmp_path, tiny_model)
+    config = json.loads((source / "config.json").read_text())
+    config["model_type"] = "t5"
+    (source / "config.json").write_text(json.dumps(config))
+    with pytest.raises(ModelUnavailable, match="cannot load as a model that generates text"):
+        resolve(settings_for(weights_dir), HubModel(repository=REPO), hub)
+    assert [patterns for *_, patterns in hub.downloaded] == [["config.json"]]
+
+
+def test_a_multimodal_architecture_with_no_text_only_class_is_fetched(
+    weights_dir, hub, tmp_path, tiny_model
+):
+    """Qwen2.5-VL is image-text-to-text and nothing else in transformers. Lab
+    loads such a model whole, so the config check must not mistake it for
+    one that generates no text."""
+    source = published(hub, tmp_path, tiny_model)
+    config = json.loads((source / "config.json").read_text())
+    config["model_type"] = "qwen2_5_vl"
+    (source / "config.json").write_text(json.dumps(config))
+    resolved = resolve(settings_for(weights_dir), HubModel(repository=REPO), hub)
+    assert resolved.architecture == "qwen2_5_vl"

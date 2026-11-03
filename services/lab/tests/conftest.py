@@ -20,6 +20,7 @@ from huggingface_hub.errors import RepositoryNotFoundError
 from huggingface_hub.utils import filter_repo_objects
 from lab_support import MODEL, SAES, TINY, build_saes, build_tiny_model, lab, lab_with_saes, settle
 from nnterp import StandardizedTransformer
+from nnterp.rename_utils import RenamingError
 from primer_lab.migrations import upgrade_to_head
 from primer_lab.sources import Listing
 from primer_lab.tables import LAB_SCHEMA, Base
@@ -100,11 +101,15 @@ class RecordingFactory:
     def __init__(self) -> None:
         self.calls: list[tuple[str, dict[str, Any]]] = []
         self.fail_for: set[str] = set()
+        #: Directories nnterp is made to fail to map, as it does an architecture it does not know.
+        self.unmappable: set[str] = set()
 
     def __call__(self, path: str, **options: Any) -> Any:
         self.calls.append((path, options))
         if Path(path).name in self.fail_for:
             raise ValueError("nnterp cannot map this architecture")
+        if Path(path).name in self.unmappable:
+            raise RenamingError("Could not find any attention module")
         return StandardizedTransformer(path, **options)
 
 

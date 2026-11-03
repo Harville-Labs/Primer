@@ -198,7 +198,7 @@ class ModelHost:
         too, but after the switch is reported done: the model answers runs
         while they download. A failure here leaves the model as it is.
         """
-        config = resident.loaded.model.config
+        config = resident.loaded.text_config
         try:
             ready = await asyncio.to_thread(
                 fetch,
