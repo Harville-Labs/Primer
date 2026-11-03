@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { Activity } from '@lucide/svelte';
 	import DetectorDetail from '#lib/components/lab/DetectorDetail.svelte';
 	import { entropyBasis, entropyOf, SPAN_KINDS, spanText } from '#lib/lab/anomalies.ts';
 	import { visibleToken } from '#lib/lab/heatmap.ts';
@@ -18,8 +19,8 @@
 	let entropy = $derived(token ? entropyOf(token) : null);
 </script>
 
-<div class="flex flex-col gap-5 px-4 py-4">
-	{#if score && token}
+{#if score && token}
+	<div class="flex flex-col gap-6 px-4 py-4">
 		<section aria-labelledby="token-heading" class="flex flex-col gap-2">
 			<h2
 				id="token-heading"
@@ -88,10 +89,10 @@
 				</ul>
 			{/if}
 		</section>
-	{:else}
-		<p class="text-xs leading-relaxed text-muted-foreground">
-			Score something to see each token's surprisal, the model's uncertainty where it wrote it,
-			and the stretches that stand out.
-		</p>
-	{/if}
-</div>
+	</div>
+{:else}
+	<div class="flex h-full flex-col items-center justify-center gap-2 px-6 text-center">
+		<Activity size={20} aria-hidden="true" class="text-muted-foreground" />
+		<p class="text-sm text-muted-foreground">Score something, then pick a token to read it.</p>
+	</div>
+{/if}

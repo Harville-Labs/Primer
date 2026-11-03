@@ -268,7 +268,7 @@ Compose passes one.
 | `PRIMER_ADMIN_GROUP` | `auth.adminGroup` | unset | Who counts as an admin for `admins` |
 | `PRIMER_LAB_REPOSITORY_PATTERNS` | `lab.repositoryPatterns` | `["*/*"]` | JSON list of shell-style patterns a repository must match |
 | `PRIMER_LAB_MAX_MODEL_BYTES` | `lab.maxModelBytes` | `20000000000` | Checked against the hub's file list before anything downloads |
-| `PRIMER_LAB_SAES` | `lab.saes` | Qwen3-1.7B and Qwen3-1.7B-Base to Qwen-Scope | JSON object from a model repository to the SAE repository read with it. `{}` maps none. See [SAE features](lab.md#sae-features) |
+| `PRIMER_LAB_SAES` | `lab.saes` | Qwen3-1.7B, Qwen3.5-2B, and their Base models to Qwen-Scope | JSON object from a model repository to the SAE repository read with it. `{}` maps none. See [SAE features](lab.md#sae-features) |
 | `PRIMER_LAB_FEATURE_LABELS` | `lab.featureLabels` | none | JSON object from an SAE repository to a labels file, as a path inside the weights volume. See [Feature labels](lab.md#feature-labels) |
 | `PRIMER_LAB_TRANSCODERS` | `lab.graphs.transcoders` | Qwen3-4B to `mwhanna/qwen3-4b-transcoders` | JSON object from a model repository to its transcoders. Read only where graphs can be built. See [Attribution graphs](lab.md#attribution-graphs) |
 | `PRIMER_LAB_MAX_TRANSCODER_BYTES` | `lab.graphs.maxTranscoderBytes` | `70000000000` | Checked against the hub's file list before transcoders download |

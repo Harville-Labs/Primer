@@ -20,7 +20,14 @@ from primer_lab.app import create_app
 from primer_lab.config import Settings
 from primer_service.db import Database
 from tokenizers import Tokenizer, models, pre_tokenizers
-from transformers import PreTrainedTokenizerFast, Qwen3Config, Qwen3ForCausalLM
+from transformers import (
+    PreTrainedTokenizerFast,
+    Qwen3_5Config,
+    Qwen3_5ForConditionalGeneration,
+    Qwen3_5Tokenizer,
+    Qwen3Config,
+    Qwen3ForCausalLM,
+)
 
 TINY = "tiny"
 #: The tiny model published to the fake hub, and the SAEs mapped to it.
@@ -58,6 +65,74 @@ def build_tiny_model(
     )
     fast.chat_template = chat_template
     fast.save_pretrained(directory)
+    return directory
+
+
+#: The tiny hybrid model's layers, in Qwen3.5's pattern of three linear-attention
+#: layers to every softmax one.
+HYBRID_LAYERS = ["linear_attention", "linear_attention", "linear_attention", "full_attention"]
+#: The tiny hybrid model's end-of-sequence token, in its text config.
+HYBRID_EOS = 60
+
+
+def save_qwen3_5_tokenizer(directory: Path) -> None:
+    """A byte-level tokenizer of the kind Qwen3.5 ships, covering the test prompts.
+
+    `transformers` loads every `qwen3_5` checkpoint's tokenizer as
+    `Qwen3_5Tokenizer`, whatever its files name, so the word-level one the
+    other tiny models use would encode a prompt to nothing here.
+    """
+    merges = [("h", "e"), ("he", "l"), ("hel", "l"), ("hell", "o"), ("Ġ", "w")]
+    merges += [("Ġw", "o"), ("Ġwo", "r"), ("Ġwor", "l"), ("Ġworl", "d")]
+    pieces = [*"helowrdĠ", *"0123456789", *("".join(pair) for pair in merges)]
+    vocab = {piece: i for i, piece in enumerate(pieces)} | {"<|endoftext|>": 61}
+    # The annotation says `list[str]`, but space-joined strings are refused
+    # when the BPE model is built; the pairs are what it accepts.
+    tokenizer = Qwen3_5Tokenizer(
+        vocab=vocab,
+        merges=merges,  # ty: ignore[invalid-argument-type]
+        eos_token="<|endoftext|>",
+    )
+    tokenizer.save_pretrained(directory)
+
+
+def build_tiny_hybrid_model(directory: Path, *, seed: int = 0) -> Path:
+    """A Qwen3.5 checkpoint as Qwen publishes them: an image-text model with a vision tower.
+
+    Saved as the multimodal class, not the text one, because that is what
+    `config.json` names in every real Qwen3.5 repository and what Lab has
+    to get past to reach the language model.
+    """
+    config = Qwen3_5Config(
+        text_config={
+            "vocab_size": 64,
+            "hidden_size": 16,
+            "intermediate_size": 32,
+            "num_hidden_layers": len(HYBRID_LAYERS),
+            "layer_types": HYBRID_LAYERS,
+            "num_attention_heads": 2,
+            "num_key_value_heads": 1,
+            "head_dim": 8,
+            "linear_num_key_heads": 2,
+            "linear_num_value_heads": 2,
+            "linear_key_head_dim": 8,
+            "linear_value_head_dim": 8,
+            "max_position_embeddings": 64,
+            # Not the tokenizer's, so a test can tell which one Lab stops at.
+            "eos_token_id": HYBRID_EOS,
+            "pad_token_id": 61,
+        },
+        vision_config={
+            "depth": 1,
+            "hidden_size": 16,
+            "intermediate_size": 32,
+            "num_heads": 2,
+            "out_hidden_size": 16,
+        },
+    )
+    torch.manual_seed(seed)
+    Qwen3_5ForConditionalGeneration(config).save_pretrained(directory, safe_serialization=True)
+    save_qwen3_5_tokenizer(directory)
     return directory
 
 

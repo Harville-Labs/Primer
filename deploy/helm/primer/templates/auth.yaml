@@ -35,6 +35,13 @@ spec:
             - --http-address=0.0.0.0:4180
             - --upstream=http://{{ include "primer.fullname" . }}-web:3000
             - --reverse-proxy=true
+            # How long to wait for the web app to begin answering. The
+            # default, 30 seconds, is shorter than a Lab run on a CPU, and
+            # the proxy answered 502 while Lab was still working. Five
+            # minutes is how long the web app's own fetch to Lab and Control
+            # waits; a longer limit here would only hold a connection open
+            # for a response the web app has already given up on.
+            - --upstream-timeout=5m
             - --skip-provider-button=true
             # PKCE, because a public redirect and a leaked authorization code
             # are otherwise enough to complete someone else's sign-in.

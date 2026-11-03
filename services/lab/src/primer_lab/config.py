@@ -13,8 +13,12 @@ from primer_contracts.lab import REPOSITORY_PATTERN, HubModel, LocalModel
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-QWEN_SCOPE_SAES = "Qwen/SAE-Res-Qwen3-1.7B-Base-W32K-L0_50"
-QWEN_SCOPE_MODELS = ("Qwen/Qwen3-1.7B", "Qwen/Qwen3-1.7B-Base")
+#: Qwen-Scope's SAEs, each set trained on a base model and read with it and
+#: with the instruction-tuned model made from it.
+QWEN_SCOPE = {
+    "Qwen/SAE-Res-Qwen3-1.7B-Base-W32K-L0_50": ("Qwen/Qwen3-1.7B", "Qwen/Qwen3-1.7B-Base"),
+    "Qwen/SAE-Res-Qwen3.5-2B-Base-W32K-L0_50": ("Qwen/Qwen3.5-2B", "Qwen/Qwen3.5-2B-Base"),
+}
 #: The transcoders circuit-tracer publishes for Qwen3-4B: one per layer,
 #: 36 files and about 60 GB in all.
 QWEN3_4B_TRANSCODERS = "mwhanna/qwen3-4b-transcoders"
@@ -53,7 +57,11 @@ class Settings(BaseSettings):
     lab_saes: dict[
         Annotated[str, Field(pattern=REPOSITORY_PATTERN)],
         Annotated[str, Field(pattern=REPOSITORY_PATTERN)],
-    ] = Field(default_factory=lambda: dict.fromkeys(QWEN_SCOPE_MODELS, QWEN_SCOPE_SAES))
+    ] = Field(
+        default_factory=lambda: {
+            model: saes for saes, models in QWEN_SCOPE.items() for model in models
+        }
+    )
     #: Labels for SAE features, by the SAE repository they describe: a JSON
     #: Lines file in the weights volume, read at startup. See `labels`.
     lab_feature_labels: dict[Annotated[str, Field(pattern=REPOSITORY_PATTERN)], Path] = Field(

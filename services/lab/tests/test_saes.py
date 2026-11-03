@@ -182,11 +182,13 @@ def test_a_layer_that_would_run_code_when_unpickled_is_refused_without_running_i
     assert not marker.exists(), "loading the SAE ran the code in its pickle"
 
 
-def test_by_default_qwen3_1_7b_is_given_qwen_scope(monkeypatch):
+def test_by_default_qwen3_1_7b_and_qwen3_5_2b_are_given_qwen_scope(monkeypatch):
     monkeypatch.delenv("PRIMER_LAB_SAES", raising=False)
     saes = Settings().lab_saes
     assert saes["Qwen/Qwen3-1.7B"] == "Qwen/SAE-Res-Qwen3-1.7B-Base-W32K-L0_50"
     assert saes["Qwen/Qwen3-1.7B-Base"] == saes["Qwen/Qwen3-1.7B"]
+    assert saes["Qwen/Qwen3.5-2B"] == "Qwen/SAE-Res-Qwen3.5-2B-Base-W32K-L0_50"
+    assert saes["Qwen/Qwen3.5-2B-Base"] == saes["Qwen/Qwen3.5-2B"]
 
 
 def test_an_operator_maps_saes_as_json_and_can_map_none(monkeypatch):

@@ -61,24 +61,46 @@ itself. Lab never runs code that ships with a model, and refuses a directory
 that also holds pickled weights (`.bin`, `.pt`, `.ckpt`), because unpickling
 can run code: remove them.
 
+### Qwen3.5 and other multimodal checkpoints
+
+A checkpoint published as an image-text model, as every Qwen3.5 one is,
+loads whole, vision tower included, as the model it was published as. Lab
+still reads it with text prompts only: everything it shows is in the
+language model. An architecture `transformers` cannot load as one that
+generates text, such as T5, is refused before anything but its
+`config.json` downloads. Qwen3.5 is the multimodal family Lab has been
+tested with; another whose layers Lab cannot find is refused when it loads,
+by name. [ADR 0013](../adr/0013-lab-loads-multimodal-checkpoints.md)
+records why.
+
+Qwen3.5's layers are hybrid: three in every four mix tokens with linear
+attention, and only the rest have an attention output to read or edit. Lab
+names the layers that do when someone asks for one that does not. Every
+other site, the residual stream, the MLP, and SAE features, is on every
+layer.
+
 ### SAE features
 
 The Neurons tab can show which sparse-autoencoder features fire at each
 token, for a model someone has trained SAEs for. You choose the SAEs, not
 your users. `lab.saes` (`PRIMER_LAB_SAES`) maps a model repository to the
-SAE repository Lab reads with it. By default it maps Qwen3-1.7B and
-Qwen3-1.7B-Base to Qwen's
-[Qwen-Scope](https://huggingface.co/Qwen/SAE-Res-Qwen3-1.7B-Base-W32K-L0_50)
-set: 32,768 features on the residual stream after each of the 28 layers.
+SAE repository Lab reads with it. By default it maps two models, and the
+Base model each was trained from, to Qwen's Qwen-Scope sets: 32,768
+features on the residual stream after every layer.
+
+| Model | SAEs | Layers | Size |
+| --- | --- | --- | --- |
+| `Qwen/Qwen3-1.7B` | [SAE-Res-Qwen3-1.7B-Base-W32K-L0_50](https://huggingface.co/Qwen/SAE-Res-Qwen3-1.7B-Base-W32K-L0_50) | 28 | about 15GB |
+| `Qwen/Qwen3.5-2B` | [SAE-Res-Qwen3.5-2B-Base-W32K-L0_50](https://huggingface.co/Qwen/SAE-Res-Qwen3.5-2B-Base-W32K-L0_50) | 24 | about 13GB |
 
 Before you keep that default, know three things about it:
 
-- **It is about 15GB**, on top of the model, in the same volume. It
+- **Each set is large**, on top of its model, in the same volume. It
   downloads after the model has loaded, so the model is usable in the
   meantime, and `lab.maxModelBytes` applies to it too.
-- **Its licence permits scientific research only.** Read the repository's
-  terms before you offer it to anyone.
-- **Its files are pickles.** Lab opens them with torch's weights-only
+- **Their licence permits scientific research only.** Read the repository's
+  terms before you offer them to anyone.
+- **Their files are pickles.** Lab opens them with torch's weights-only
   loader, which rebuilds tensors and refuses anything else, and it
   downloads only `config.json` and the layer files the config names.
   [ADR 0007](../adr/0007-lab-saes-as-weights-only-pickles.md) records why.
@@ -147,7 +169,8 @@ they first do. An edit names a site, a layer, and an operation:
 
 - **Sites**: the attention output, the MLP's neurons, the MLP output, the
   residual stream after the layer, or an SAE feature at a layer that has
-  an SAE.
+  an SAE. A hybrid model such as Qwen3.5 has an attention output only on
+  its softmax attention layers.
 - **Operations**: `zero`, `mean` (the site's average over the prompt),
   `scale`, `clamp` to a value, or `add` a value or a steering vector.
 - **Positions**: every text token, the prompt, the generated tokens, or a
