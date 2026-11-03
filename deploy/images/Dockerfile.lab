@@ -16,7 +16,7 @@ COPY --from=ghcr.io/astral-sh/uv:0.12.7 /uv /usr/local/bin/uv
 
 LABEL org.opencontainers.image.title="Primer Lab" \
       org.opencontainers.image.description="Inspects and edits a small open model as it runs" \
-      org.opencontainers.image.source="https://github.com/isaiah-harville/Primer" \
+      org.opencontainers.image.source="https://github.com/Harville-Labs/Primer" \
       org.opencontainers.image.licenses="Apache-2.0"
 
 # HF_HOME is pointed at the weights volume so that anything transformers

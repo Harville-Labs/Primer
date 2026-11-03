@@ -275,7 +275,7 @@ twice the batch tokens.
 above, ready to copy:
 
 ```bash
-helm install primer oci://ghcr.io/isaiah-harville/charts/primer \
+helm install primer oci://ghcr.io/harville-labs/charts/primer \
   --version <release> \
   -f values-selfhosted.yaml \
   --set ingress.host=primer.example.com \
@@ -290,6 +290,6 @@ helm install primer oci://ghcr.io/isaiah-harville/charts/primer \
 
 The chart runs both inference servers itself, with the flags discussed
 above. To run them outside the release instead, the same servers are in
-[`examples/inference/`](https://github.com/isaiah-harville/Primer/tree/main/examples/inference);
+[`examples/inference/`](https://github.com/Harville-Labs/Primer/tree/main/examples/inference);
 [Connecting model providers](providers.md#using-your-own-embedding-server)
 says what to set.

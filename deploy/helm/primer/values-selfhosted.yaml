@@ -5,7 +5,7 @@
 # the part that is usually guesswork, and every number in it was measured
 # rather than chosen. See docs/operations/models.md for why.
 #
-#   helm install primer oci://ghcr.io/isaiah-harville/charts/primer \
+#   helm install primer oci://ghcr.io/harville-labs/charts/primer \
 #     -f values-selfhosted.yaml \
 #     --set ingress.host=primer.example.com \
 #     --set auth.oidc.issuerUrl=https://auth.example.com/application/o/primer/ \

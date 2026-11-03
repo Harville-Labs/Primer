@@ -192,8 +192,14 @@ jobs:
       # As an install comes up out of the box, with the bundled embedder. An
       # embedding baseUrl here as well is refused by the chart, which is
       # what failed v1.0.1's first run.
+      #
+      # The image is matched by its whole path, not only its tag: when the
+      # repository moved to the organisation, images went with it and the
+      # chart's defaults did not, so 1.1.0 installed images that were never
+      # pushed where it looked.
       - name: Check the packaged chart renders
         run: |
+          owner="${GITHUB_REPOSITORY_OWNER,,}"
           helm template primer "dist/primer-${{ needs.version.outputs.version }}.tgz" \
             --set postgresql.existingSecret=primer-postgres \
             --set rabbitmq.existingSecret=primer-rabbitmq \
@@ -202,7 +208,7 @@ jobs:
             --set auth.oidc.existingSecret=primer-oidc \
             --set inference.chat.baseUrl=http://model/v1 \
             --set inference.chat.model=chat-model \
-            | grep -q "primer-api:${{ needs.version.outputs.version }}"
+            | grep -q "ghcr.io/${owner}/primer-api:${{ needs.version.outputs.version }}"
 
       - name: Log in to GHCR
         run: |

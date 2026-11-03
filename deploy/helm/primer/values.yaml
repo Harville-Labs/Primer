@@ -46,21 +46,21 @@ image:
   # needs torch and torch has no musl wheels, so sharing would put a machine
   # learning stack in services that never import it.
   api:
-    repository: ghcr.io/isaiah-harville/primer-api
+    repository: ghcr.io/harville-labs/primer-api
     tag: ""          # defaults to .Chart.AppVersion
     pullPolicy: IfNotPresent
   worker:
-    repository: ghcr.io/isaiah-harville/primer-worker
+    repository: ghcr.io/harville-labs/primer-worker
     tag: ""
     pullPolicy: IfNotPresent
   web:
-    repository: ghcr.io/isaiah-harville/primer-web
+    repository: ghcr.io/harville-labs/primer-web
     tag: ""
     pullPolicy: IfNotPresent
   # Published twice per version: the tag itself is the CPU build, and the
   # same tag with `-cuda` is the GPU build, chosen when lab.gpu is set.
   lab:
-    repository: ghcr.io/isaiah-harville/primer-lab
+    repository: ghcr.io/harville-labs/primer-lab
     tag: ""
     pullPolicy: IfNotPresent
   pullSecrets: []

@@ -2,10 +2,10 @@
 
 # Primer
 
-[![CI](https://github.com/isaiah-harville/Primer/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/isaiah-harville/Primer/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/isaiah-harville/Primer?sort=semver&display_name=tag&color=1f9be6)](https://github.com/isaiah-harville/Primer/releases)
-[![Docs](https://img.shields.io/badge/docs-github%20pages-1f9be6)](https://isaiah-harville.github.io/Primer/)
-[![Helm](https://img.shields.io/badge/helm-oci%20chart-0f1689?logo=helm&logoColor=white)](https://github.com/isaiah-harville/Primer/pkgs/container/charts%2Fprimer)
+[![CI](https://github.com/Harville-Labs/Primer/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Harville-Labs/Primer/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/Harville-Labs/Primer?sort=semver&display_name=tag&color=1f9be6)](https://github.com/Harville-Labs/Primer/releases)
+[![Docs](https://img.shields.io/badge/docs-github%20pages-1f9be6)](https://harville-labs.github.io/Primer/)
+[![Helm](https://img.shields.io/badge/helm-oci%20chart-0f1689?logo=helm&logoColor=white)](https://github.com/Harville-Labs/Primer/pkgs/container/charts%2Fprimer)
 
 </div>
 
@@ -45,7 +45,7 @@ you bring: any OpenAI-compatible endpoint, named here or added later on the
 settings page.
 
 ```bash
-git clone https://github.com/isaiah-harville/Primer.git
+git clone https://github.com/Harville-Labs/Primer.git
 cd Primer
 
 cat > .env <<'ENV'
@@ -60,7 +60,7 @@ docker compose up --wait
 
 The first start downloads the embedding and reranking models, a few
 gigabytes. [Connecting model
-providers](https://isaiah-harville.github.io/Primer/operations/providers/)
+providers](https://harville-labs.github.io/Primer/operations/providers/)
 covers vLLM, llama.cpp, hosted APIs, and using your own embedder, which is
 much faster on Apple Silicon.
 
@@ -68,7 +68,7 @@ Then open <http://localhost:3000>.
 
 The knowledge graph is off until you turn it on. It needs a model that
 supports structured output, and runs Neo4j under a Compose profile; see
-[Turning on the knowledge graph](https://isaiah-harville.github.io/Primer/operations/deploying/#turning-on-the-knowledge-graph-with-compose).
+[Turning on the knowledge graph](https://harville-labs.github.io/Primer/operations/deploying/#turning-on-the-knowledge-graph-with-compose).
 
 > [!WARNING]
 > The Compose profile has **no authentication and is not meant to gain any**.
@@ -81,7 +81,7 @@ supports structured output, and runs Neo4j under a Compose profile; see
 ## Hosting it on a server
 
 ```bash
-helm install primer oci://ghcr.io/isaiah-harville/charts/primer \
+helm install primer oci://ghcr.io/harville-labs/charts/primer \
   --namespace primer --create-namespace \
   --values my-values.yaml
 ```
@@ -92,17 +92,17 @@ implements no login flow of its own: it trusts identity headers, and the
 ingress strips those headers from anything arriving on the outside so a
 caller cannot claim to be someone else.
 
-See [Kubernetes](https://isaiah-harville.github.io/Primer/operations/kubernetes/)
+See [Kubernetes](https://harville-labs.github.io/Primer/operations/kubernetes/)
 for what the chart expects.
 
 ## Published artefacts
 
 | Artefact | Where |
 |---|---|
-| API image (Control, Chat, Retrieval) | `ghcr.io/isaiah-harville/primer-api` |
-| Worker image (parsing, embedding, indexing) | `ghcr.io/isaiah-harville/primer-worker` |
-| Web image | `ghcr.io/isaiah-harville/primer-web` |
-| Helm chart | `oci://ghcr.io/isaiah-harville/charts/primer` |
+| API image (Control, Chat, Retrieval) | `ghcr.io/harville-labs/primer-api` |
+| Worker image (parsing, embedding, indexing) | `ghcr.io/harville-labs/primer-worker` |
+| Web image | `ghcr.io/harville-labs/primer-web` |
+| Helm chart | `oci://ghcr.io/harville-labs/charts/primer` |
 
 Releases publish all four under one version, so a chart at `1.4.0` pulls the
 images built from the commit tagged `v1.4.0`. Charts come only from releases.

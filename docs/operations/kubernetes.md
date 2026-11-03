@@ -25,7 +25,7 @@ providers](providers.md#using-your-own-embedding-server).
 Releases publish the chart to GHCR, so an install does not need a checkout:
 
 ```bash
-helm install primer oci://ghcr.io/isaiah-harville/charts/primer \
+helm install primer oci://ghcr.io/harville-labs/charts/primer \
   --version 1.4.0 \
   --set ingress.host=primer.example.com \
   ...

@@ -83,7 +83,7 @@ it on sends the model's queries, which are written from people's
 questions, to public search engines.
 
 ```bash
-helm upgrade primer oci://ghcr.io/isaiah-harville/charts/primer \
+helm upgrade primer oci://ghcr.io/harville-labs/charts/primer \
   --reuse-values \
   --set tools.enabled=true \
   --set tools.search.enabled=true

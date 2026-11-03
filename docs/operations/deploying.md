@@ -114,9 +114,9 @@ built locally:
 
 | Image | Contains |
 | --- | --- |
-| `ghcr.io/isaiah-harville/primer-api` | Control, Chat, Retrieval |
-| `ghcr.io/isaiah-harville/primer-worker` | The ingestion worker |
-| `ghcr.io/isaiah-harville/primer-web` | The web app |
+| `ghcr.io/harville-labs/primer-api` | Control, Chat, Retrieval |
+| `ghcr.io/harville-labs/primer-worker` | The ingestion worker |
+| `ghcr.io/harville-labs/primer-web` | The web app |
 
 Tagged `latest` and by commit SHA. Pull requests build them but do not push:
 a broken Dockerfile fails review rather than after merge, and an image

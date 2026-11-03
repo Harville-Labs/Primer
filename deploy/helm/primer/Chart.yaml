@@ -4,9 +4,9 @@ description: Self-hosted, multi-user retrieval-augmented search over your own do
 type: application
 version: 1.1.0
 appVersion: "1.1.0"
-home: https://github.com/isaiah-harville/Primer
+home: https://github.com/Harville-Labs/Primer
 sources:
-  - https://github.com/isaiah-harville/Primer
+  - https://github.com/Harville-Labs/Primer
 keywords:
   - rag
   - research
