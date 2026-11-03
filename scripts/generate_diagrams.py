@@ -19,39 +19,87 @@ OUTPUT = Path(__file__).resolve().parents[1] / "docs" / "assets" / "diagrams"
 
 def system_architecture() -> Canvas:
     """Which process owns what, and what is allowed to talk to what."""
-    canvas = Canvas(1240, 760, "Primer system architecture")
+    canvas = Canvas(1300, 760, "Primer system architecture")
 
     browser = canvas.box(Box(60, 70, 210, 62, "Browser", "the researcher", "client"))
     proxy = canvas.box(Box(60, 196, 210, 76, "oauth2-proxy", "verifies with the IdP", "edge"))
     web = canvas.box(Box(60, 336, 210, 62, "Web app", "SvelteKit", "client"))
 
+    lab = canvas.box(Box(420, 96, 250, 80, "Lab", "optional, loads its own model", "service"))
     control = canvas.box(
-        Box(400, 190, 250, 88, "Control API", "libraries, documents, jobs", "service")
+        Box(420, 230, 250, 88, "Control API", "libraries, documents, jobs", "service")
     )
-    broker = canvas.box(Box(400, 350, 250, 62, "RabbitMQ", "one queue per stage", "store"))
+    broker = canvas.box(Box(420, 370, 250, 62, "RabbitMQ", "one queue per stage", "store"))
     workers = canvas.box(
-        Box(400, 484, 250, 80, "Ingestion workers", "parse, embed, index", "worker")
+        Box(420, 490, 250, 80, "Ingestion workers", "parse, embed, index", "worker")
+    )
+    extraction = canvas.box(
+        Box(420, 640, 250, 62, "Graph extraction", "OpenAI-compatible, optional", "external")
     )
 
-    postgres = canvas.box(Box(760, 190, 250, 66, "PostgreSQL", "control schema", "store"))
-    sources = canvas.box(Box(760, 330, 250, 66, "Source objects", "fsspec: disk or S3", "store"))
-    retrieval = canvas.box(Box(760, 470, 250, 88, "Retrieval", "the only index client", "service"))
-    vectors = canvas.box(Box(760, 620, 250, 62, "Vector store", "Qdrant", "store"))
-    embeddings = canvas.box(Box(1060, 470, 150, 88, "Embeddings", "OpenAI-compatible", "external"))
-    graph = canvas.box(Box(1060, 620, 150, 62, "Knowledge graph", "Neo4j, optional", "store"))
-    extraction = canvas.box(
-        Box(400, 620, 250, 62, "Graph extraction", "OpenAI-compatible, optional", "external")
-    )
+    chat = canvas.box(Box(780, 96, 250, 80, "Chat", "answers, tools, images", "service"))
+    postgres = canvas.box(Box(780, 240, 250, 66, "PostgreSQL", "a schema per service", "store"))
+    sources = canvas.box(Box(780, 370, 250, 66, "Source objects", "fsspec: disk or S3", "store"))
+    retrieval = canvas.box(Box(780, 490, 250, 88, "Retrieval", "the only index client", "service"))
+    vectors = canvas.box(Box(780, 640, 250, 62, "Vector store", "Qdrant", "store"))
+
+    models = canvas.box(Box(1100, 96, 170, 80, "Your endpoints", "chat, MCP, images", "external"))
+    embeddings = canvas.box(Box(1100, 490, 170, 88, "Embeddings", "embedder, reranker", "external"))
+    graph = canvas.box(Box(1100, 640, 170, 62, "Knowledge graph", "Neo4j, optional", "store"))
 
     canvas.group(30, 36, 270, 396, "Outside the cluster")
-    canvas.group(360, 150, 870, 560, "Inside the cluster")
+    canvas.group(370, 30, 915, 690, "Inside the cluster")
 
     canvas.arrow(browser.port("bottom"), proxy.port("top"))
     canvas.arrow(proxy.port("bottom"), web.port("top"), label="signed in")
-    canvas.arrow(proxy.port("right"), control.port("left"), label="identity headers")
+
+    # The web app is the only caller of Control, Chat, and Lab, and forwards
+    # the proxy's identity headers to each. One trunk up the gap between the
+    # two groups, rather than three lines crossing the cluster's edge.
+    trunk = 335
+    canvas.route(
+        [
+            (web.x + web.w, web.cy),
+            (trunk, web.cy),
+            (trunk, control.y + 20),
+            (control.x, control.y + 20),
+        ]
+    )
+    canvas.route([(trunk, control.y + 20), (trunk, lab.cy), (lab.x, lab.cy)])
+    # Labelled along the top, where the chip has room; on the trunk itself
+    # it would sit across both groups' edges.
+    canvas.route(
+        [(trunk, lab.cy), (trunk, 66), (chat.cx, 66), (chat.cx, chat.y)],
+        label="identity headers",
+        label_at=2,
+    )
+
+    # Chat asks Control who may read a library before it searches one.
+    canvas.route(
+        [
+            (chat.x, chat.y + 70),
+            (725, chat.y + 70),
+            (725, control.y + 16),
+            (control.x + control.w, control.y + 16),
+        ]
+    )
+    canvas.arrow(chat.port("right"), models.port("left"))
+    canvas.route(
+        [
+            (chat.x + chat.w, chat.y + 70),
+            (1060, chat.y + 70),
+            (1060, retrieval.y + 14),
+            (retrieval.x + retrieval.w, retrieval.y + 14),
+        ],
+        label="scoped search",
+        label_at=2,
+    )
+
     canvas.arrow(control.port("bottom"), broker.port("top"), label="job id")
     canvas.arrow(broker.port("bottom"), workers.port("top"))
-    canvas.arrow(control.port("right"), postgres.port("left"), label="reads, writes")
+    canvas.arrow(
+        (control.x + control.w, postgres.cy), (postgres.x, postgres.cy), label="reads, writes"
+    )
     canvas.arrow(workers.port("right"), retrieval.port("left"), label="chunks, graphs")
     canvas.arrow(workers.port("bottom"), extraction.port("top"), dashed=True)
     canvas.arrow(retrieval.port("bottom"), vectors.port("top"), label="scoped filter")
@@ -61,8 +109,8 @@ def system_architecture() -> Canvas:
     canvas.route(
         [
             (retrieval.x + retrieval.w, retrieval.y + 76),
-            (1035, retrieval.y + 76),
-            (1035, graph.cy),
+            (1065, retrieval.y + 76),
+            (1065, graph.cy),
             (graph.x, graph.cy),
         ]
     )
@@ -72,8 +120,8 @@ def system_architecture() -> Canvas:
     canvas.route(
         [
             (control.x + 200, control.y + control.h),
-            (control.x + 200, 312),
-            (sources.x, 312),
+            (control.x + 200, 344),
+            (sources.x, 344),
             (sources.x, sources.cy),
         ],
         label="writes uploads",
@@ -82,8 +130,8 @@ def system_architecture() -> Canvas:
     canvas.route(
         [
             (workers.x + 50, workers.y),
-            (workers.x + 50, 440),
-            (sources.cx, 440),
+            (workers.x + 50, 460),
+            (sources.cx, 460),
             (sources.cx, sources.y + sources.h),
         ],
         label="reads bytes",
@@ -91,23 +139,23 @@ def system_architecture() -> Canvas:
         label_at=2,
     )
 
-    # Job transitions return to Control down the gutter left of the cluster,
-    # rather than crossing back through the column they came from. The label
-    # sits low on that line, clear of the web app and the broker.
+    # Job transitions return to Control down a gutter inside the cluster's
+    # edge, rather than crossing back through the column they came from. It
+    # meets Control below the web app's trunk so the two never cross.
     canvas.route(
         [
             (workers.x, workers.cy + 16),
-            (332, workers.cy + 16),
-            (332, control.cy + 26),
+            (395, workers.cy + 16),
+            (395, control.cy + 26),
             (control.x, control.cy + 26),
         ],
         label="claim, complete, fail",
         label_at=2,
-        label_dy=60,
+        label_dy=-90,
     )
 
     canvas.label(
-        620,
+        650,
         736,
         "Workers hold no database credentials: every job transition is a Control request.",
         size=12,
