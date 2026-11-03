@@ -6,7 +6,7 @@ COPY --from=ghcr.io/astral-sh/uv:0.12.7 /uv /usr/local/bin/uv
 
 LABEL org.opencontainers.image.title="Primer Ingestion Worker" \
       org.opencontainers.image.description="Parses, chunks, and indexes documents" \
-      org.opencontainers.image.source="https://github.com/isaiah-harville/Primer" \
+      org.opencontainers.image.source="https://github.com/Harville-Labs/Primer" \
       org.opencontainers.image.licenses="Apache-2.0"
 
 ENV UV_COMPILE_BYTECODE=1 \

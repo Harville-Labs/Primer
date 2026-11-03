@@ -145,7 +145,7 @@ Cohere's and Jina's hosted rerankers.
 
 ## Running the bundled servers yourself
 
-[`examples/inference/`](https://github.com/isaiah-harville/Primer/tree/main/examples/inference)
+[`examples/inference/`](https://github.com/Harville-Labs/Primer/tree/main/examples/inference)
 has standalone manifests for the same two servers. Use them to share one
 pair between several releases, or to run them somewhere other than
 Primer's namespace.
