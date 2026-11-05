@@ -6,15 +6,17 @@ a job that does not exist. Routes publish through a background task, which
 runs after the response - and therefore after the session dependency has
 committed - so a message only ever names a job that is really there.
 
-The reverse failure is possible and is the acceptable one: a crash between
-commit and publish leaves a job queued in the database with no message. That
-is visible, recoverable by re-enqueueing, and harms nothing in the meantime.
+The reverse failure is possible and is the acceptable one: a broker that is
+down, or a crash between commit and publish, leaves a job queued in the
+database with no message. `primer_control.dispatch` is what makes that
+recoverable: it records which jobs were actually sent and re-sends the rest.
 """
 
 from __future__ import annotations
 
 import logging
 from typing import Protocol
+from urllib.parse import urlsplit
 from uuid import UUID
 
 from primer_contracts.ingestion import StageName
@@ -47,8 +49,23 @@ QUEUE_ARGUMENTS: dict[str, object] = {
 }
 
 
+class BrokerUnreachable(Exception):
+    """The broker refused or never answered, so the job was not sent.
+
+    Raised in place of kombu's own error, whose traceback leads with an
+    unrelated `AttributeError` from its lazy channel and names neither the
+    broker nor the fact that nothing was published.
+    """
+
+    def __init__(self, host: str, reason: str) -> None:
+        super().__init__(f"the ingestion broker at {host} is unreachable: {reason}")
+        self.host = host
+
+
 class JobPublisher(Protocol):
-    def publish(self, stage: StageName, job_id: UUID) -> None: ...
+    def publish(self, stage: StageName, job_id: UUID) -> None:
+        """Send the job's stage to the workers, or raise `BrokerUnreachable`."""
+        ...
 
 
 class NullPublisher:
@@ -70,6 +87,7 @@ class CeleryJobPublisher:
         from celery import Celery
         from kombu import Exchange, Queue
 
+        self._host = broker_host(broker_url)
         exchange = Exchange("ingestion", type="direct")
         self._app = Celery("primer_control_publisher", broker=broker_url)
         self._app.conf.update(
@@ -88,7 +106,26 @@ class CeleryJobPublisher:
         )
 
     def publish(self, stage: StageName, job_id: UUID) -> None:
-        self._app.send_task(TASK_NAMES[stage], args=[str(job_id)], queue=TASK_NAMES[stage])
+        from kombu.exceptions import OperationalError
+
+        try:
+            self._app.send_task(TASK_NAMES[stage], args=[str(job_id)], queue=TASK_NAMES[stage])
+        except OperationalError as error:
+            # `from None`: the chained context is kombu's lazy-channel
+            # AttributeError, which is what made the original log unreadable.
+            raise BrokerUnreachable(self._host, str(error)) from None
+
+
+def broker_host(broker_url: str) -> str:
+    """Where the broker is, for a log line, with any credentials left out.
+
+    Built up from the parts rather than by masking the password, so a
+    username, or a password containing `@`, cannot leak through a pattern
+    that missed it.
+    """
+    parts = urlsplit(broker_url)
+    host = parts.hostname or "an unnamed host"
+    return f"{host}:{parts.port}" if parts.port else host
 
 
 def build_publisher(broker_url: str | None) -> JobPublisher:
