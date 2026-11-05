@@ -1383,7 +1383,7 @@ wheels = [
 
 [[package]]
 name = "primer-contracts"
-version = "1.2.0"
+version = "1.3.0"
 source = { directory = "../../packages/contracts" }
 dependencies = [
     { name = "pydantic" },
@@ -1394,7 +1394,7 @@ requires-dist = [{ name = "pydantic" }]
 
 [[package]]
 name = "primer-lab-graphs"
-version = "1.2.0"
+version = "1.3.0"
 source = { editable = "." }
 dependencies = [
     { name = "circuit-tracer" },
