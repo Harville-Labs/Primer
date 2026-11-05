@@ -10,18 +10,17 @@ from __future__ import annotations
 import hashlib
 import math
 import re
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from dataclasses import replace
 from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
 from haystack import Document
-from haystack_integrations.document_stores.qdrant import QdrantDocumentStore
 from primer_retrieval.app import create_app
 from primer_retrieval.config import Settings
 from primer_retrieval.graph import GraphStore, build_graph_store
-from primer_retrieval.stores import build_document_store
+from primer_retrieval.stores import RetryingQdrantDocumentStore, build_document_store
 from testcontainers.community.neo4j import Neo4jContainer
 from testcontainers.community.qdrant import QdrantContainer
 
@@ -59,6 +58,16 @@ def qdrant_url() -> Iterator[str]:
     """One Qdrant for the session; each test gets its own collection in it."""
     with QdrantContainer(QDRANT_IMAGE) as container:
         yield f"http://{container.get_container_host_ip()}:{container.get_exposed_port(6333)}"
+
+
+@pytest.fixture
+def qdrant_on_port() -> Callable[[int], QdrantContainer]:
+    """A Qdrant not yet started, for a test that must choose when it comes up.
+
+    It is published on a host port the test names, so a store can be pointed
+    at that address before anything is listening there.
+    """
+    return lambda port: QdrantContainer(QDRANT_IMAGE).with_bind_ports(6333, port)
 
 
 @pytest.fixture(scope="session")
@@ -102,7 +111,7 @@ def client(qdrant_url: str, request: pytest.FixtureRequest) -> TestClient:
     return TestClient(app)
 
 
-class UnreadableStore(QdrantDocumentStore):
+class UnreadableStore(RetryingQdrantDocumentStore):
     """Qdrant, except that reading passages back is a test failure."""
 
     def filter_documents(self, filters: Any = None) -> list[Document]:
