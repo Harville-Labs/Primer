@@ -3,7 +3,14 @@ import type { InspectedToken, SteeredChatRequest } from '#lib/api/types.ts';
 import { SteeredChat } from './chat.svelte';
 import { frames, RESIDENT } from './fixture';
 
-const shift = { site: 'mlp_neuron' as const, layer: 1, index: 2, op: 'add' as const, value: 4 };
+const shift = {
+	site: 'mlp_neuron' as const,
+	layer: 1,
+	index: 2,
+	op: 'add' as const,
+	value: 4,
+	positions: 'all' as const,
+};
 
 function token(text: string, id = 7): InspectedToken {
 	return { id, text, special: false };

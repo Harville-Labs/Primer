@@ -23,7 +23,9 @@ describe('the steered chat route', () => {
 		}) as typeof globalThis.fetch;
 		const conversation: SteeredChatRequest = {
 			messages: [{ role: 'user', content: 'hello' }],
-			interventions: [{ site: 'mlp_neuron', layer: 1, index: 2, op: 'add', value: 4 }],
+			interventions: [
+				{ site: 'mlp_neuron', layer: 1, index: 2, op: 'add', value: 4, positions: 'all' },
+			],
 			max_new_tokens: 8,
 		};
 		const request = new Request('http://primer.test/lab/chat', {
