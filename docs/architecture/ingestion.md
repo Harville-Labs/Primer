@@ -37,9 +37,24 @@ An upload is committed before its message is published. A message sent
 first could outlive a rolled-back upload, leaving a worker to claim a job
 that does not exist.
 
-The opposite failure is possible and is the one worth having: a crash
-between committing and publishing leaves a job queued with no message. That
-is visible, re-enqueueable, and harms nothing meanwhile.
+The opposite failure is possible and is the one worth having: a broker that
+is down, or a crash between committing and publishing, leaves a job queued
+with no message. Each job records when the broker accepted its message, so
+this case is visible rather than inferred:
+
+- A publish that fails is logged as "the ingestion broker at *host* is
+  unreachable", naming the host and never the URL's credentials, and the
+  document tells its owner that the workers can't be reached.
+- Control sweeps for `queued` and `deleting` jobs with no accepted message
+  that have not changed for `PRIMER_JOB_RESEND_AFTER_SECONDS`, and sends them
+  again. A job is sent once per sweep however many Control replicas run it,
+  because each one locks the rows it is sending and skips rows another holds.
+- A second message for a job is harmless: the claim refuses a job that is
+  already taken or past the stage, exactly as it does a broker redelivery.
+
+The sweep lives in Control rather than behind a retry button because the
+person who would see the button cannot fix a broker, and a deletion's
+document is no longer on screen to press it on.
 
 ## Retries
 
