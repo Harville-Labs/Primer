@@ -147,20 +147,30 @@ Two Python images, not one.
 
 | Image | Base | Contains |
 | --- | --- | --- |
-| `Dockerfile.python` | Alpine + uv | Control, Chat, Retrieval |
-| `Dockerfile.worker` | Debian slim + uv | The ingestion worker |
-| `Dockerfile.gui` | Node slim | The web app |
+| `Dockerfile.python` | Python on Alpine | Control, Chat, Retrieval |
+| `Dockerfile.worker` | Python on Debian slim | The ingestion worker |
+| `Dockerfile.gui` | Node on Debian slim | The web app |
 
 The split is not tidiness. Docling's layout models run on torch, and torch
 publishes no musl wheels — so the worker needs a glibc base and a machine
 learning stack, while the three API services need neither. Sharing one image
 would put roughly two gigabytes into every service that never imports it.
 
-Both Python images are a single stage. A build/runtime split earns its keep
-when the build needs compilers or caches the runtime should not have; here
-everything installs from a wheel and uv's cache is a mount rather than a
-layer. Each `uv sync` writes a complete virtualenv that stays in its layer,
-so a separate dependency-install layer nearly *doubled* the API image.
+Every image is built in one stage and run from another. The build stage
+has uv, and for Lab a compiler; the image you run has neither, only the
+virtualenv copied out of the build, so nothing inside it can install or
+compile a package. Development dependency groups are never installed, and
+the code is owned by root: the services read it and never write it, and
+the root filesystem is read-only in both Compose and the chart.
+
+The web image is the adapter's build and nothing else. The web app lists
+every package as a devDependency, so the adapter bundles all of them into
+the server and there is no `node_modules` to install beside it.
+
+Each Python build is still one `uv sync`. Splitting it into a dependency
+layer and a workspace layer looks like better caching, but each sync
+writes a complete virtualenv that stays in its layer, so a second one
+nearly *doubled* the API image.
 
 ## Running the processes directly
 

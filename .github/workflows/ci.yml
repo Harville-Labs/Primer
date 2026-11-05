@@ -471,3 +471,24 @@ jobs:
 
       - name: Tests
         run: pnpm test
+
+      # The web image ships the adapter's bundle with no node_modules, so the
+      # image scan finds no npm packages to check: what the server bundles is
+      # checked here, from the lockfile, instead. Every package is a
+      # devDependency (see tests/repo/test_deploy_images.py), and Trivy skips those
+      # unless told otherwise - without the variable this scans nothing and
+      # passes. That makes it a superset: build tools fail it too.
+      - name: Scan the web dependencies
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: pnpm-lock.yaml
+          format: table
+          exit-code: 1
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          trivyignores: .trivyignore
+        env:
+          TRIVY_INCLUDE_DEV_DEPS: true
+          TRIVY_USERNAME: ${{ github.actor }}
+          TRIVY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
