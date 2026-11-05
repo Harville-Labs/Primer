@@ -17,7 +17,7 @@ model endpoints.
 - **Answers with citations.** Every claim points at a passage in a specific
   version of a specific document, so you can check it.
 - **Your models.** Any OpenAI-compatible endpoint, hosted or local.
-- **Connections across documents.** Optionally, a knowledge graph of what
+- **Connections across documents.** A knowledge graph of what
   your sources name, so a question also finds passages linked to what it
   mentions rather than only ones that resemble it.
 

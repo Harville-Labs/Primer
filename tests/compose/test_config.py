@@ -36,6 +36,7 @@ RESOLVE_ENV = {
     "POSTGRES_PASSWORD": "resolve-only",
     "RABBITMQ_PASSWORD": "resolve-only",
     "PRIMER_INTERNAL_API_TOKEN": "resolve-only",
+    "PRIMER_GRAPH_PASSWORD": "resolve-only",
 }
 
 #: The bundled model servers. Not hardened by `APPLICATION_SERVICES`'s test
@@ -361,52 +362,71 @@ def test_every_documented_variable_appears_in_the_example(
         assert variable in example, f"{variable} is required but absent from env.example"
 
 
-#: What turns the graph on: the profile, and a URL and password for it.
-GRAPH_ENV = {
-    "COMPOSE_PROFILES": "graph",
-    "PRIMER_GRAPH_URL": "bolt://neo4j:7687",
-    "PRIMER_GRAPH_PASSWORD": "resolve-only",
-}
+def test_the_graph_runs_without_a_profile(compose_config: dict[str, Any]) -> None:
+    """Retrieval does not start without a graph, so a plain `up` has to bring one."""
+    assert "neo4j" in compose_config["services"]
+    assert "migrate-graph" in compose_config["services"]
 
 
-def resolve_with_graph() -> dict[str, Any]:
-    if shutil.which("docker") is None:
-        pytest.skip("docker is not installed")
-    return resolve(BASE, env=GRAPH_ENV)
-
-
-def test_the_graph_is_off_unless_its_profile_is_on(compose_config: dict[str, Any]) -> None:
-    """A stack started as it always was must not start a Neo4j it never asked for."""
-    assert "neo4j" not in compose_config["services"]
-    assert "migrate-graph" not in compose_config["services"]
-
-
-def test_the_graph_schema_is_applied_before_retrieval_starts() -> None:
+def test_the_graph_schema_is_applied_before_retrieval_starts(
+    compose_config: dict[str, Any],
+) -> None:
     """Retrieval writing into a graph with no constraints duplicates every entity."""
-    services = resolve_with_graph()["services"]
+    services = compose_config["services"]
 
     assert services["migrate-graph"]["restart"] == "no"
     assert services["migrate-graph"]["depends_on"]["neo4j"]["condition"] == "service_healthy"
     waits = services["retrieval"]["depends_on"]["migrate-graph"]
     assert waits["condition"] == "service_completed_successfully"
-    assert services["retrieval"]["environment"]["PRIMER_GRAPH_URL"] == "bolt://neo4j:7687"
+    assert waits["required"] is True
+    for name in ("retrieval", "migrate-graph"):
+        environment = services[name]["environment"]
+        assert environment["PRIMER_GRAPH_URL"] == "bolt://neo4j:7687"
+        assert environment["PRIMER_GRAPH_PASSWORD"] == RESOLVE_ENV["PRIMER_GRAPH_PASSWORD"]
+    assert (
+        services["neo4j"]["environment"]["NEO4J_AUTH"]
+        == f"neo4j/{RESOLVE_ENV['PRIMER_GRAPH_PASSWORD']}"
+    )
 
 
-def test_the_graph_password_has_no_default() -> None:
-    """Empty when unset, never a value, so Neo4j refuses to start without one.
-
-    It cannot be `:?` like the others: Compose interpolates every service
-    whichever profiles are on, so that would refuse every stack without a graph.
-    """
+def test_the_graph_password_is_required() -> None:
+    """Never a default, and never empty: Neo4j and Retrieval both need it."""
     text = BASE.read_text()
-    assert "${PRIMER_GRAPH_PASSWORD:-}" in text
-    assert "${PRIMER_GRAPH_PASSWORD:-" not in text.replace("${PRIMER_GRAPH_PASSWORD:-}", "")
-    assert "neo4j/${PRIMER_GRAPH_PASSWORD:-}" in text
+    assert "${PRIMER_GRAPH_PASSWORD:-" not in text
+    assert text.count("${PRIMER_GRAPH_PASSWORD:?") == 2
 
 
-def test_neo4j_is_not_published() -> None:
+def test_neo4j_is_not_published(compose_config: dict[str, Any]) -> None:
     """Only Retrieval and the schema step talk to it, both on the Compose network."""
-    assert "ports" not in resolve_with_graph()["services"]["neo4j"]
+    assert "ports" not in compose_config["services"]["neo4j"]
+
+
+def test_your_own_neo4j_replaces_the_bundled_one() -> None:
+    """No server started, and nothing waiting on one."""
+    if shutil.which("docker") is None:
+        pytest.skip("docker is not installed")
+    theirs = "bolt://neo4j.example:7687"
+    config = resolve(BASE, env={"PRIMER_GRAPH_URL": theirs})
+    services = config["services"]
+
+    assert "neo4j" not in services
+    assert services["migrate-graph"]["depends_on"]["neo4j"]["required"] is False
+    for name in ("retrieval", "migrate-graph"):
+        assert services[name]["environment"]["PRIMER_GRAPH_URL"] == theirs
+
+
+def test_the_index_worker_is_given_chat_to_extract_with(compose_config: dict[str, Any]) -> None:
+    """Passed whole, so the worker can choose endpoint, model and key together.
+
+    A Compose fallback per variable, `${EXTRACTION_KEY:-${CHAT_KEY}}`, would
+    send the chat key to an extraction endpoint that was named without one.
+    """
+    environment = compose_config["services"]["worker-index"]["environment"]
+
+    for name in ("BASE_URL", "MODEL", "API_KEY"):
+        assert f"PRIMER_CHAT_{name}" in environment
+        assert f"PRIMER_GRAPH_EXTRACTION_{name}" in environment
+    assert "${PRIMER_GRAPH_EXTRACTION_API_KEY:-${" not in BASE.read_text()
 
 
 #: An operator's own PostgreSQL, in place of the bundled one.

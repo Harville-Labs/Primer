@@ -524,10 +524,10 @@
     },
     "graph": {
       "type": "object",
-      "description": "Optional knowledge graph in Neo4j. Off unless url is set or neo4j.enabled is true.",
+      "description": "The knowledge graph in Neo4j. Required: either url or neo4j.enabled.",
       "properties": {
         "url": {
-          "description": "bolt:// or neo4j:// for a Neo4j you run. Empty, with neo4j.enabled false, turns the graph off.",
+          "description": "bolt:// or neo4j:// for a Neo4j you run. Required when neo4j.enabled is false.",
           "type": "string",
           "pattern": "^$|^(bolt|neo4j)(\\+s|\\+ssc)?://"
         },

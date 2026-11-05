@@ -403,8 +403,8 @@ running now: above one it is `ReadWriteMany`, and the chart refuses a
 
 ## The knowledge graph
 
-On by default: the release runs a Neo4j for it, as it runs Qdrant
-([ADR 0011](../adr/0011-bundle-neo4j-by-default.md)). With nothing set, the
+Every release has one: it runs a Neo4j for it, as it runs Qdrant
+([ADR 0014](../adr/0014-knowledge-graph-is-always-on.md)). With nothing set, the
 release makes the password itself and extracts with the chat model. To
 size it, name the password, or extract with a different model:
 
@@ -431,7 +431,8 @@ graph:
     enabled: false
 ```
 
-`graph.neo4j.enabled: false` with no `graph.url` turns the graph off.
+`graph.neo4j.enabled: false` with no `graph.url` is refused at render
+time: there is no release without a graph.
 
 Either way, Retrieval is given the graph and a `migrate-graph` hook applies
 its constraints and indexes on every install and upgrade. Nothing else is
@@ -444,9 +445,7 @@ each passage, and it runs on the index worker. Left empty, it is the chat
 endpoint and model, with the chat key, when both of those are set. It must
 support structured output. Extraction calls it once per passage, so on a
 small shared endpoint name a separate model. With no model at all the graph
-stays empty and search answers from vectors alone. Setting it
-with the graph off is refused at render time, because every document would
-then extract a graph that Retrieval has nowhere to put and fail to index.
+stays empty and search answers from vectors alone.
 Documents indexed before extraction was turned on have no graph until they
 are reindexed.
 

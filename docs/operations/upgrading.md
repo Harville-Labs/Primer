@@ -4,6 +4,25 @@ Most upgrades are a new image tag and [the migrations](migrations.md). The
 exceptions are listed here, newest first: changes where something already
 running has to be dealt with before the new version will start.
 
+## Every deployment has a knowledge graph
+
+**Affects:** a chart install with `graph.neo4j.enabled: false` and no
+`graph.url`, and every Compose stack.
+
+There is no graph-off mode any more
+([ADR 0014](../adr/0014-knowledge-graph-is-always-on.md)). The chart refuses
+a release that turns the bundled Neo4j off without naming another; turn it
+back on, or set `graph.url`.
+
+Compose now runs Neo4j and its schema step without a profile, and refuses
+to start until `.env` sets `PRIMER_GRAPH_PASSWORD`. Remove `graph` from
+`COMPOSE_PROFILES`. A stack that already ran the graph profile can delete
+`PRIMER_GRAPH_URL=bolt://neo4j:7687`, which is now the default; keep it
+set only for a Neo4j you run yourself. The index worker extracts with the
+chat model when no extraction model is set.
+
+Libraries indexed without a graph need a reindex to get one.
+
 ## The chart runs a Neo4j by default
 
 **Affects:** a chart install that leaves `graph.neo4j.enabled` and
@@ -24,8 +43,7 @@ graph:
     enabled: false
 ```
 
-To keep running without a graph, set the same thing and leave `graph.url`
-unset.
+Running without a graph was possible until the change above.
 
 ## The embedder and reranker are bundled
 
