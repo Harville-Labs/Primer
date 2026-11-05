@@ -282,7 +282,7 @@ Compose passes one.
 | `PRIMER_LAB_EXPERIMENT_RETENTION_DAYS` | `lab.experimentRetentionDays` | `90` | Days a saved experiment is kept. See [Saved experiments](lab.md#saved-experiments) |
 | `PRIMER_DATABASE_URL` | the shared database | unset | Where saved experiments are kept. Unset, Lab runs and cannot save |
 | `PRIMER_LAB_WEIGHTS_DIR` | | `/models` | Where the volume is mounted; fetched weights go under `hub/` |
-| `PRIMER_LAB_MAX_PROMPT_TOKENS` | | `512` | Longest prompt a run reads, counted with the chat template |
+| `PRIMER_LAB_MAX_PROMPT_TOKENS` | | `512` | Longest prompt a run reads, counted with the chat template. A steered chat counts its whole conversation |
 | `PRIMER_LAB_MAX_NEW_TOKENS` | | `128` | Most tokens a generation writes, for each of its two runs |
 | `PRIMER_LAB_MAX_INTERVENTIONS` | | `16` | Most edits one generation applies |
 | `PRIMER_LAB_RUN_TIMEOUT_SECONDS` | | `120` | A run past this is abandoned, and its caller told so |
