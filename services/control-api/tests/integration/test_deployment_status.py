@@ -8,7 +8,7 @@ because that is how PostgreSQL and RabbitMQ URLs are written.
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncGenerator, Callable
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from typing import Any
 
@@ -89,7 +89,7 @@ class TestWhenNobodyHasBeenNamedAnAdministrator:
 @pytest.fixture
 def make_client(database: Database, clean_tables: AsyncEngine, source_store: SourceStore) -> Build:
     @asynccontextmanager
-    async def build(**overrides: Any) -> AsyncIterator[AsyncClient]:
+    async def build(**overrides: Any) -> AsyncGenerator[AsyncClient]:
         settings = Settings(auth_mode="oidc", admin_group=ADMINS, **overrides)
         app = create_app(settings, database=database, source_store=source_store)
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://control") as http:
