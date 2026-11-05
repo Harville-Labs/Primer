@@ -1,4 +1,3 @@
-import { parseEvents } from '#lib/api/sse.ts';
 import type {
 	GenerateRequest,
 	GenerationCompleted,
@@ -6,8 +5,8 @@ import type {
 	SteeringVector,
 	SteeringVectorRequest,
 } from '#lib/api/types.ts';
-import { asFailure, problemOf } from './failure';
-import { emptyGeneration, foldGeneration, type GenerationView, OP_DEFAULTS } from './generation';
+import { readComparison } from './comparison';
+import { emptyGeneration, type GenerationView, OP_DEFAULTS } from './generation';
 import { OwnedList, type OwnedOptions } from './owned.svelte';
 
 /**
@@ -135,7 +134,6 @@ export class Generator {
 		const controller = new AbortController();
 		this.controller = controller;
 		this.running = true;
-		this.view = emptyGeneration();
 		const asked: GenerateRequest = {
 			prompt,
 			chat: ask.chat,
@@ -145,30 +143,9 @@ export class Generator {
 		};
 		this.asked = asked;
 		try {
-			const response = await this.fetch('/lab/generate', {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify(asked),
-				signal: controller.signal,
+			await readComparison(this.fetch, '/lab/generate', asked, controller.signal, (view) => {
+				this.view = view;
 			});
-			if (!response.ok) throw await problemOf(response);
-			if (!response.body) throw new Error('The generation came back without a stream.');
-			for await (const event of parseEvents(response.body)) {
-				if (controller.signal.aborted) return;
-				this.view = foldGeneration(this.view, event);
-			}
-			if (!this.view.completed && !this.view.failure) {
-				this.view = {
-					...this.view,
-					failure: {
-						title: 'The generation stopped',
-						detail: 'The stream ended before Lab finished. Run it again.',
-					},
-				};
-			}
-		} catch (failure) {
-			if (controller.signal.aborted) return;
-			this.view = { ...this.view, ahead: null, failure: asFailure(failure) };
 		} finally {
 			if (this.controller === controller) {
 				this.controller = null;

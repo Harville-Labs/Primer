@@ -19,6 +19,7 @@ import type {
 	Probe,
 	ProbeRequest,
 	ProblemDetail,
+	SteeredChatRequest,
 	SteeringVector,
 	SteeringVectorRequest,
 } from './types';
@@ -123,6 +124,11 @@ export class LabApi {
 	 */
 	generate(payload: GenerateRequest): Promise<Response> {
 		return this.send('/api/v1/lab/generate', jsonPost(payload));
+	}
+
+	/** Lab's event stream for the next turn of a steered chat, unread, as `generate` returns it. */
+	chat(payload: SteeredChatRequest): Promise<Response> {
+		return this.send('/api/v1/lab/chat', jsonPost(payload));
 	}
 
 	/** The resident model's surprise at each token, with entropy over the whole vocabulary. */
