@@ -19,10 +19,11 @@ and it is worth making, but it is a trade.
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from typing import Any
 
-from docling_core.types.doc import DocItemLabel, DoclingDocument
+from docling_core.types.doc import DocItemLabel, DoclingDocument, PictureItem
+from PIL.Image import Image
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +57,23 @@ def build_picture_reader() -> PictureReader:
     return read
 
 
+def readable_pictures(
+    document: DoclingDocument, *, max_pictures: int
+) -> Iterator[tuple[PictureItem, Image]]:
+    """The pictures worth a model's time, and their images, in reading order.
+
+    Shared by OCR and by figure description so both spend the one ceiling
+    the operator set on the same pictures, and skip the same bullets and
+    spacers. The ceiling counts pictures, not readable ones: it bounds the
+    images opened, which is the cost before any model is asked anything.
+    """
+    for picture in list(document.pictures or [])[:max_pictures]:
+        image = picture.get_image(document)
+        if image is None or min(image.width, image.height) < MIN_READABLE_PIXELS:
+            continue
+        yield picture, image
+
+
 def read_pictures(
     document: DoclingDocument,
     read: PictureReader,
@@ -76,12 +94,7 @@ def read_pictures(
     that did convert.
     """
     read_count = 0
-    for picture in list(document.pictures or [])[:max_pictures]:
-        image = picture.get_image(document)
-        if image is None:
-            continue
-        if min(image.width, image.height) < MIN_READABLE_PIXELS:
-            continue
+    for picture, image in readable_pictures(document, max_pictures=max_pictures):
         try:
             lines = read(image)
         except Exception:

@@ -12,12 +12,20 @@ import logging
 import uuid
 from collections.abc import Callable, Iterable, Iterator
 from dataclasses import dataclass
+from typing import Any, override
 from uuid import UUID
 
 from docling.chunking import HierarchicalChunker, HybridChunker
 from docling_core.transforms.chunker import BaseChunk, BaseChunker
+from docling_core.transforms.chunker.hierarchical_chunker import (
+    ChunkingDocSerializer,
+    ChunkingSerializerProvider,
+)
 from docling_core.transforms.chunker.tokenizer.huggingface import HuggingFaceTokenizer
-from docling_core.types.doc import DoclingDocument
+from docling_core.transforms.serializer.base import BaseDocSerializer, SerializationResult
+from docling_core.transforms.serializer.common import create_ser_result
+from docling_core.transforms.serializer.markdown import MarkdownMetaSerializer
+from docling_core.types.doc import DoclingDocument, NodeItem, PictureItem
 from primer_contracts.chunks import DocumentChunk
 from primer_contracts.retrieval import SourceLocator
 
@@ -65,6 +73,40 @@ class DocumentContext:
     filename: str
 
 
+#: How a vision model's account of a figure opens, wherever it lands in a
+#: passage. In the text rather than in a field on the chunk, because a
+#: passage is often a figure joined to the paragraphs around it, and only
+#: the words themselves can say which part the document wrote.
+DESCRIBED_FIGURE = "[Figure, as described by {model}]"
+
+
+class _DescribedFigureMeta(MarkdownMetaSerializer):
+    """Docling's meta serializer, with figure descriptions marked as such.
+
+    Unmarked, a description is serialized exactly as if the document had
+    printed it below the figure, and a citation quotes a model's guess about
+    a chart as the author's claim.
+    """
+
+    @override
+    def serialize(
+        self, *, item: NodeItem, doc: DoclingDocument, **kwargs: Any
+    ) -> SerializationResult:
+        if not isinstance(item, PictureItem) or item.meta is None:
+            return super().serialize(item=item, doc=doc, **kwargs)
+        description = item.meta.description
+        if description is None or not description.text:
+            return super().serialize(item=item, doc=doc, **kwargs)
+        marker = DESCRIBED_FIGURE.format(model=description.created_by or "a vision model")
+        return create_ser_result(text=f"{marker} {description.text}", span_source=item)
+
+
+class _SerializerProvider(ChunkingSerializerProvider):
+    @override
+    def get_serializer(self, doc: DoclingDocument) -> BaseDocSerializer:
+        return ChunkingDocSerializer(doc=doc, meta_serializer=_DescribedFigureMeta())
+
+
 def build_chunker(settings: Settings) -> BaseChunker:
     """Choose a chunker from configuration.
 
@@ -93,7 +135,7 @@ def build_chunker(settings: Settings) -> BaseChunker:
             "fragments. Set PRIMER_EMBEDDING_MODEL to the model Retrieval embeds with, "
             "or PRIMER_CHUNK_TOKENIZER for a model that publishes no tokenizer."
         )
-        return HierarchicalChunker()
+        return HierarchicalChunker(serializer_provider=_SerializerProvider())
     try:
         tokenizer = HuggingFaceTokenizer.from_pretrained(
             settings.chunk_tokenizer, max_tokens=settings.max_chunk_tokens
@@ -110,7 +152,9 @@ def build_chunker(settings: Settings) -> BaseChunker:
             "the embedding model's own id, such as 'Qwen/Qwen3-Embedding-0.6B'. A "
             "hosted embedding model that publishes no tokenizer has none to name."
         ) from error
-    return HybridChunker(tokenizer=tokenizer, merge_peers=True)
+    return HybridChunker(
+        tokenizer=tokenizer, merge_peers=True, serializer_provider=_SerializerProvider()
+    )
 
 
 def locator_for(chunk: BaseChunk) -> SourceLocator:
