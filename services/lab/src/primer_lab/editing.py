@@ -1,4 +1,4 @@
-"""Editing how the resident model runs: generating with interventions, and steering vectors."""
+"""Editing how the resident model runs: generating and chatting with edits, and steering vectors."""
 
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ import itertools
 import logging
 from collections.abc import AsyncIterator
 from typing import Any
+from uuid import UUID
 
 import torch
 from fastapi import APIRouter, Request, status
@@ -21,6 +22,8 @@ from primer_contracts.lab import (
     GenerationQueued,
     GenerationStreamEvent,
     InspectedToken,
+    Intervention,
+    SteeredChatRequest,
     SteeringVector,
     SteeringVectorRequest,
     TargetChange,
@@ -29,14 +32,22 @@ from primer_service.errors import ProblemError, problem_of
 from primer_service.sse import encode
 
 from primer_lab.config import Settings
+from primer_lab.host import Resident
 from primer_lab.identity import CurrentPrincipal
-from primer_lab.inspection import describe, special_ids
-from primer_lab.interventions import Comparison, InterventionRefused, compare, first_divergence
+from primer_lab.inspection import Prompt, describe, special_ids
+from primer_lab.interventions import (
+    Comparison,
+    Edit,
+    InterventionRefused,
+    compare,
+    first_divergence,
+)
 from primer_lab.interventions import resolve as resolve_edits
 from primer_lab.routes import (
     check_layer,
     check_new_tokens,
     current_resident,
+    read_conversation,
     read_prompt,
     read_prompt_set,
     refused,
@@ -75,45 +86,42 @@ def _target_change(tokenizer: Any, token: int, comparison: Comparison) -> Target
     )
 
 
-@router.post(
-    "/generate",
-    summary="Generate with and without edits to the forward pass",
-    response_class=_EventStream,
-    responses={200: {"model": GenerationStreamEvent}},
-    description=(
-        "Generates greedily from the prompt twice, first as the model is and then with the "
-        "interventions applied at every step, and streams both answers token by token as "
-        "server-sent events. A request that cannot run is refused before the stream opens; "
-        "one that fails once it has started ends the stream with an `error` event."
-    ),
-)
-async def generate(
-    request: Request, body: GenerateRequest, principal: CurrentPrincipal
-) -> StreamingResponse:
+def _checked_edits(
+    request: Request, resident: Resident, interventions: list[Intervention], user_id: UUID
+) -> list[Edit]:
+    """The interventions resolved against the resident model, or refused naming why."""
     settings: Settings = request.app.state.settings
-    resident = current_resident(request)
-    prompt = read_prompt(request, resident, body)
-    model = resident.loaded.model
-    check_new_tokens(settings, body.max_new_tokens)
-    if len(body.interventions) > settings.lab_max_interventions:
+    if len(interventions) > settings.lab_max_interventions:
         raise refused(
             "Too many edits",
             f"This Lab applies at most {settings.lab_max_interventions} at once "
             "(PRIMER_LAB_MAX_INTERVENTIONS).",
         )
     try:
-        edits = resolve_edits(
-            body.interventions,
+        return resolve_edits(
+            interventions,
             num_layers=resident.loaded.num_layers,
             without_attention=resident.loaded.without_attention,
             hidden_size=resident.loaded.text_config.hidden_size,
             mlp_width=resident.loaded.text_config.intermediate_size,
             saes=resident.ready_saes,
-            vectors=resident.vectors.owned_by(principal.user_id),
+            vectors=resident.vectors.owned_by(user_id),
         )
     except InterventionRefused as error:
         raise refused("That edit cannot be made", str(error)) from None
-    target = _target_id(model.tokenizer, body.target) if body.target else None
+
+
+def _comparison_stream(
+    request: Request,
+    resident: Resident,
+    prompt: Prompt,
+    edits: list[Edit],
+    *,
+    max_new_tokens: int,
+    target: int | None,
+) -> StreamingResponse:
+    """Generate from `prompt` without the edits and with them, streaming both as they come."""
+    model = resident.loaded.model
     special = special_ids(model.tokenizer)
 
     loop = asyncio.get_running_loop()
@@ -144,7 +152,7 @@ async def generate(
             model,
             prompt.ids,
             edits,
-            max_new_tokens=body.max_new_tokens,
+            max_new_tokens=max_new_tokens,
             special=special,
             cancelled=gone.is_set,
             on_token=on_token,
@@ -193,6 +201,58 @@ async def generate(
         events(),
         # As for Chat: a buffering proxy would hold every token until the end.
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+@router.post(
+    "/generate",
+    summary="Generate with and without edits to the forward pass",
+    response_class=_EventStream,
+    responses={200: {"model": GenerationStreamEvent}},
+    description=(
+        "Generates greedily from the prompt twice, first as the model is and then with the "
+        "interventions applied at every step, and streams both answers token by token as "
+        "server-sent events. A request that cannot run is refused before the stream opens; "
+        "one that fails once it has started ends the stream with an `error` event."
+    ),
+)
+async def generate(
+    request: Request, body: GenerateRequest, principal: CurrentPrincipal
+) -> StreamingResponse:
+    resident = current_resident(request)
+    prompt = read_prompt(request, resident, body)
+    check_new_tokens(request.app.state.settings, body.max_new_tokens)
+    edits = _checked_edits(request, resident, body.interventions, principal.user_id)
+    tokenizer = resident.loaded.model.tokenizer
+    target = _target_id(tokenizer, body.target) if body.target else None
+    return _comparison_stream(
+        request, resident, prompt, edits, max_new_tokens=body.max_new_tokens, target=target
+    )
+
+
+@router.post(
+    "/chat",
+    summary="Reply in a conversation with and without edits to the forward pass",
+    response_class=_EventStream,
+    responses={200: {"model": GenerationStreamEvent}},
+    description=(
+        "Renders the conversation through the model's chat template and writes the next "
+        "assistant turn twice, greedily: first as the model is, then with the interventions "
+        "applied at every token, the conversation's included. Streams the same events as "
+        "`/generate`, with `baseline` the unsteered reply and `edited` the steered one. Lab "
+        "keeps no conversation: send the whole of it, with the assistant turns you kept, each "
+        "time. A model without a chat template is refused."
+    ),
+)
+async def chat(
+    request: Request, body: SteeredChatRequest, principal: CurrentPrincipal
+) -> StreamingResponse:
+    resident = current_resident(request)
+    prompt = read_conversation(request, resident, body.messages)
+    check_new_tokens(request.app.state.settings, body.max_new_tokens)
+    edits = _checked_edits(request, resident, body.interventions, principal.user_id)
+    return _comparison_stream(
+        request, resident, prompt, edits, max_new_tokens=body.max_new_tokens, target=None
     )
 
 

@@ -214,6 +214,18 @@ def settle(client: TestClient) -> dict:
     return client.get("/api/v1/lab/status").json()
 
 
+#: Wraps each turn in <eos> markers, so the template's own tokens are ones
+#: the tests can tell apart from the text's.
+CHAT_TEMPLATE = "{% for m in messages %}<eos> {{ m['content'] }} <eos>{% endfor %}"
+
+
+def switch_to_chat_model(client: TestClient, weights_dir: Path) -> None:
+    """Load the tiny model with a chat template, which the default one has not."""
+    build_tiny_model(weights_dir / "chatty", chat_template=CHAT_TEMPLATE)
+    client.put("/api/v1/lab/model", json={"model": {"source": "local", "path": "chatty"}})
+    assert settle(client)["model"]["reference"]["path"] == "chatty"
+
+
 def as_user(name: str) -> dict[str, str]:
     """Headers as the proxy sets them, for a Lab running with authentication on."""
     return {"X-Forwarded-User": name}
