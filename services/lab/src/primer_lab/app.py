@@ -8,16 +8,16 @@ from collections.abc import AsyncGenerator, Callable
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 
-# Every `TypedAttributeSet` subclass anyio defines, imported by name (its
-# packages are lazy, so importing `anyio.abc` alone defines nothing) and
-# before any model is traced. nnsight's first `.save()` mounts `save` on `object` for
-# the rest of the process, and anyio, which imports these lazily, refuses
-# to define one of these classes once it can see an unannotated public
-# name - so the first sync dependency after a trace would fail, and keep
-# failing, with "Attribute 'save' is missing its type annotation".
-# Turning the mount off (`CONFIG.APP.PYMOUNT`) is not the alternative it
-# looks like: nnterp, which Lab loads every model through, calls `.save()`
-# on proxies throughout and needs it.
+# nnsight's first `.save()` adds `save` to `object` for the rest of the
+# process, and Lab traces its startup model before it serves anything.
+# anyio refuses to define a `TypedAttributeSet` subclass that can see an
+# unannotated public name, and it defines these lazily - the first on the
+# first sync dependency - so after a trace that request fails with
+# "Attribute 'save' is missing its type annotation", as does every one
+# after it. Defining all of them here, by name because anyio's packages
+# are lazy too, puts them ahead of any trace. The test checks this list
+# against anyio's source. Turning the mount off (`CONFIG.APP.PYMOUNT`)
+# is not the alternative it looks like: nnterp relies on `.save()`.
 from anyio.abc import SocketAttribute  # noqa: F401
 from anyio.streams.file import FileStreamAttribute  # noqa: F401
 from anyio.streams.tls import TLSAttribute  # noqa: F401

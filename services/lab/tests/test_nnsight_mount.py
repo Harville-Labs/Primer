@@ -9,23 +9,36 @@ import sys
 def test_sync_routes_still_reach_the_thread_pool_after_a_trace() -> None:
     """The first `.save()` in a trace mounts `save` on `object` for good.
 
-    anyio imports its modules lazily, and a `TypedAttributeSet` subclass
-    checks every public name it can see for an annotation when its class
-    is defined. Defined after the mount, `SocketAttribute` sees `save` and
-    refuses, so the first request that needs the thread pool - any route
-    with a sync dependency, such as status - fails with a 500, and so does
-    every one after it, because a failed import is not cached. Lab loads
-    and traces its startup model before it serves anything, so this was
-    the state of every deployment that lost the race.
+    Defined after the mount, an anyio `TypedAttributeSet` sees `save` and
+    refuses, so every request needing the thread pool - any route with a
+    sync dependency, such as status - would fail with a 500. The app
+    module defines them all first.
 
-    In a subprocess because the mount cannot be undone, and because the
-    test client has already imported anyio's backend, which hides the bug.
+    It is checked against anyio's source, rather than against the three
+    names the app imports, so an anyio release that adds a fourth fails
+    here and not in a deployment. In a subprocess because the mount cannot
+    be undone, and because the test client has already imported anyio's
+    backend, which hides the bug.
     """
     script = """
 import asyncio
+import pathlib
+import re
 
+import anyio
 import primer_lab.app  # noqa: F401 - the import is what is under test
+from anyio import TypedAttributeSet
 from nnsight.intervention.tracing.globals import _ensure_mounted
+
+source = pathlib.Path(anyio.__file__).parent
+declared = {
+    name
+    for path in source.rglob("*.py")
+    for name in re.findall(r"^class (\\w+)\\(TypedAttributeSet\\)", path.read_text(), re.M)
+}
+assert declared, "found no attribute sets in anyio, so nothing was checked"
+missing = declared - {cls.__name__ for cls in TypedAttributeSet.__subclasses__()}
+assert not missing, f"import these in primer_lab.app: {sorted(missing)}"
 
 _ensure_mounted()
 assert hasattr(object(), "save"), "the mount did not happen, so nothing was tested"
