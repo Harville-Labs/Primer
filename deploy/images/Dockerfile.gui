@@ -12,8 +12,7 @@ COPY apps/web/package.json apps/web/
 RUN --mount=type=cache,target=/pnpm/store pnpm install --frozen-lockfile
 
 COPY apps/web/ apps/web/
-RUN pnpm --filter @primer/web build \
-    && pnpm --filter @primer/web --prod --legacy deploy /app/bundle
+RUN pnpm --filter @primer/web build
 
 
 FROM node:24-bookworm-slim AS runtime
@@ -38,8 +37,11 @@ RUN apt-get update \
 
 WORKDIR /app
 
-COPY --from=build --chown=node:node /app/apps/web/build ./build
-COPY --from=build --chown=node:node /app/bundle/node_modules ./node_modules
+# The build is the whole server. The adapter bundles everything the web app
+# lists as a devDependency, and it lists nothing else, so there is no
+# node_modules to install here. The files stay owned by root: the server
+# reads them and never writes them.
+COPY --from=build /app/apps/web/build ./build
 
 USER node
 

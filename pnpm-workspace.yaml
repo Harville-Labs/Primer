@@ -11,3 +11,10 @@ packages:
 # build without it.
 allowBuilds:
   esbuild: true
+
+# The OpenAPI type generator's YAML parser pins js-yaml to a release with a
+# fixed HIGH advisory, and CI scans every package in the lockfile, so the
+# patch release is forced here. Remove it once @redocly/openapi-core allows
+# 4.3.2 or later itself.
+overrides:
+  js-yaml@4.3.1: 4.3.2
