@@ -19,6 +19,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
 
+import nnsight
 import torch
 from nnterp import StandardizedTransformer
 from nnterp.rename_utils import RenameConfig, RenamingError
@@ -29,6 +30,17 @@ from primer_lab.config import Settings
 from primer_lab.sources import ModelUnavailable, Resolved
 
 logger = logging.getLogger(__name__)
+
+# nnsight's first trace otherwise gives every object in the interpreter a
+# `save` method, so that `.save()` works on any value inside a trace. Lab
+# never calls it - it reads values out of a trace by assigning them - and
+# the mount breaks anyio: its asyncio backend is imported lazily, on the
+# first route Starlette runs in a thread, and defines classes whose base
+# rejects a public attribute with no annotation. After one trace that
+# import raised, and every such route answered 500 until Lab restarted.
+# Importing anyio's backend early instead would leave every other library
+# that inspects `dir()` exposed, so the mount is what goes.
+nnsight.CONFIG.APP.PYMOUNT = False
 
 DTYPES = {"float32": torch.float32, "bfloat16": torch.bfloat16, "float16": torch.float16}
 
