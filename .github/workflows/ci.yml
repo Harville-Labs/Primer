@@ -261,6 +261,19 @@ jobs:
             dockerfile: deploy/images/Dockerfile.lab
             target: graphs
     steps:
+      # The CUDA images hold torch's CUDA wheels, twice over in the graphs
+      # image, and buildx needs room for the layers, the cache export and
+      # the SBOM scan at once. That is more than a hosted runner has free:
+      # the graphs build has failed with no space left on the device. The
+      # runner's preinstalled SDKs are about 25 GB that nothing here uses.
+      - name: Free disk space
+        if: matrix.target == 'cuda' || matrix.target == 'graphs'
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+            /usr/local/.ghcup /opt/hostedtoolcache/CodeQL
+          sudo docker image prune --all --force
+          df -h /
+
       - uses: actions/checkout@v5
 
       - uses: docker/setup-buildx-action@v3
