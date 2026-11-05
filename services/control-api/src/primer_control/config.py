@@ -125,6 +125,19 @@ class Settings(BaseSettings):
         ge=1,
         description="Hard retry bound, held here because a broker redelivery resets a worker's",
     )
+    #: Long enough that the publish a request makes after its response has
+    #: finished, including Celery's own few publish retries, before a sweep
+    #: would consider the job forgotten.
+    job_resend_after_seconds: int = Field(
+        default=120,
+        ge=1,
+        description="How long a job may wait with no message sent before Control sends it again",
+    )
+    job_resend_interval_seconds: int = Field(
+        default=60,
+        ge=1,
+        description="How often Control looks for jobs whose message was never sent",
+    )
 
     subject_header: str = Field(
         default="X-Forwarded-User",

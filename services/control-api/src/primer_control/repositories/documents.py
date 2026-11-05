@@ -222,6 +222,7 @@ class DocumentRepository:
         job.error_detail = None
         job.claimed_at = None
         job.lease_expires_at = None
+        job.dispatched_at = None
         await self._session.flush()
         await self._session.refresh(job)
         return job
@@ -243,6 +244,7 @@ class DocumentRepository:
         job.state = IngestionStatus.DELETING.value
         job.claimed_at = None
         job.lease_expires_at = None
+        job.dispatched_at = None
         await self._session.flush()
         await self._session.refresh(job)
         return job
