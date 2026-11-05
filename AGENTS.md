@@ -33,8 +33,8 @@ Small, logical commits, each one a thing you could describe in a sentence.
 Several stacked pull requests rather than one branch carrying a week.
 
 **Commit messages say what changed and why it changed.** The why is the part
-worth writing: a diff already shows the what. No co-author trailers, no
-"Generated with" footers.
+worth writing: a diff already shows the what. No "Generated with"
+footers.
 
 **No commit is finished until it is verified.** See the commands below. A
 change to code with tests means running them; a change to a chart means
