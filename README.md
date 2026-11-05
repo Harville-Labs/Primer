@@ -81,6 +81,14 @@ has a page explaining how it works.
 The screenshots were taken against stand-in services with invented documents,
 so the text in them is illustrative.
 
+## Installing
+
+[Installing](https://harville-labs.github.io/Primer/operations/installing/)
+walks through both deployments, Docker Compose for one person and
+Kubernetes for several: the secrets, connecting model providers, the
+optional parts, and checking that it works. The two sections below are the
+shortest version of each.
+
 ## Local quick start
 
 The stack runs its own embedding model and reranker. Chat is the one model
@@ -137,8 +145,10 @@ implements no login flow of its own: it trusts identity headers, and the
 ingress strips those headers from anything arriving on the outside so a
 caller cannot claim to be someone else.
 
-See [Kubernetes](https://harville-labs.github.io/Primer/operations/kubernetes/)
-for what the chart expects.
+See [Installing](https://harville-labs.github.io/Primer/operations/installing/#kubernetes)
+for the secrets and values file the chart expects, and
+[Kubernetes](https://harville-labs.github.io/Primer/operations/kubernetes/)
+for the full reference.
 
 ## Published artefacts
 
