@@ -26,7 +26,7 @@ from tempfile import TemporaryDirectory
 from docling.datamodel.accelerator_options import AcceleratorOptions
 from docling.datamodel.base_models import InputFormat
 from docling.datamodel.document import ConversionStatus
-from docling.datamodel.pipeline_options import PdfPipelineOptions
+from docling.datamodel.pipeline_options import PdfPipelineOptions, PictureDescriptionApiOptions
 from docling.document_converter import DocumentConverter, PdfFormatOption
 from docling_core.transforms.chunker import BaseChunker
 from docling_core.types.doc import DoclingDocument
@@ -36,7 +36,8 @@ from primer_storage import DOCX_MEDIA_TYPE, PDF_MEDIA_TYPE, PNG_MEDIA_TYPE, PPTX
 from primer_ingestion.chunking import DocumentContext, build_chunker, to_chunks
 from primer_ingestion.config import Settings
 from primer_ingestion.errors import PermanentStageError, StageError, UnsupportedDocument
-from primer_ingestion.images import Captioner, build_captioner, image_document
+from primer_ingestion.figures import build_figure_describer, describe_figures
+from primer_ingestion.images import Captioner, build_captioner, image_document, model_digest
 from primer_ingestion.images import conversion_key as image_conversion_key
 from primer_ingestion.pictures import PictureReader, build_picture_reader, read_pictures
 
@@ -67,7 +68,10 @@ DOCLING_VERSION = version("docling")
 
 
 def build_converter(
-    *, enable_ocr: bool = True, accelerator: AcceleratorOptions | None = None
+    *,
+    enable_ocr: bool = True,
+    keep_picture_images: bool = False,
+    accelerator: AcceleratorOptions | None = None,
 ) -> DocumentConverter:
     """A converter matching what Primer claims to support.
 
@@ -84,10 +88,17 @@ def build_converter(
     not the document's own characters, so a citation drawn from it can be
     subtly wrong in a way a reader cannot see. Chunks carry no marker for
     this yet, which is the honest limitation of turning it on.
+
+    `keep_picture_images` is for describing figures. Every other format
+    carries its pictures as embedded images already; a PDF's are regions of
+    a page that are gone once conversion ends unless Docling crops them,
+    and it crops them at the scale its own description model would use.
     """
     pdf_options = PdfPipelineOptions(
         do_ocr=enable_ocr,
         do_table_structure=True,
+        generate_picture_images=keep_picture_images,
+        images_scale=PictureDescriptionApiOptions().scale if keep_picture_images else 1.0,
         accelerator_options=accelerator or AcceleratorOptions(),
     )
     return DocumentConverter(
@@ -146,12 +157,14 @@ class DocumentParser:
         self._given_chunker = chunker
         self._given_picture_reader: PictureReader | None = None
         self._captioner = captioner or build_captioner(settings)
+        self._describer = build_figure_describer(settings)
 
     @property
     def converter(self) -> DocumentConverter:
         if self._given_converter is None:
             self._given_converter = build_converter(
                 enable_ocr=self._settings.enable_ocr,
+                keep_picture_images=self._describer is not None,
                 accelerator=AcceleratorOptions(
                     device=self._settings.parse_device,
                     num_threads=self._settings.parse_threads,
@@ -197,9 +210,10 @@ class DocumentParser:
     def conversion_key(self, media_type: str) -> str:
         """What a stored conversion must have been made with to be reused.
 
-        The format, Docling's version, and whether OCR ran: each changes
-        what comes out of the same bytes. Device and thread count do not,
-        and leaving them out lets a GPU worker reuse what a CPU one made.
+        The format, Docling's version, whether OCR ran, and which model
+        described the figures: each changes what comes out of the same
+        bytes. Device and thread count do not, and leaving them out lets a
+        GPU worker reuse what a CPU one made.
         """
         if media_type == PNG_MEDIA_TYPE:
             self._require_captioner()
@@ -207,7 +221,10 @@ class DocumentParser:
             # a different model is a different conversion.
             return image_conversion_key(self._settings.vision_model or "")
         ocr = "ocr" if self._settings.enable_ocr else "no-ocr"
-        return f"{self.format_for(media_type).value}-docling-{DOCLING_VERSION}-{ocr}"
+        key = f"{self.format_for(media_type).value}-docling-{DOCLING_VERSION}-{ocr}"
+        if self._describer is not None:
+            key += f"-figures-{model_digest(self._describer.model_name)}"
+        return key
 
     def _require_captioner(self) -> Captioner:
         """The vision model, or a permanent refusal naming what to set.
@@ -278,6 +295,18 @@ class DocumentParser:
                         "read text from %d picture(s) in %s", read, context.document_version_id
                     )
                 self._check_deadline(started, "read pictures")
+
+            if self._describer is not None:
+                described = describe_figures(
+                    result.document,
+                    self._describer,
+                    max_pictures=self._settings.max_pictures_per_document,
+                )
+                if described:
+                    logger.info(
+                        "described %d figure(s) in %s", described, context.document_version_id
+                    )
+                self._check_deadline(started, "describe figures")
             return result.document
 
     def chunk(

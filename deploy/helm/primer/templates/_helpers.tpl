@@ -488,7 +488,8 @@ seconds after every release.
 {{- end -}}
 
 {{/*
-How many embedded images the parse worker will run OCR over.
+How many embedded images the parse worker will run OCR over, and describe
+with the vision model when there is one.
 
 Only the PDF pipeline does OCR of its own; every other format Primer
 accepts is converted by a pipeline that has none, so a slide deck of pasted
@@ -533,13 +534,16 @@ produces the most fragments, so this is never left out.
 {{- end -}}
 
 {{/*
-The parse worker's vision model, for Studio images added to a library. Set
-only where Control will offer the action, so the two cannot disagree: an
-image Control accepted with no model to read it would fail after the person
-was told it was added.
+The parse worker's vision model: it describes the figures in documents, and
+reads Studio images added to a library.
+
+Set whenever a model is, not only with Studio, because figures need no
+Studio. Control offers "Add to library" from inside the `studio.enabled`
+block of its own template, so it still cannot offer an image the worker has
+no model to read.
 */}}
 {{- define "primer.visionEnv" -}}
-{{- if and .Values.studio.enabled .Values.inference.vision.baseUrl }}
+{{- if .Values.inference.vision.baseUrl }}
 {{- with .Values.inference.vision }}
 - name: PRIMER_VISION_BASE_URL
   value: {{ .baseUrl | quote }}
@@ -547,6 +551,12 @@ was told it was added.
   value: {{ required "inference.vision.model is required when inference.vision.baseUrl is set" .model | quote }}
 - name: PRIMER_VISION_TIMEOUT_SECONDS
   value: {{ .timeoutSeconds | quote }}
+- name: PRIMER_VISION_CONCURRENCY
+  value: {{ .concurrency | int | quote }}
+{{- end }}
+- name: PRIMER_DESCRIBE_FIGURES
+  value: {{ .Values.ingestion.describeFigures | quote }}
+{{- with .Values.inference.vision }}
 {{- if .existingSecret }}
 - name: PRIMER_VISION_API_KEY
   valueFrom:

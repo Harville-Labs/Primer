@@ -492,11 +492,14 @@ services:
       PRIMER_EMBEDDING_MODEL: *embedding-model
       PRIMER_CHUNK_TOKENIZER: ${PRIMER_CHUNK_TOKENIZER:-}
       PRIMER_MAX_CHUNK_TOKENS: ${PRIMER_MAX_CHUNK_TOKENS:-512}
-      # A Studio image added to a library is indexed by what this model says
-      # it shows. Unset, Studio offers no way to add one.
+      # Figures in documents, and Studio images added to a library, are
+      # indexed by what this model says they show. Unset, figures keep only
+      # the text OCR finds in them and Studio offers no way to add an image.
       PRIMER_VISION_BASE_URL: ${PRIMER_VISION_BASE_URL:-}
       PRIMER_VISION_MODEL: ${PRIMER_VISION_MODEL:-}
       PRIMER_VISION_API_KEY: ${PRIMER_VISION_API_KEY:-}
+      PRIMER_VISION_CONCURRENCY: ${PRIMER_VISION_CONCURRENCY:-4}
+      PRIMER_DESCRIBE_FIGURES: ${PRIMER_DESCRIBE_FIGURES:-true}
     volumes:
       - source-objects:/var/lib/primer/sources
       # Docling downloads layout models on first use. A named volume keeps

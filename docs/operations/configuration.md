@@ -38,6 +38,7 @@ instead of silently keeping a default.
 | `PRIMER_SERVICE_TOKEN` | unset | Must match the services' tokens |
 | `PRIMER_SOURCE_STORE_URL` | `file:///var/lib/primer/sources` | Same store as Control |
 | `PRIMER_ENABLE_OCR` | `true` | Read text from images |
+| `PRIMER_MAX_PICTURES_PER_DOCUMENT` | `100` | Pictures read with OCR, and figures described, per document; `0` turns both off |
 | `PRIMER_PARSE_DEVICE` | `auto` | Where Docling runs its models: `auto`, `cpu`, `cuda`, `mps` or `xpu` |
 | `PRIMER_PARSE_THREADS` | `4` | CPU threads for Docling's models; match the CPU the worker is given |
 | `PRIMER_EMBEDDING_MODEL` | unset | The model Retrieval embeds with; the parse worker finds its tokenizer from it |
@@ -54,10 +55,12 @@ instead of silently keeping a default.
 | `PRIMER_CHAT_BASE_URL`, `PRIMER_CHAT_MODEL`, `PRIMER_CHAT_API_KEY` | unset | Extract with the chat model when no extraction base URL is set. Needs both the URL and the model; the key goes only to this URL |
 | `PRIMER_GRAPH_EXTRACTION_TIMEOUT_SECONDS` | `120` | Per passage |
 | `PRIMER_GRAPH_EXTRACTION_CONCURRENCY` | `4` | Passages sent to the model at once |
-| `PRIMER_VISION_BASE_URL` | unset | OpenAI-compatible endpoint that accepts images, to read Studio images added to a library |
-| `PRIMER_VISION_MODEL` | unset | Unset, or no base URL, refuses images for good with `vision_unconfigured` |
+| `PRIMER_VISION_BASE_URL` | unset | OpenAI-compatible endpoint that accepts images, to describe figures and read Studio images added to a library |
+| `PRIMER_VISION_MODEL` | unset | Unset, or no base URL, describes no figures and refuses Studio images for good with `vision_unconfigured` |
 | `PRIMER_VISION_API_KEY` | unset | Sent as a placeholder when unset |
 | `PRIMER_VISION_TIMEOUT_SECONDS` | `120` | Per image |
+| `PRIMER_VISION_CONCURRENCY` | `4` | Figures sent to the vision model at once |
+| `PRIMER_DESCRIBE_FIGURES` | `true` | `false` keeps the vision model for Studio images only. See [What a figure shows](models.md#what-a-figure-shows) |
 
 An empty value counts as unset for the extraction settings, so Compose's
 `${VAR:-}` leaves extraction off rather than turning it on with nowhere to
