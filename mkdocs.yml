@@ -97,6 +97,7 @@ nav:
           - Multimodal checkpoints in Lab: adr/0013-lab-loads-multimodal-checkpoints.md
           - Knowledge graph always on: adr/0014-knowledge-graph-is-always-on.md
   - Operations:
+      - Installing: operations/installing.md
       - Configuration: operations/configuration.md
       - Connecting model providers: operations/providers.md
       - Choosing models: operations/models.md
