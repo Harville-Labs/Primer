@@ -190,6 +190,9 @@ inference:
     existingSecret: ""   # a Secret holding vision-api-key, if it needs one
 ```
 
+The same model describes the figures inside uploaded documents; see
+[What a figure shows](models.md#what-a-figure-shows).
+
 Only Studio can put an image in a library. An ordinary upload still refuses
 a PNG, since Primer promises nothing about an arbitrary photograph.
 

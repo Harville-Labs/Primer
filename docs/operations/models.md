@@ -163,6 +163,46 @@ transcription rather than the document's own characters, so a citation drawn
 from it can be subtly wrong in a way a reader cannot see. Chunks carry no
 marker for this.
 
+## What a figure shows
+
+OCR recovers the words printed in a chart and nothing else: not that it is
+a chart, what it plots, or which way the line goes. A figure that carries a
+paper's result is findable only by its axis labels.
+
+With a vision model configured, the parse worker asks it what each figure
+shows and indexes the answer where the figure stands, in PDFs, Word
+documents, and slide decks alike. The model is the one Studio uses, set the
+same way:
+
+```yaml
+inference:
+  vision:
+    baseUrl: http://vision.models.svc:8000/v1
+    model: Qwen/Qwen2.5-VL-7B-Instruct
+    concurrency: 4       # figures in flight at once
+```
+
+In Compose, set `PRIMER_VISION_BASE_URL` and `PRIMER_VISION_MODEL`. Studio
+does not have to be on. To keep the model for Studio images only, set
+`ingestion.describeFigures: false` (`PRIMER_DESCRIBE_FIGURES=false`).
+
+What a reader sees:
+
+- **A description is marked as one.** The passage reads
+  `[Figure, as described by <model>]` before the description, so a citation
+  never presents a model's reading of a chart as the author's words.
+- **Text in a figure is described, never followed.** A figure is someone
+  else's content, and the prompt says so.
+- **It costs one request per figure**, bounded by the same
+  `ingestion.maxPicturesPerDocument` as OCR. Figures smaller than 64 pixels
+  on a side, or under a twentieth of their page, are not sent.
+- **An unreachable model is retried, not skipped.** If every figure in a
+  document fails, the parse is retried later rather than indexed without
+  them. One figure failing on its own is logged and left out.
+
+Changing the vision model makes every document's stored conversion stale,
+so reindex the library for its figures to be described by the new one.
+
 ## Reranking
 
 A vector search compares a question and a passage through two embeddings
