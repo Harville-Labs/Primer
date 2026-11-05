@@ -35,6 +35,7 @@ from neo4j import (
     unit_of_work,
 )
 from primer_contracts.graph import ChunkGraph, entity_key
+from primer_contracts.retrieval import MAX_GRAPH_ENTITIES
 
 if TYPE_CHECKING:
     # Only for annotations: config bounds its hop setting by MAX_HOPS, so
@@ -145,8 +146,11 @@ WHERE length(path) <= $hops
 WITH entity, min(length(path)) AS distance
 MATCH (chunk:Chunk {library_id: $library_id})-[:MENTIONS]->(entity)
 WHERE chunk.generation_id IN $generation_ids
-WITH chunk, min(distance) AS distance, count(DISTINCT entity) AS support
-RETURN chunk.chunk_id AS chunk_id, distance, support
+WITH chunk, entity, distance
+ORDER BY distance ASC, entity.name ASC
+WITH chunk, min(distance) AS distance, count(DISTINCT entity) AS support,
+     collect(entity.name)[..$entity_names] AS entities
+RETURN chunk.chunk_id AS chunk_id, distance, support, entities
 ORDER BY distance ASC, support DESC, chunk_id ASC
 LIMIT $limit
 """
@@ -215,6 +219,9 @@ class GraphHit:
     #: names three of them is more likely about the question than one that
     #: names one.
     support: int
+    #: Names of the reached entities this chunk mentions, nearest first: why
+    #: the graph found it, in words a reader recognises.
+    entities: tuple[str, ...] = ()
 
 
 class GraphStore:
@@ -315,6 +322,7 @@ class GraphStore:
                 "keys": sorted({entity_key(name) for name in names}),
                 "hops": hops,
                 "limit": limit,
+                "entity_names": MAX_GRAPH_ENTITIES,
             },
             routing_=RoutingControl.READ,
             database_=self._database,
@@ -324,6 +332,7 @@ class GraphStore:
                 chunk_id=UUID(record["chunk_id"]),
                 distance=record["distance"],
                 support=record["support"],
+                entities=tuple(record["entities"]),
             )
             for record in records
         ]

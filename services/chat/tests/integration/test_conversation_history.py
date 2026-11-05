@@ -74,6 +74,8 @@ async def test_a_reopened_answer_still_carries_what_it_cited(owner: ChatUser) ->
 
     assert answer["citations"], "the stored answer lost its sources"
     assert answer["citations"][0]["excerpt"]
+    assert answer["citations"][0]["found_by"] == "graph"
+    assert answer["citations"][0]["graph_entities"] == ["trial"]
 
 
 async def test_a_conversation_with_no_library_says_so(owner: ChatUser) -> None:

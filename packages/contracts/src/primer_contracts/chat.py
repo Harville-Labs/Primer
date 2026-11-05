@@ -11,7 +11,12 @@ from pydantic import ConfigDict, Field
 
 from primer_contracts.base import WireModel
 from primer_contracts.identity import Principal
-from primer_contracts.retrieval import SourceLocator
+from primer_contracts.retrieval import (
+    MAX_GRAPH_ENTITIES,
+    FoundBy,
+    GraphEntityName,
+    SourceLocator,
+)
 
 Message = Annotated[str, Field(min_length=1, max_length=32000)]
 
@@ -28,6 +33,11 @@ class Citation(WireModel):
     chunk_id: UUID
     locator: SourceLocator | None = None
     excerpt: str | None = Field(default=None, max_length=2000)
+    #: How retrieval found the passage, so a reader can see what the graph
+    #: contributed to an answer. None for answers recorded before Primer kept
+    #: it, rather than a guess of "vector" that would be wrong for some.
+    found_by: FoundBy | None = None
+    graph_entities: tuple[GraphEntityName, ...] = Field(default=(), max_length=MAX_GRAPH_ENTITIES)
 
 
 class ChatRequest(WireModel):

@@ -17,7 +17,7 @@ from haystack.utils import Secret
 from haystack_integrations.components.retrievers.qdrant import QdrantEmbeddingRetriever
 from primer_contracts.chunks import DocumentChunk
 from primer_contracts.indexing import Passage
-from primer_contracts.retrieval import RetrievedChunk, SourceLocator
+from primer_contracts.retrieval import FoundBy, RetrievedChunk, SourceLocator
 
 from primer_retrieval.config import Settings
 from primer_retrieval.errors import UnembeddedChunks
@@ -218,7 +218,9 @@ def reading_order(document: Document) -> tuple[str, str, int]:
     return (str(meta.get("filename") or ""), str(meta[DOCUMENT_ID]), int(meta.get("ordinal") or 0))
 
 
-def to_retrieved(document: Document) -> RetrievedChunk:
+def to_retrieved(
+    document: Document, found_by: FoundBy = "vector", graph_entities: tuple[str, ...] = ()
+) -> RetrievedChunk:
     """Translate a store hit back into Primer's contract."""
     meta = document.meta
     return RetrievedChunk(
@@ -230,4 +232,6 @@ def to_retrieved(document: Document) -> RetrievedChunk:
         score=float(document.score or 0.0),
         locator=SourceLocator(page=meta.get("page"), section=meta.get("section")),
         index_generation=UUID(str(meta[GENERATION_ID])),
+        found_by=found_by,
+        graph_entities=graph_entities,
     )

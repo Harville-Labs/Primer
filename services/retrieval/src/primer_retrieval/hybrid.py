@@ -14,14 +14,16 @@ measure. Reciprocal rank fusion needs only the two orderings.
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
+
+from primer_contracts.retrieval import FoundBy
 
 from primer_retrieval.errors import GRAPH_OUTAGES
 
 if TYPE_CHECKING:
-    from primer_retrieval.graph import GraphStore
+    from primer_retrieval.graph import GraphHit, GraphStore
 
 logger = logging.getLogger(__name__)
 
@@ -90,8 +92,8 @@ def related_chunks(
     question: str,
     hops: int,
     limit: int,
-) -> list[str]:
-    """Chunk ids the graph ranks for this question, or none at all.
+) -> list[GraphHit]:
+    """The chunks the graph ranks for this question, or none at all.
 
     A graph that is down is a worse answer, not a lost one: the vector
     results are still correct and are what Primer answered with before the
@@ -107,7 +109,22 @@ def related_chunks(
             "the graph store could not be reached; searching vectors alone", exc_info=True
         )
         return []
-    return [str(hit.chunk_id) for hit in hits]
+    return hits
+
+
+def provenance(
+    chunk_id: str, vector_ids: frozenset[str], graph_hits: Mapping[str, GraphHit]
+) -> tuple[FoundBy, tuple[str, ...]]:
+    """Which ranking found a passage, and the entities the graph found it through.
+
+    Decided by membership in the two rankings before fusion, not by where
+    the passage ended up: a passage both rankings found is "both" whichever
+    one placed it higher.
+    """
+    hit = graph_hits.get(chunk_id)
+    if hit is None:
+        return "vector", ()
+    return ("both" if chunk_id in vector_ids else "graph"), hit.entities
 
 
 def blend(

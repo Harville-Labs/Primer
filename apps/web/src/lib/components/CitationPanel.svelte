@@ -79,6 +79,12 @@
 				{@const position = index + 1}
 				{@const source = documentFor(citation)}
 				<!--
+				  "both" counts: the graph agreeing with the vector search is
+				  part of why a passage ranked where it did. An answer stored
+				  before provenance was recorded has none, and says nothing.
+				-->
+				{@const viaGraph = citation.found_by === 'graph' || citation.found_by === 'both'}
+				<!--
 				  The marker in the answer and this card are the same thing
 				  seen twice, so the number is what ties them together and is
 				  what the answer's link carries.
@@ -95,7 +101,21 @@
 								<span class="text-sm font-medium">
 									{describeCitation(citation, source?.filename)}
 								</span>
+								{#if viaGraph}
+									<Badge variant="outline">via graph</Badge>
+								{/if}
 							</div>
+							<!--
+							  Written out rather than tucked into a hover: the
+							  entities are why an unexpected passage is here,
+							  and a reader on a keyboard or a touch screen
+							  needs them as much as one with a mouse.
+							-->
+							{#if viaGraph && citation.graph_entities.length > 0}
+								<p class="text-xs text-muted-foreground">
+									Connected through: {citation.graph_entities.join(', ')}
+								</p>
+							{/if}
 						</Card.Header>
 						{#if source?.media_type === 'image/png'}
 							<Card.Content>

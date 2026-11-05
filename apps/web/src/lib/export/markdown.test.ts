@@ -16,6 +16,7 @@ function message(overrides: Partial<MessageSummary> = {}): MessageSummary {
 				chunk_id: 'chunk-1',
 				locator: { page: 3, section: 'Findings' },
 				excerpt: 'the quoted passage',
+				graph_entities: [],
 			},
 		],
 		error_code: null,
@@ -58,6 +59,7 @@ describe('markdown export', () => {
 					chunk_id: 'chunk-1',
 					locator: { page: null, section: 'Introduction' },
 					excerpt: null,
+					graph_entities: [],
 				},
 			],
 		});

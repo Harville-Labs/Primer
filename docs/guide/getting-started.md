@@ -42,6 +42,12 @@ claim, naming the document, the version, and where in it the passage sits.
 If an answer has no citation, treat it with suspicion. The citation is the
 part you can check, and checking it is the point.
 
+Some sources are marked **via graph**. Primer found those by following the
+links between people, places, and ideas in your library, not by how closely
+the passage's wording matches the question. The source names what connected
+it. A passage like that can look unrelated to what you asked, and the named
+connections are how you judge whether it belongs.
+
 !!! warning "Answers are drafts, not authorities"
     Retrieval finds passages that look relevant; a model then writes prose
     from them. Both steps can be wrong. The citations exist so you can
