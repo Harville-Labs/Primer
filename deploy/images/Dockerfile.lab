@@ -31,6 +31,17 @@ ENV UV_COMPILE_BYTECODE=1 \
     HF_HOME=/models/huggingface \
     HF_HUB_DISABLE_TELEMETRY=1
 
+# The base image is rebuilt less often than Debian publishes security
+# fixes, so the image takes them itself rather than waiting for it.
+RUN apt-get update \
+    && apt-get upgrade -y \
+    && rm -rf /var/lib/apt/lists/*
+
+# The base image's pip is never used - uv installs everything - and it
+# carries its own vendored copies of urllib3, msgpack and setuptools, which
+# the image scan reports and nothing here would ever update.
+RUN python -m pip uninstall --yes --root-user-action ignore pip
+
 RUN groupadd --gid 10001 primer \
     && useradd --uid 10001 --gid 10001 --create-home --shell /usr/sbin/nologin primer
 

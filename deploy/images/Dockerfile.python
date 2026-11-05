@@ -20,6 +20,11 @@ ENV UV_COMPILE_BYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1
 
+# The base image's pip is never used - uv installs everything - and it
+# carries its own vendored copies of urllib3, msgpack and setuptools, which
+# the image scan reports and nothing here would ever update.
+RUN python -m pip uninstall --yes --root-user-action ignore pip
+
 RUN addgroup -g 10001 primer \
     && adduser -u 10001 -G primer -s /sbin/nologin -D primer
 

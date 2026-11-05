@@ -13,3 +13,19 @@
 #
 #   # Reachable only from a CLI entry point Primer does not ship.
 #   CVE-2026-12345 exp:2027-03-31
+
+# transformers 4.57 in the attribution graph builder's environment, which
+# is on 4.x because circuit-tracer 0.5 pins transformer-lens 3.2 (ADR 0009).
+# Each of these needs a malicious checkpoint: a config that names remote
+# code, or a chat template saved back to disk. The builder only loads the
+# models an operator has listed in PRIMER_LAB_TRANSCODERS, from the copy
+# Lab already fetched and held to its repository patterns, and never saves
+# one. Look again when a circuit-tracer release supports transformers 5.
+CVE-2026-4372 exp:2027-02-01
+CVE-2026-5241 exp:2027-02-01
+CVE-2026-9856 exp:2027-02-01
+
+# Go's crypto/x509 in wandb-core, the binary wandb starts for a run. wandb
+# is a dependency of transformer-lens; the graph builder never starts a run,
+# so the binary never executes. 0.31.0 is the newest wandb; take the next.
+CVE-2026-111943 exp:2027-01-01
