@@ -108,14 +108,35 @@ def test_a_vision_model_lets_studio_images_into_libraries() -> None:
     assert parse["PRIMER_VISION_MODEL"] == "qwen-vl"
 
 
-def test_a_vision_model_without_studio_renders_nothing() -> None:
-    """Only Studio adds images to libraries, so neither side should think it can."""
+def test_a_vision_model_without_studio_describes_figures_but_offers_no_images() -> None:
+    """Figures need no Studio; adding a Studio image to a library does.
+
+    The worker gets the model either way. Control must still not offer an
+    action whose images live in a feature that is switched off.
+    """
     manifests = render(*VISION)
 
     assert "PRIMER_VISION_ENABLED" not in env_names(named(manifests, "Deployment", "-control"))
-    parse = env_names(named(manifests, "Deployment", "-worker-parse"))
+    parse = env_of(named(manifests, "Deployment", "-worker-parse"))
+    assert parse["PRIMER_VISION_MODEL"] == "qwen-vl"
+    assert parse["PRIMER_DESCRIBE_FIGURES"] == "true"
+
+
+def test_figures_can_be_kept_from_the_vision_model() -> None:
+    parse = env_of(
+        named(render(*VISION, "ingestion.describeFigures=false"), "Deployment", "-worker-parse")
+    )
+
+    assert parse["PRIMER_DESCRIBE_FIGURES"] == "false"
+    assert parse["PRIMER_VISION_MODEL"] == "qwen-vl"
+
+
+def test_without_a_vision_model_the_worker_is_told_nothing_about_one() -> None:
+    parse = env_names(named(render(), "Deployment", "-worker-parse"))
+
     assert parse
     assert not {n for n in parse if n.startswith("PRIMER_VISION_")}
+    assert "PRIMER_DESCRIBE_FIGURES" not in parse
 
 
 def test_the_vision_key_comes_only_from_a_secret() -> None:
