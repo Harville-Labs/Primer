@@ -66,3 +66,41 @@ async def test_retrieval_being_down_is_said_to_be_worth_retrying(make_client) ->
     assert response.status_code == 503
     assert response.json()["code"] == "dependency_unavailable"
     assert "The vector store could not be reached." in response.json()["detail"]
+
+
+async def test_a_library_the_person_cannot_read_has_no_graph_status(
+    client: AsyncClient, control: FakeControl, retrieval: FakeRetrieval
+) -> None:
+    """Counts say what a library holds, so they are refused the same way passages are."""
+    response = await ChatUser(client, "owner").get(f"/api/v1/libraries/{OTHER_LIBRARY_ID}/graph")
+
+    assert response.status_code == 404
+    assert retrieval.described == []
+
+
+async def test_a_graph_status_is_read_within_the_active_generations(
+    client: AsyncClient, control: FakeControl, retrieval: FakeRetrieval
+) -> None:
+    response = await ChatUser(client, "owner").get(f"/api/v1/libraries/{LIBRARY_ID}/graph")
+
+    assert response.status_code == 200, response.text
+    assert response.json()["entities"] == 4
+    [described] = retrieval.described
+    assert described.generation_ids == control.generations
+
+
+async def test_a_library_with_nothing_indexed_has_an_empty_graph_without_asking_retrieval(
+    client: AsyncClient, control: FakeControl, retrieval: FakeRetrieval
+) -> None:
+    control.generations = ()
+
+    response = await ChatUser(client, "owner").get(f"/api/v1/libraries/{LIBRARY_ID}/graph")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "entities": 0,
+        "relations": 0,
+        "communities": 0,
+        "graphed_versions": [],
+    }
+    assert retrieval.described == []

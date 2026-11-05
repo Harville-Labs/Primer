@@ -15,6 +15,8 @@ import httpx2
 from primer_contracts.errors import ErrorCode
 from primer_contracts.identity import Principal
 from primer_contracts.indexing import (
+    GraphStatus,
+    GraphStatusRequest,
     LibraryAccessRequest,
     LibraryScope,
     PassagesRequest,
@@ -40,6 +42,8 @@ class PassageSource(Protocol):
     async def search(self, request: SearchRequest) -> SearchResult: ...
 
     async def passages(self, request: PassagesRequest) -> PassagesResult: ...
+
+    async def graph_status(self, request: GraphStatusRequest) -> GraphStatus: ...
 
 
 class SearchFailed(Exception):
@@ -151,6 +155,16 @@ class RetrievalClient(_Client):
             raise SearchUnavailable("Retrieval could not be reached.") from error
         _raise_for(response)
         return PassagesResult.model_validate(response.json())
+
+    async def graph_status(self, request: GraphStatusRequest) -> GraphStatus:
+        try:
+            response = await self._client.post(
+                "/internal/v1/graph/status", json=request.model_dump(mode="json")
+            )
+        except httpx2.TransportError as error:
+            raise SearchUnavailable("Retrieval could not be reached.") from error
+        _raise_for(response)
+        return GraphStatus.model_validate(response.json())
 
 
 def _raise_for(response: httpx2.Response) -> None:

@@ -201,6 +201,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/libraries/{library_id}/graph": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * How much of a library the knowledge graph covers
+         * @description Entity, relation, and topic counts for a library you can read, and which document versions have a graph. A searchable version with none was indexed with no extraction model, and gains one when it is reindexed.
+         */
+        get: operations["graph_status_api_v1_libraries__library_id__graph_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/libraries/{library_id}/passages": {
         parameters: {
             query?: never;
@@ -568,6 +588,33 @@ export interface components {
             model?: string | null;
             /** Provider Id */
             provider_id?: string | null;
+        };
+        /**
+         * GraphStatus
+         * @description How much of a library the knowledge graph covers.
+         */
+        GraphStatus: {
+            /**
+             * Communities
+             * @description Topics a library-wide question reads from: the largest communities, at most PRIMER_GRAPH_COMMUNITIES. Null when the library is too large to group into topics, which is also when library-wide questions are refused.
+             */
+            communities?: number | null;
+            /**
+             * Entities
+             * @description Distinct entities the library's passages mention
+             */
+            entities: number;
+            /**
+             * Graphed Versions
+             * @description Document versions with a graph. A searchable version missing from this list was indexed with no extraction model, and needs reindexing to gain one.
+             * @default []
+             */
+            graphed_versions: string[];
+            /**
+             * Relations
+             * @description Relations extracted between those entities
+             */
+            relations: number;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -1526,6 +1573,37 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    graph_status_api_v1_libraries__library_id__graph_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                library_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GraphStatus"];
+                };
             };
             /** @description Validation Error */
             422: {

@@ -19,6 +19,7 @@ from fastapi import APIRouter, Depends, FastAPI, Request
 from fastapi.responses import JSONResponse
 from haystack.document_stores.types import DuplicatePolicy
 from haystack_integrations.document_stores.qdrant import QdrantDocumentStore
+from primer_contracts.errors import ErrorCode
 from primer_contracts.indexing import (
     DeleteRequest,
     DeleteResult,
@@ -26,6 +27,8 @@ from primer_contracts.indexing import (
     GenerationQuery,
     GraphIndexRequest,
     GraphIndexResult,
+    GraphStatus,
+    GraphStatusRequest,
     IndexRequest,
     IndexResult,
     PassagesRequest,
@@ -343,6 +346,35 @@ def passages(payload: PassagesRequest, state: State) -> PassagesResult:
     return PassagesResult(
         passages=tuple(to_passage(document) for document in found[: payload.limit]),
         total=len(found),
+    )
+
+
+@router.post("/graph/status", summary="Describe how much of a library the graph covers")
+def graph_status(payload: GraphStatusRequest, state: State) -> GraphStatus:
+    """Counts for a library's graph, and which of its versions have one.
+
+    Communities come from the same cache a library-wide question uses, so
+    the number shown is the one those questions read from, and opening the
+    page warms the cache for them.
+    """
+    with graph_store("this library's graph cannot be described"):
+        coverage = state.graph.coverage(payload.library_id, payload.generation_ids)
+        try:
+            communities: int | None = len(
+                state.communities.get(payload.library_id, payload.generation_ids)
+            )
+        except ProblemError as refused:
+            # Too large to cluster. Not an error for a status read: the
+            # page says library-wide questions are unavailable, which is
+            # the true and useful part of the refusal.
+            if refused.code != ErrorCode.QUOTA_EXCEEDED:
+                raise
+            communities = None
+    return GraphStatus(
+        entities=coverage.entities,
+        relations=coverage.relations,
+        communities=communities,
+        graphed_versions=tuple(sorted(coverage.versions, key=str)),
     )
 
 

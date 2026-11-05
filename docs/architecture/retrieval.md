@@ -148,6 +148,28 @@ Retrieval's memory. Without a graph, or with the graph down, a
 library-wide question gets the focused answer. Passages that mention no
 entity belong to no community and are not reached this way.
 
+### Graph status
+
+`POST /internal/v1/graph/status` describes one library's graph within the
+generations the caller names: how many entities its passages mention, how
+many relations those generations wrote, how many communities a
+library-wide question would read, and which document versions have any
+passage in the graph. Chat serves it to the library page as
+`GET /api/v1/libraries/{id}/graph`, after Control has authorized the
+reader, in the same way it serves passages.
+
+The community count comes from the same cache library-wide questions use,
+so the number on the page is the one answers read, and showing it pays for
+the clustering a library-wide question would otherwise pay for. A library
+over `PRIMER_GRAPH_COMMUNITY_MAX_MENTIONS` reports `communities: null`
+rather than failing: the counts are still worth showing, and the null is
+what tells the page to say library-wide questions are unavailable.
+
+A document version with no passage in the graph was indexed without an
+extraction model. Retrieval writes a `Chunk` node for every passage it
+extracts, mentions or not, so a version is listed in `graphed_versions` as
+soon as it was extracted at all, and missing from it only when it was not.
+
 ## No Primer vector adapter
 
 Haystack's `DocumentStore` protocol is already that abstraction. Wrapping it

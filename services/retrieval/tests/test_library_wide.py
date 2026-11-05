@@ -17,7 +17,7 @@ from primer_contracts.identity import Principal
 from primer_retrieval.app import create_app
 from primer_retrieval.breadth import Communities
 from primer_retrieval.config import Settings
-from primer_retrieval.graph import GraphHit
+from primer_retrieval.graph import GraphCoverage, GraphHit
 
 SERVICE_TOKEN = "test-service-token"  # noqa: S105 - a fixture value, not a real credential
 LIBRARY = uuid.uuid4()
@@ -42,6 +42,8 @@ def passage(content: str, score: float) -> Document:
 #: passage that does not. A focused search never reaches the astronomy.
 CHEMISTRY = [passage(f"Polonium, part {i}.", 0.9 - i / 100) for i in range(3)]
 ASTRONOMY = passage("Comets have elliptical orbits.", 0.1)
+#: The one document version the fake graph has extracted.
+GRAPHED = uuid.uuid4()
 #: Named by the graph, absent from the scoped store: another library's.
 FOREIGN = str(uuid.uuid4())
 
@@ -78,6 +80,11 @@ class Graph:
 
     def neighbourhood(self, *args: Any, **kwargs: Any) -> list[Any]:
         return []
+
+    def coverage(self, library_id: uuid.UUID, generation_ids: Any) -> GraphCoverage:
+        if self.fail:
+            raise ServiceUnavailable("graph down")
+        return GraphCoverage(entities=3, relations=1, versions=frozenset({GRAPHED}))
 
 
 class Embedder:
@@ -214,3 +221,50 @@ def test_a_library_wide_answer_is_marked_as_the_graphs() -> None:
 
     assert chunks
     assert {chunk["found_by"] for chunk in chunks} == {"graph"}
+
+
+def describe(client: TestClient) -> Any:
+    reader = Principal(subject="reader", user_id=uuid.uuid4())
+    return client.post(
+        "/internal/v1/graph/status",
+        json={
+            "principal": reader.model_dump(mode="json"),
+            "library_id": str(LIBRARY),
+            "generation_ids": [str(GENERATION)],
+        },
+        headers={"X-Primer-Service-Token": SERVICE_TOKEN},
+    )
+
+
+def test_a_graph_status_counts_the_communities_a_library_wide_question_reads() -> None:
+    """The same clustering, so the number on the page is the one answers use."""
+    graph = Graph()
+    client = build_client(graph)
+
+    status = describe(client)
+    ask(client, "library")
+
+    assert status.status_code == 200, status.text
+    assert status.json() == {
+        "entities": 3,
+        "relations": 1,
+        "communities": 2,
+        "graphed_versions": [str(GRAPHED)],
+    }
+    assert len(graph.reads) == 1, "the question reused the clustering the status computed"
+
+
+def test_a_library_too_large_to_cluster_still_has_a_status() -> None:
+    """Library-wide questions are refused; the page that says so is not."""
+    response = describe(build_client(Graph(), graph_community_max_mentions=3))
+
+    assert response.status_code == 200, response.text
+    assert response.json()["communities"] is None
+    assert response.json()["entities"] == 3
+
+
+def test_a_graph_status_with_the_graph_down_says_which_store_failed() -> None:
+    response = describe(build_client(Graph(fail=True)))
+
+    assert response.status_code == 503, response.text
+    assert response.json()["code"] == "dependency_unavailable"

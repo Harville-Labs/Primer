@@ -102,6 +102,25 @@ library's main topics and answers from those, still citing each one. The
 answer covers breadth rather than depth: it names a theme and cites an
 example of it.
 
-This needs the knowledge graph. Without one, the question gets an ordinary
-answer. A library too large for the deployment to group into topics is
-refused, with a message saying so.
+This reads the topics from the knowledge graph. If the graph is unreachable
+the question gets an ordinary answer. A library too large for the
+deployment to group into topics is refused, with a message saying so.
+
+## The knowledge graph card
+
+Below a library's documents, **Knowledge graph** shows what Primer has
+learned about how they connect:
+
+- **Entities**: the people, places, and ideas the documents mention.
+- **Relations**: the connections between them that a passage states.
+- **Topics**: the groups a question about the whole library reads from. A
+  dash means the library is too large to group, so questions about the
+  whole library are refused; focused questions still use the graph.
+
+The counts take a moment longer than the document list, so the card fills
+in after the page appears.
+
+If any ready documents are listed under **no graph**, they were indexed
+while the deployment had no extraction model. Answers still find them by
+wording, but not by what they mention. Once an extraction model is
+configured, the library's owner can reindex them to add them to the graph.
