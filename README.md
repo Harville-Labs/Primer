@@ -36,7 +36,7 @@ reranker, and answers with whichever chat model you point it at.
 | **Private by default** | A library belongs to one person. Nobody else can read it, list it, or discover that it exists. |
 | **Real documents** | `.pdf` `.docx` `.pptx` `.md` `.markdown` `.txt` — including text that exists only inside images. |
 | **Answers you can check** | Every citation names a passage in a specific *version* of a specific document, and is recorded with the answer rather than recomputed later. |
-| **Connections across documents** | Optionally, a knowledge graph of the people, methods, and things your sources name. A question finds passages linked to what it mentions, not only passages that resemble it. |
+| **Connections across documents** | A knowledge graph of the people, methods, and things your sources name. A question finds passages linked to what it mentions, not only passages that resemble it. |
 | **Your models** | Any OpenAI-compatible endpoint — vLLM, Ollama, llama.cpp, or a hosted API. |
 | **Chat on its own** | Use it as a plain chat interface, and link a library when you want the answer grounded and cited. |
 | **Tools, only with consent** | MCP tools run in the operator's own servers, and only after a person approves that specific call. Primer never touches the host shell. |
@@ -94,6 +94,7 @@ cd Primer
 cat > .env <<'ENV'
 POSTGRES_PASSWORD=change-me
 RABBITMQ_PASSWORD=change-me
+PRIMER_GRAPH_PASSWORD=change-me
 PRIMER_INTERNAL_API_TOKEN=change-me
 PRIMER_CHAT_BASE_URL=http://host.docker.internal:11434/v1
 ENV
@@ -109,9 +110,10 @@ much faster on Apple Silicon.
 
 Then open <http://localhost:3000>.
 
-The knowledge graph is off until you turn it on. It needs a model that
-supports structured output, and runs Neo4j under a Compose profile; see
-[Turning on the knowledge graph](https://harville-labs.github.io/Primer/operations/deploying/#turning-on-the-knowledge-graph-with-compose).
+The stack runs Neo4j for the knowledge graph, so `.env` also needs
+`PRIMER_GRAPH_PASSWORD`. The graph is extracted with the chat model, which
+must support structured output; see
+[The knowledge graph with Compose](https://harville-labs.github.io/Primer/operations/deploying/#the-knowledge-graph-with-compose).
 
 > [!WARNING]
 > The Compose profile has **no authentication and is not meant to gain any**.
@@ -162,10 +164,9 @@ Each process owns one thing.
   states. Celery over RabbitMQ, with lease-based claims so a worker dying
   mid-document is recoverable rather than corrupting.
 - **Retrieval** — the only process that touches the index: the vector store,
-  and the Neo4j knowledge graph when there is one. Every request carries a
-  library and a generation; there is no unscoped search to get wrong. With
-  a graph, search fuses the vector ranking with the passages connected to
-  what the question names.
+  and the Neo4j knowledge graph. Every request carries a library and a
+  generation; there is no unscoped search to get wrong. Search fuses the
+  vector ranking with the passages connected to what the question names.
 - **Chat** — conversations and answers. It searches through Retrieval,
   calls the chat model, runs approved tool calls against MCP servers, and
   makes images through the operator's image backend.

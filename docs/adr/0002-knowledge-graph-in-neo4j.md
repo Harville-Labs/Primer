@@ -1,6 +1,6 @@
 # 0002. Keep a knowledge graph in Neo4j, owned by Retrieval
 
-- Status: Accepted
+- Status: Accepted; superseded in part by [0014](0014-knowledge-graph-is-always-on.md)
 - Date: 2026-10-14
 
 ## Context

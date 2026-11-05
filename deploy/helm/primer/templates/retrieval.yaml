@@ -51,13 +51,11 @@ spec:
                   name: {{ . }}
                   key: {{ $.Values.vectorStore.apiKeyKey }}
             {{- end }}
-            {{- if include "primer.graphUrl" . }}
             {{- include "primer.graphEnv" . | trim | nindent 12 }}
             - name: PRIMER_GRAPH_HOPS
               value: {{ .Values.graph.hops | quote }}
             - name: PRIMER_GRAPH_CANDIDATES
               value: {{ .Values.graph.candidates | quote }}
-            {{- end }}
           ports:
             - name: http
               containerPort: 8000

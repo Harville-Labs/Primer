@@ -142,9 +142,9 @@ class Settings(BaseSettings):
         description="Budget for converting one document, checked between phases",
     )
 
-    #: Off unless both are set. Any OpenAI-compatible endpoint that supports
-    #: structured output; a small instruction-tuned model is enough, and it
-    #: need not be the one Chat answers with.
+    #: Any OpenAI-compatible endpoint that supports structured output; a
+    #: small instruction-tuned model is enough, and it need not be the one
+    #: Chat answers with. Unset, it is the chat endpoint below.
     graph_extraction_base_url: str | None = Field(
         default=None,
         description="OpenAI-compatible base URL of the model that extracts the knowledge graph",
@@ -162,6 +162,13 @@ class Settings(BaseSettings):
         gt=0,
         description="Passages sent to the extraction model at once",
     )
+
+    #: Chat's endpoint, read only as extraction's fallback. It is not the
+    #: fallback without a model named, because Chat then asks the endpoint
+    #: which models it serves, and extraction has no first model to take.
+    chat_base_url: str | None = Field(default=None)
+    chat_model: str | None = Field(default=None)
+    chat_api_key: SecretStr | None = Field(default=None)
 
     #: Reads what a picture shows, for an image added to a library from
     #: Studio. Off unless both are set, and without it Control does not offer
@@ -211,6 +218,20 @@ class Settings(BaseSettings):
                 f"reads at most {known.max_tokens} tokens and would silently cut every "
                 f"longer chunk short. Set it to {known.max_tokens} or less."
             )
+        return self
+
+    @model_validator(mode="after")
+    def _extract_with_chat_model(self) -> Settings:
+        """Extract with the chat model when no extraction endpoint is named.
+
+        Chosen whole, endpoint, model and key together, and only when the
+        extraction endpoint is unset. Falling back one setting at a time
+        would send the chat key to an extraction endpoint named without one.
+        """
+        if self.graph_extraction_base_url is None and self.chat_base_url and self.chat_model:
+            self.graph_extraction_base_url = self.chat_base_url
+            self.graph_extraction_model = self.chat_model
+            self.graph_extraction_api_key = self.chat_api_key
         return self
 
     @property

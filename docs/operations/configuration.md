@@ -49,8 +49,9 @@ instead of silently keeping a default.
 | `PRIMER_INDEX_BATCH_SIZE` | `64` | Passages per call to Retrieval; one timeout loses one batch |
 | `PRIMER_INDEX_CONCURRENCY` | `4` | Batches of one document in flight at once |
 | `PRIMER_GRAPH_EXTRACTION_BASE_URL` | unset | OpenAI-compatible endpoint for knowledge-graph extraction |
-| `PRIMER_GRAPH_EXTRACTION_MODEL` | unset | Must support structured output. Unset, or no base URL, turns extraction off |
+| `PRIMER_GRAPH_EXTRACTION_MODEL` | unset | Must support structured output. Unset, or no base URL, falls back to the chat model below |
 | `PRIMER_GRAPH_EXTRACTION_API_KEY` | unset | Sent as a placeholder when unset; many local servers need the header |
+| `PRIMER_CHAT_BASE_URL`, `PRIMER_CHAT_MODEL`, `PRIMER_CHAT_API_KEY` | unset | Extract with the chat model when no extraction base URL is set. Needs both the URL and the model; the key goes only to this URL |
 | `PRIMER_GRAPH_EXTRACTION_TIMEOUT_SECONDS` | `120` | Per passage |
 | `PRIMER_GRAPH_EXTRACTION_CONCURRENCY` | `4` | Passages sent to the model at once |
 | `PRIMER_VISION_BASE_URL` | unset | OpenAI-compatible endpoint that accepts images, to read Studio images added to a library |
@@ -62,9 +63,9 @@ An empty value counts as unset for the extraction settings, so Compose's
 `${VAR:-}` leaves extraction off rather than turning it on with nowhere to
 send it.
 
-Graph extraction needs Retrieval to have a graph store. A worker extracting
-for a Retrieval without `PRIMER_GRAPH_URL` fails the document permanently
-and says which setting to change, rather than indexing a graph nobody keeps.
+With neither an extraction model nor a chat model, the worker indexes
+vectors only, and the library's graph stays empty until it is reindexed
+with one.
 
 ## Retrieval
 
@@ -80,7 +81,7 @@ and says which setting to change, rather than indexing a graph nobody keeps.
 | `PRIMER_EMBEDDING_DOCUMENT_PREFIX` | from the model | Prompt put before every passage |
 | `PRIMER_EMBEDDING_BASE_URL` | unset | Any OpenAI-compatible endpoint |
 | `PRIMER_EMBEDDING_API_KEY` | unset | |
-| `PRIMER_GRAPH_URL` | unset | Neo4j `bolt://` or `neo4j://` URL. Unset turns the knowledge graph off |
+| `PRIMER_GRAPH_URL` | unset | Neo4j `bolt://` or `neo4j://` URL |
 | `PRIMER_GRAPH_USERNAME` | `neo4j` | |
 | `PRIMER_GRAPH_PASSWORD` | unset | |
 | `PRIMER_GRAPH_DATABASE` | `neo4j` | Community edition has only this one |

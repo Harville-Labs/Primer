@@ -10,7 +10,7 @@
 | Embedding endpoint | for retrieval | Any OpenAI-compatible API |
 | `oauth2-proxy` | for multi-user | Not needed with auth off |
 | Qdrant | yes | The vector store; Compose and the chart each run one unless you name your own |
-| Neo4j | optional | For the knowledge graph; Compose and the chart can each run one |
+| Neo4j | yes | The knowledge graph; Compose and the chart each run one unless you name your own |
 
 ## Running it with Compose
 
@@ -89,23 +89,36 @@ Either way the collection is created on first use, with the width of the
 embedding model. Changing the model later means deleting the collection and
 reindexing; [ADR 0004](../adr/0004-qdrant-only.md) has the detail.
 
-## Turning on the knowledge graph with Compose
+## The knowledge graph with Compose
 
-The graph runs under a Compose profile, so a stack without one starts no
-Neo4j. Uncomment the graph block in `.env`:
+Every stack runs Neo4j beside Qdrant
+([ADR 0014](../adr/0014-knowledge-graph-is-always-on.md)), so `.env` needs
+its password:
 
 ```bash
-COMPOSE_PROFILES=graph
-PRIMER_GRAPH_URL=bolt://neo4j:7687
 PRIMER_GRAPH_PASSWORD=...   # openssl rand -hex 32
-PRIMER_GRAPH_EXTRACTION_BASE_URL=http://host.docker.internal:11434/v1
-PRIMER_GRAPH_EXTRACTION_MODEL=qwen2.5:7b-instruct
 ```
 
-Neo4j's port is not published; only Retrieval and the `migrate-graph` step
-reach it. Like PostgreSQL, it reads its password only when it first creates
-its volume. Documents indexed before the graph was on need a reindex to get
-one.
+The index worker extracts the graph with the chat model named by
+`PRIMER_CHAT_BASE_URL` and `PRIMER_CHAT_MODEL`. To extract with a different
+model, which must support structured output, set the three extraction
+settings together:
+
+```bash
+PRIMER_GRAPH_EXTRACTION_BASE_URL=http://host.docker.internal:11434/v1
+PRIMER_GRAPH_EXTRACTION_MODEL=qwen2.5:7b-instruct
+PRIMER_GRAPH_EXTRACTION_API_KEY=
+```
+
+With neither, the graph stays empty and search answers from vectors. A
+chat model added on the settings page does not count: the worker cannot
+read it.
+
+To use a Neo4j you run, set `PRIMER_GRAPH_URL`; the bundled one then does
+not start. Neo4j's port is not published; only Retrieval and the
+`migrate-graph` step reach it. Like PostgreSQL, it reads its password only
+when it first creates its volume. Documents indexed before the graph had a
+model need a reindex to get one.
 
 ## Published images
 

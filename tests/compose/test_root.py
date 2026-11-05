@@ -16,7 +16,7 @@ from test_config import BASE, COMPOSE_DIR, resolve
 ROOT = COMPOSE_DIR.parents[1] / "compose.yaml"
 
 #: Every combination of the optional profiles, with none first.
-PROFILES = ("", "graph", "lab", "graph,lab")
+PROFILES = ("", "lab")
 
 
 @pytest.fixture(autouse=True)

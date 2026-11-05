@@ -1,7 +1,7 @@
 """The knowledge graph in the rendered chart: a bundled Neo4j by default, or one named.
 
-Kept apart from `test_chart.py` because the graph is optional and its
-assertions are about which workloads it reaches and which it must not.
+Kept apart from `test_chart.py` because its assertions are about which
+workloads the graph reaches and which it must not.
 """
 
 from __future__ import annotations
@@ -10,8 +10,12 @@ from typing import Any
 
 from test_chart import containers, env_of, named, of_kind, refusal, render, workloads
 
-GRAPH_OFF = ("graph.neo4j.enabled=false",)
-GRAPH_ON = (*GRAPH_OFF, "graph.url=bolt://neo4j.graph:7687", "graph.existingSecret=primer-neo4j")
+NOT_BUNDLED = ("graph.neo4j.enabled=false",)
+GRAPH_ON = (
+    *NOT_BUNDLED,
+    "graph.url=bolt://neo4j.graph:7687",
+    "graph.existingSecret=primer-neo4j",
+)
 BUNDLED = ("graph.neo4j.enabled=true", "graph.existingSecret=primer-neo4j")
 EXTRACTION_ON = (
     "graph.extraction.baseUrl=http://model/v1",
@@ -28,16 +32,15 @@ def graph_variables(workload: dict[str, Any]) -> set[str]:
     }
 
 
-def test_with_the_graph_off_nothing_is_told_about_a_graph() -> None:
-    """Turned off, a deployment must render as it did before the graph existed."""
-    rendered = render(*GRAPH_OFF)
-    found = workloads(rendered)
-    assert found, "the chart rendered no workloads, so this test would check nothing"
+def test_a_release_without_a_graph_is_refused() -> None:
+    """Retrieval does not start without one, so say so where the setting is named.
 
-    for name, workload in found.items():
-        assert graph_variables(workload) == set(), f"{name} is told about a graph nobody set"
-    assert not any(name.endswith("-migrate-graph") for name in found)
-    assert not [doc for doc in rendered if "neo4j" in doc["metadata"]["name"]]
+    Rendered anyway, the release would install and then crash-loop Retrieval
+    with a message about an environment variable, not a value.
+    """
+    message = refusal(*NOT_BUNDLED)
+    assert "graph.url" in message
+    assert "graph.neo4j.enabled" in message
 
 
 def test_by_default_a_release_runs_its_own_neo4j_with_a_password_it_made() -> None:
@@ -126,13 +129,8 @@ def test_extraction_runs_on_the_index_worker_alone() -> None:
 
 def test_a_graph_url_without_its_password_is_refused() -> None:
     """Only a bundled Neo4j has a password the release can make up."""
-    message = refusal(*GRAPH_OFF, "graph.url=bolt://neo4j.graph:7687")
+    message = refusal(*NOT_BUNDLED, "graph.url=bolt://neo4j.graph:7687")
     assert "graph.existingSecret is required" in message
-
-
-def test_extraction_without_a_graph_is_refused() -> None:
-    """Every document would extract a graph and then fail to store it."""
-    assert "Set graph.url or graph.neo4j.enabled" in refusal(*GRAPH_OFF, *EXTRACTION_ON)
 
 
 def test_extraction_without_a_model_is_refused() -> None:
@@ -271,7 +269,7 @@ def test_extraction_writes_into_a_bundled_neo4j() -> None:
 
 
 def test_without_an_extraction_model_the_graph_is_built_by_the_chat_model() -> None:
-    """A graph on by default would otherwise stay empty until someone found the setting."""
+    """The graph would otherwise stay empty until someone found the setting."""
     env = env_of(named(render(), "Deployment", "-worker-index"))
 
     assert env["PRIMER_GRAPH_EXTRACTION_BASE_URL"] == "http://model/v1"
