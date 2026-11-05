@@ -36,6 +36,8 @@ store or the graph. The **web app** is what you use.
 ## Where to start
 
 - New to Primer? [Getting started](guide/getting-started.md).
+- Installing it? [Installing](operations/installing.md) goes from nothing
+  to a working deployment, with Compose or Kubernetes.
 - Running it for a team? [Configuration](operations/configuration.md) and
   [Deploying](operations/deploying.md).
 - Want to know how it works? [Architecture](architecture/index.md).
