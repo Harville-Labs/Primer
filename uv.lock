@@ -3200,6 +3200,7 @@ version = "1.3.0"
 source = { editable = "services/lab" }
 dependencies = [
     { name = "alembic" },
+    { name = "anyio" },
     { name = "asyncpg" },
     { name = "fastapi" },
     { name = "huggingface-hub" },
@@ -3232,6 +3233,7 @@ server = [
 [package.metadata]
 requires-dist = [
     { name = "alembic" },
+    { name = "anyio" },
     { name = "asyncpg" },
     { name = "fastapi" },
     { name = "huggingface-hub" },

@@ -8,6 +8,19 @@ from collections.abc import AsyncGenerator, Callable
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 
+# Every `TypedAttributeSet` subclass anyio defines, imported by name (its
+# packages are lazy, so importing `anyio.abc` alone defines nothing) and
+# before any model is traced. nnsight's first `.save()` mounts `save` on `object` for
+# the rest of the process, and anyio, which imports these lazily, refuses
+# to define one of these classes once it can see an unannotated public
+# name - so the first sync dependency after a trace would fail, and keep
+# failing, with "Attribute 'save' is missing its type annotation".
+# Turning the mount off (`CONFIG.APP.PYMOUNT`) is not the alternative it
+# looks like: nnterp, which Lab loads every model through, calls `.save()`
+# on proxies throughout and needs it.
+from anyio.abc import SocketAttribute  # noqa: F401
+from anyio.streams.file import FileStreamAttribute  # noqa: F401
+from anyio.streams.tls import TLSAttribute  # noqa: F401
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse

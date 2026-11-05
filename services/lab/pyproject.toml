@@ -5,6 +5,7 @@ description = "Primer Lab: look inside a small open model and edit how it runs"
 requires-python = ">=3.13"
 dependencies = [
     "alembic",
+    "anyio",
     "asyncpg",
     "fastapi",
     "huggingface-hub",
