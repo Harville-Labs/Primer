@@ -96,10 +96,15 @@ def graph_settings(container: Neo4jContainer, **overrides: Any) -> Settings:
 
 
 @pytest.fixture
-def client(qdrant_url: str, request: pytest.FixtureRequest) -> TestClient:
-    """A service with its own collection, so no test can see another's writes."""
+def client(qdrant_url: str, neo4j: Neo4jContainer, request: pytest.FixtureRequest) -> TestClient:
+    """A service with its own collection, so no test can see another's writes.
+
+    With the session's Neo4j, because every deployment has a graph (ADR
+    0014) and the routes that count and delete answer for it as well.
+    """
     unique = abs(hash(request.node.nodeid)) % 10**9
-    settings = Settings(
+    settings = graph_settings(
+        neo4j,
         qdrant_url=qdrant_url,
         qdrant_index=f"service_{unique}",
         embedding_dimensions=DIMENSIONS,
@@ -122,10 +127,13 @@ class UnreadableStore(RetryingQdrantDocumentStore):
 
 
 @pytest.fixture
-def unreadable(qdrant_url: str, request: pytest.FixtureRequest) -> TestClient:
+def unreadable(
+    qdrant_url: str, neo4j: Neo4jContainer, request: pytest.FixtureRequest
+) -> TestClient:
     """A service whose store fails any route that reads passages back."""
     unique = abs(hash(request.node.nodeid)) % 10**9
-    settings = Settings(
+    settings = graph_settings(
+        neo4j,
         qdrant_url=qdrant_url,
         qdrant_index=f"unreadable_{unique}",
         embedding_dimensions=DIMENSIONS,
