@@ -122,19 +122,19 @@ model need a reindex to get one.
 
 ## Published images
 
-Each push to `main` publishes three images to GHCR, so nothing has to be
-built locally:
+Each push to `main` publishes the images to GHCR, for amd64 and arm64, so
+nothing has to be built locally:
 
 | Image | Contains |
 | --- | --- |
 | `ghcr.io/harville-labs/primer-api` | Control, Chat, Retrieval |
 | `ghcr.io/harville-labs/primer-worker` | The ingestion worker |
 | `ghcr.io/harville-labs/primer-web` | The web app |
+| `ghcr.io/harville-labs/primer-lab` | Lab, with `-cuda` and `-graphs` builds |
 
-Tagged `latest` and by commit SHA. Pull requests build them but do not push:
-a broken Dockerfile fails review rather than after merge, and an image
-pushed from a pull request would let anyone who can open one publish under
-this repository's name.
+They are tagged `latest` and by commit SHA. Pull requests build no images.
+[Images](images.md) covers the architectures, the SBOMs, and the
+vulnerability scan an image has to pass before it is tagged.
 
 The Compose profile builds from source rather than pulling, because a local
 checkout is usually one you are changing.

@@ -1,6 +1,6 @@
 # Publishing a release.
 #
-# Everything a release produces is named by the release's own tag: the three
+# Everything a release produces is named by the release's own tag: the
 # images and the chart, all with one version, so an operator installing
 # `primer 1.4.0` gets the images that were built from the commit tagged
 # v1.4.0.
@@ -11,9 +11,10 @@
 # chart is published only from here for the same reason: there is no such
 # thing as an unversioned install.
 #
-# This does not re-run the test suite. The tag names a commit that CI already
-# checked on main; tagging something that never passed is the one way to
-# publish broken images from here.
+# This does not re-run the test suite or build anything. The tag names a
+# commit that CI already checked, built, and scanned on main; tagging
+# something that never passed is the one way to publish broken images from
+# here.
 name: Release
 
 on:
@@ -39,6 +40,7 @@ jobs:
       version: ${{ steps.resolve.outputs.version }}
       minor: ${{ steps.resolve.outputs.minor }}
       stable: ${{ steps.resolve.outputs.stable }}
+      commit: ${{ steps.commit.outputs.commit }}
     steps:
       - name: Resolve the version
         id: resolve
@@ -81,7 +83,25 @@ jobs:
 
           echo "Releasing $TAG as $version (stable: $stable)"
 
+      # The tag, explicitly. A release event's ref is already the tag, but a
+      # manual re-run's is not, and naming the wrong commit's images under a
+      # release version is not a mistake that shows up later.
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ steps.resolve.outputs.tag }}
+
+      - name: Resolve the commit
+        id: commit
+        run: echo "commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
   images:
+    # Named, not built. The images a release ships are the ones CI built
+    # from the tagged commit on main, scanned, and tagged `sha-<commit>`;
+    # this gives them the version's names. Building again here would ship
+    # images nobody scanned, from a second build that can differ from the
+    # first, and would cost the arm64 builds twice.
+    #
+    # So a release can only name a commit CI has published from main.
     name: Images
     needs: version
     runs-on: ubuntu-latest
@@ -89,38 +109,25 @@ jobs:
       contents: read
       packages: write
     strategy:
+      fail-fast: false
       matrix:
         include:
-          - name: primer-api
-            dockerfile: deploy/images/Dockerfile.python
-          - name: primer-worker
-            dockerfile: deploy/images/Dockerfile.worker
-          - name: primer-web
-            dockerfile: deploy/images/Dockerfile.gui
-          # Lab three times, from one Dockerfile: the CPU build under the
-          # plain tags, the CUDA build under the same tags with `-cuda`,
-          # which is what the chart's lab.gpu switches to, and the CUDA
-          # build with the graph builder beside it under `-graphs`, which
-          # lab.graphs.enabled switches to.
-          - name: primer-lab
-            dockerfile: deploy/images/Dockerfile.lab
-            target: cpu
-          - name: primer-lab
-            dockerfile: deploy/images/Dockerfile.lab
-            target: cuda
+          - image: primer-api
+            platforms: amd64 arm64
+          - image: primer-worker
+            platforms: amd64 arm64
+          - image: primer-web
+            platforms: amd64 arm64
+          - image: primer-lab
+            platforms: amd64 arm64
+          # Lab's GPU builds are amd64 alone; see the images job in ci.yml.
+          - image: primer-lab
             suffix: -cuda
-          - name: primer-lab
-            dockerfile: deploy/images/Dockerfile.lab
-            target: graphs
+            platforms: amd64
+          - image: primer-lab
             suffix: -graphs
+            platforms: amd64
     steps:
-      # The tag, explicitly. A release event's ref is already the tag, but a
-      # manual re-run's is not, and building the wrong commit under a release
-      # version is not a mistake that shows up later.
-      - uses: actions/checkout@v5
-        with:
-          ref: ${{ needs.version.outputs.tag }}
-
       - uses: docker/setup-buildx-action@v3
 
       - name: Log in to GHCR
@@ -130,34 +137,42 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Tags
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ghcr.io/${{ github.repository_owner }}/${{ matrix.name }}
-          flavor: |
-            suffix=${{ matrix.suffix }},onlatest=true
-          # The version, and the minor line it is the newest of. Not
-          # `latest`: that belongs to main, and moving it here would make the
-          # newest build of Primer and the newest release of Primer the same
-          # name for two different things.
-          tags: |
-            type=raw,value=${{ needs.version.outputs.version }}
-            type=raw,value=${{ needs.version.outputs.minor }},enable=${{ needs.version.outputs.stable == 'true' }}
-          labels: |
-            org.opencontainers.image.version=${{ needs.version.outputs.version }}
+      - name: Name the build
+        env:
+          COMMIT: ${{ needs.version.outputs.commit }}
+          VERSION: ${{ needs.version.outputs.version }}
+          MINOR: ${{ needs.version.outputs.minor }}
+          STABLE: ${{ needs.version.outputs.stable }}
+          SUFFIX: ${{ matrix.suffix }}
+          PLATFORMS: ${{ matrix.platforms }}
+        run: |
+          set -euo pipefail
+          image="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/${{ matrix.image }}"
+          source="${image}:sha-${COMMIT}${SUFFIX}"
 
-      - name: Build and push
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: ${{ matrix.dockerfile }}
-          target: ${{ matrix.target }}
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          platforms: linux/amd64
-          cache-from: type=gha,scope=${{ matrix.name }}${{ matrix.suffix }}
+          if ! docker buildx imagetools inspect "$source" > /dev/null; then
+            echo "::error::${source} does not exist. CI publishes images only from main, so the tag must name a commit on main whose 'Images' jobs passed. Re-run them for that commit, or tag one that has them." >&2
+            exit 1
+          fi
+
+          # The minor alias only for a stable release; a prerelease keeps
+          # its exact version and nothing else.
+          tags=(-t "${image}:${VERSION}${SUFFIX}")
+          if [[ "$STABLE" == "true" ]]; then
+            tags+=(-t "${image}:${MINOR}${SUFFIX}")
+          fi
+          docker buildx imagetools create "${tags[@]}" "$source"
+
+          # Against the registry, not against what this step believes it
+          # did: every platform the build promises is under the new name.
+          published="$(docker buildx imagetools inspect "${image}:${VERSION}${SUFFIX}")"
+          echo "$published"
+          for platform in $PLATFORMS; do
+            if ! grep -q "linux/${platform}" <<< "$published"; then
+              echo "::error::${image}:${VERSION}${SUFFIX} has no linux/${platform} image." >&2
+              exit 1
+            fi
+          done
 
   chart:
     name: Chart

@@ -1,0 +1,15 @@
+# Vulnerabilities this project has looked at and decided not to block on.
+#
+# The policy this file is an exception to is in docs/operations/images.md:
+# a scan fails on CRITICAL or HIGH with a fix available, and unfixed
+# findings are reported rather than blocking. Adding a line here waives one
+# of those, which is a decision a maintainer makes in a pull request like
+# any other change - never a thing done to make a red build go green.
+#
+# Every entry needs three things: the identifier, why it does not apply or
+# cannot be fixed today, and when it should be looked at again, as Trivy's
+# `exp:` date. An entry past its date stops applying. Each waiver is a
+# block of its own after a blank line, the reason and then the entry:
+#
+#   # Reachable only from a CLI entry point Primer does not ship.
+#   CVE-2026-12345 exp:2027-03-31
