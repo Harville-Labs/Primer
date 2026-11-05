@@ -120,13 +120,12 @@ jobs:
             platforms: amd64 arm64
           - image: primer-lab
             platforms: amd64 arm64
-          # Lab's GPU builds are amd64 alone; see the images job in ci.yml.
           - image: primer-lab
             suffix: -cuda
-            platforms: amd64
+            platforms: amd64 arm64
           - image: primer-lab
             suffix: -graphs
-            platforms: amd64
+            platforms: amd64 arm64
     steps:
       - uses: docker/setup-buildx-action@v3
 

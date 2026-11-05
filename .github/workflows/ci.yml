@@ -225,15 +225,10 @@ jobs:
           - primer-lab
           - primer-lab-cuda
           - primer-lab-graphs
+        # Lab's CUDA builds too: PyTorch publishes CUDA wheels for aarch64,
+        # and an arm64 GPU machine such as a DGX Spark has no amd64 image to
+        # fall back on.
         platform: [amd64, arm64]
-        # Lab's GPU builds are amd64 alone. Nobody has run the CUDA build on
-        # an arm64 GPU, and publishing a platform nobody has run is worse
-        # than not offering it. Lab on a CPU is both.
-        exclude:
-          - variant: primer-lab-cuda
-            platform: arm64
-          - variant: primer-lab-graphs
-            platform: arm64
         include:
           - platform: amd64
             runner: ubuntu-latest

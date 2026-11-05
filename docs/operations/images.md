@@ -8,8 +8,8 @@ Primer publishes its images to GitHub Container Registry from `main`:
 | `ghcr.io/harville-labs/primer-worker` | `latest` | The ingestion workers | amd64, arm64 |
 | `ghcr.io/harville-labs/primer-web` | `latest` | The web app | amd64, arm64 |
 | `ghcr.io/harville-labs/primer-lab` | `latest` | Lab on a CPU | amd64, arm64 |
-| `ghcr.io/harville-labs/primer-lab` | `latest-cuda` | Lab on an NVIDIA GPU | amd64 |
-| `ghcr.io/harville-labs/primer-lab` | `latest-graphs` | Lab on a GPU, with the graph builder | amd64 |
+| `ghcr.io/harville-labs/primer-lab` | `latest-cuda` | Lab on an NVIDIA GPU | amd64, arm64 |
+| `ghcr.io/harville-labs/primer-lab` | `latest-graphs` | Lab on a GPU, with the graph builder | amd64, arm64 |
 
 Each push to `main` publishes `latest` and `sha-<commit>`, with Lab's
 `-cuda` and `-graphs` suffixes where they apply. A release does not build
@@ -32,8 +32,17 @@ under QEMU is slow enough that nobody would keep it.
 docker buildx imagetools inspect ghcr.io/harville-labs/primer-api:latest
 ```
 
-Lab's CUDA builds are amd64 only. Nobody has run them on an arm64 GPU, and
-publishing a platform nobody has run is worse than not offering it.
+Lab's CUDA builds are published for arm64 too, for NVIDIA's arm64 machines
+such as the DGX Spark and Jetson-class boards running a server distribution.
+They use PyTorch's CUDA 13.2 build, which needs a driver that supports CUDA
+13. Its kernels are built for sm_120, which the Spark's GB10 (compute
+capability 12.1) runs as it is. On a DGX Spark, the arm64 image is pulled
+without naming a platform:
+
+```bash
+docker run --gpus all -p 8000:8000 -v primer-models:/models \
+  ghcr.io/harville-labs/primer-lab:latest-cuda
+```
 
 Each build pushes by digest, and one later job gives all of an image's
 architectures their tags together. A tag applied by each build would belong

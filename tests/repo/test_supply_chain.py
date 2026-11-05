@@ -152,8 +152,17 @@ def test_a_release_checks_every_architecture_in_the_registry() -> None:
 
     assert "imagetools inspect" in script
     assert 'grep -q "linux/${platform}"' in script
-    assert platforms[("primer-api", "")] == {"amd64", "arm64"}
-    assert platforms[("primer-lab", "-cuda")] == {"amd64"}
+    assert platforms, "the release names no images"
+    for build, names in platforms.items():
+        assert names == {"amd64", "arm64"}, build
+
+
+def test_lab_on_a_gpu_is_built_for_arm64() -> None:
+    """An arm64 GPU machine, a DGX Spark say, has no amd64 image to fall back on."""
+    matrix = workflow("ci.yml")["jobs"]["images"]["strategy"]["matrix"]
+
+    assert set(matrix["platform"]) == {"amd64", "arm64"}
+    assert "exclude" not in matrix
 
 
 def test_the_chart_is_published_after_the_images_are_named() -> None:
