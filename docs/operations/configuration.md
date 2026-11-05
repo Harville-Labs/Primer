@@ -23,7 +23,7 @@ instead of silently keeping a default.
 | `PRIMER_STUDIO_MAX_SIDE` | `4096` | Pixels on a side, checked before an image is decoded; at most 8192 |
 | `PRIMER_STUDIO_MAX_IMAGES_PER_REQUEST` | `4` | Images one generation may ask for |
 | `PRIMER_STUDIO_GENERATIONS_PER_HOUR` | `30` | Per person. Failed generations count, since the provider still did the work |
-| `PRIMER_VISION_ENABLED` | `false` | The parse worker has a vision model, so Studio offers to add images to a library. Set it with `PRIMER_VISION_MODEL` below |
+| `PRIMER_VISION_ENABLED` | `false` | The parse worker has a vision model. The settings page reports it, and Studio, when it is on, offers to add images to a library. Compose and the chart set it from `PRIMER_VISION_MODEL` and `inference.vision.baseUrl` |
 | `PRIMER_STUDIO_QUOTA_BYTES` | `1073741824` | Studio storage per person, uploads and results together |
 | `PRIMER_STUDIO_RETENTION_DAYS` | unset | Unset keeps images until their owner deletes them. Applied by `python -m primer_control.studio.retention`, run on a schedule. See [Studio](studio.md#retention) |
 | `PRIMER_STUDIO_TIMEOUT_SECONDS` | `900` | How long one generation may take, end to end |

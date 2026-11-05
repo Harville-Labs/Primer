@@ -111,12 +111,15 @@ def test_a_vision_model_lets_studio_images_into_libraries() -> None:
 def test_a_vision_model_without_studio_describes_figures_but_offers_no_images() -> None:
     """Figures need no Studio; adding a Studio image to a library does.
 
-    The worker gets the model either way. Control must still not offer an
-    action whose images live in a feature that is switched off.
+    The worker gets the model either way, and Control is told so it can
+    report it on the settings page. Control's own Studio gate is what keeps
+    the library action away; `test_studio_library` pins that side.
     """
     manifests = render(*VISION)
+    control = env_of(named(manifests, "Deployment", "-control"))
 
-    assert "PRIMER_VISION_ENABLED" not in env_names(named(manifests, "Deployment", "-control"))
+    assert control["PRIMER_VISION_ENABLED"] == "true"
+    assert "PRIMER_STUDIO_ENABLED" not in control
     parse = env_of(named(manifests, "Deployment", "-worker-parse"))
     assert parse["PRIMER_VISION_MODEL"] == "qwen-vl"
     assert parse["PRIMER_DESCRIBE_FIGURES"] == "true"

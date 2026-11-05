@@ -133,6 +133,11 @@
             },
             "title": "Dependencies",
             "type": "array"
+          },
+          "vision_configured": {
+            "default": false,
+            "title": "Vision Configured",
+            "type": "boolean"
           }
         },
         "required": [

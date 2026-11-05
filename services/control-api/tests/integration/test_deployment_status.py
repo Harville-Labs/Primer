@@ -8,8 +8,24 @@ because that is how PostgreSQL and RabbitMQ URLs are written.
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator, Callable
+from contextlib import AbstractAsyncContextManager, asynccontextmanager
+from typing import Any
+
+import pytest
 from control_support import UserClient
+from httpx2 import ASGITransport, AsyncClient
+from primer_control.app import create_app
+from primer_control.config import Settings
 from primer_control.routes.admin import without_credentials
+from primer_service.db import Database
+from primer_storage import SourceStore
+from sqlalchemy.ext.asyncio import AsyncEngine
+
+ADMINS = "primer-admins"
+ADMIN = {"X-Forwarded-User": "an-admin", "X-Forwarded-Groups": ADMINS}
+
+type Build = Callable[..., AbstractAsyncContextManager[AsyncClient]]
 
 
 class TestStrippingCredentialsFromAUrl:
@@ -68,3 +84,41 @@ class TestWhenNobodyHasBeenNamedAnAdministrator:
 
     async def test_the_refusal_says_why(self, owner: UserClient) -> None:
         assert "administrator" in (await owner.get("/api/v1/admin/status")).json()["detail"]
+
+
+@pytest.fixture
+def make_client(database: Database, clean_tables: AsyncEngine, source_store: SourceStore) -> Build:
+    @asynccontextmanager
+    async def build(**overrides: Any) -> AsyncIterator[AsyncClient]:
+        settings = Settings(auth_mode="oidc", admin_group=ADMINS, **overrides)
+        app = create_app(settings, database=database, source_store=source_store)
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://control") as http:
+            yield http
+
+    return build
+
+
+@pytest.mark.parametrize("vision", [True, False])
+async def test_the_status_says_whether_a_vision_model_was_configured(
+    make_client: Build, vision: bool
+) -> None:
+    """The settings page suggests a vision model from this, so it must not guess."""
+    async with make_client(vision_enabled=vision) as http:
+        response = await http.get("/api/v1/admin/status", headers=ADMIN)
+
+    assert response.status_code == 200
+    assert response.json()["vision_configured"] is vision
+
+
+async def test_a_vision_model_without_studio_offers_no_studio_library_action(
+    make_client: Build,
+) -> None:
+    """The chart tells Control about vision whether or not Studio is on.
+
+    Studio's own switch is then the only thing between a deployment with a
+    vision model and an action whose images live in a feature that is off.
+    """
+    async with make_client(vision_enabled=True, broker_url="amqp://broker.invalid") as http:
+        response = await http.get("/api/v1/capabilities", headers=ADMIN)
+
+    assert response.json()["studio_library_available"] is False
