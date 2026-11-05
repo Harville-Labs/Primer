@@ -129,6 +129,56 @@ def scanned_with_text() -> bytes:
     return build_pdf(objects)
 
 
+def figure_paper() -> bytes:
+    """A page of text with a chart below it: a figure with no words in it.
+
+    The bars carry the page's result and nothing printed says what they
+    show, so only something that looks at the figure can make it findable.
+    Drawn rather than photographed so the layout model has an unambiguous
+    picture to find.
+    """
+    from io import BytesIO
+
+    from PIL import Image, ImageDraw
+
+    image = Image.new("RGB", (800, 500), "white")
+    draw = ImageDraw.Draw(image)
+    draw.line([(60, 440), (760, 440)], fill="black", width=4)
+    draw.line([(60, 40), (60, 440)], fill="black", width=4)
+    for index, height in enumerate((120, 200, 290, 380)):
+        left = 120 + index * 160
+        draw.rectangle([left, 440 - height, left + 100, 438], fill=(40, 90, 200))
+
+    buffer = BytesIO()
+    image.save(buffer, format="JPEG", quality=95)
+    jpeg = buffer.getvalue()
+
+    content = (
+        b"BT /F1 18 Tf 72 720 Td (Quarterly Bookings) Tj ET\n"
+        b"BT /F1 11 Tf 72 690 Td (Bookings grew in every quarter of the year, "
+        b"as the figure below shows.) Tj ET\n"
+        b"q 400 0 0 250 106 380 cm /Im0 Do Q\n"
+    )
+    objects = [
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R "
+        b"/Resources << /Font << /F1 5 0 R >> /XObject << /Im0 6 0 R >> >> >>",
+        stream_object(content),
+        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+        b"<< /Type /XObject /Subtype /Image /Width "
+        + str(image.width).encode()
+        + b" /Height "
+        + str(image.height).encode()
+        + b" /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length "
+        + str(len(jpeg)).encode()
+        + b" >>\nstream\n"
+        + jpeg
+        + b"\nendstream",
+    ]
+    return build_pdf(objects)
+
+
 def picture_deck() -> bytes:
     """A deck whose substance is inside a picture rather than beside it.
 
@@ -198,9 +248,10 @@ if __name__ == "__main__":
     (HERE / "text-paper.pdf").write_bytes(text_paper())
     (HERE / "scanned-paper.pdf").write_bytes(scanned_paper())
     (HERE / "scanned-with-text.pdf").write_bytes(scanned_with_text())
+    (HERE / "figure-paper.pdf").write_bytes(figure_paper())
     (HERE / "slides.pptx").write_bytes(slide_deck())
     (HERE / "slides-with-a-picture.pptx").write_bytes(picture_deck())
     print(
         "wrote text-paper.pdf, scanned-paper.pdf, scanned-with-text.pdf, "
-        "slides.pptx, and slides-with-a-picture.pptx"
+        "figure-paper.pdf, slides.pptx, and slides-with-a-picture.pptx"
     )

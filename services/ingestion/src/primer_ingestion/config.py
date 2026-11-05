@@ -93,15 +93,16 @@ class Settings(BaseSettings):
         gt=0,
         description="CPU threads Docling's models use; match the CPU the worker is given",
     )
-    #: Pictures are read one at a time and each costs a full OCR pass, so a
-    #: deck built entirely of screenshots is the slowest thing this worker
-    #: does. The ceiling is a bound on that rather than a judgement about
-    #: how many pictures a document should have: past it, the remaining
-    #: images are left unread rather than the document left unfinished.
+    #: Each picture costs a full OCR pass, and a call to the vision model
+    #: when one describes figures, so a deck built entirely of screenshots
+    #: is the slowest thing this worker does. The ceiling is a bound on that
+    #: rather than a judgement about how many pictures a document should
+    #: have: past it, the remaining images are left unread rather than the
+    #: document left unfinished.
     max_pictures_per_document: int = Field(
         default=100,
         ge=0,
-        description="How many embedded images to run OCR over before giving up on the rest",
+        description="How many embedded images to read or describe before giving up on the rest",
     )
 
     #: The model Retrieval embeds with. Only the parse worker reads it, to
@@ -170,19 +171,35 @@ class Settings(BaseSettings):
     chat_model: str | None = Field(default=None)
     chat_api_key: SecretStr | None = Field(default=None)
 
-    #: Reads what a picture shows, for an image added to a library from
-    #: Studio. Off unless both are set, and without it Control does not offer
-    #: the action. Any OpenAI-compatible endpoint that accepts images.
+    #: Reads what a picture shows: an image added to a library from Studio,
+    #: and the figures inside documents. Off unless both are set, and
+    #: without it Control does not offer the Studio action. Any
+    #: OpenAI-compatible endpoint that accepts images.
     vision_base_url: str | None = Field(
         default=None,
         description="OpenAI-compatible base URL of the model that describes images",
     )
     vision_model: str | None = Field(
         default=None,
-        description="Vision model that describes images added to libraries; unset turns it off",
+        description="Vision model that describes images and figures; unset turns it off",
     )
     vision_api_key: SecretStr | None = Field(default=None)
     vision_timeout_seconds: float = Field(default=120.0, gt=0)
+    #: On whenever a vision model is configured, because a chart is
+    #: otherwise findable only by whatever words OCR recovers from it. This
+    #: is the way to keep the model for Studio alone, where each figure it
+    #: would describe is a request someone pays for.
+    describe_figures: bool = Field(
+        default=True,
+        description="Ask the vision model what each figure in a document shows",
+    )
+    #: Figures are described one request each. The worker only waits, so
+    #: this is bounded by what the model server can take, not by this pod.
+    vision_concurrency: int = Field(
+        default=4,
+        gt=0,
+        description="Figures sent to the vision model at once",
+    )
 
     max_retries: int = Field(
         default=4,

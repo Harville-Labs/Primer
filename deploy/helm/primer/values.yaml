@@ -263,17 +263,22 @@ inference:
     # Longer than a chat answer's: a batch of large images on a busy GPU
     # can take minutes.
     timeoutSeconds: 300
-  # A model that can see, for adding Studio images to a library: the parse
-  # worker asks it what each image shows and indexes the answer. Any
-  # OpenAI-compatible endpoint that accepts images (vLLM serving a
-  # Qwen2.5-VL, Ollama with llava, a hosted API). Primer does not run one.
-  # Empty leaves the action out of Studio. Read only with `studio.enabled`.
+  # A model that can see. The parse worker asks it what each figure in a
+  # document shows, so a chart is found by what it plots and not only by
+  # its axis labels, and what each Studio image shows when one is added to
+  # a library. Any OpenAI-compatible endpoint that accepts images (vLLM
+  # serving a Qwen2.5-VL, Ollama with llava, a hosted API). Primer does not
+  # run one. Empty indexes figures by their OCR text alone and leaves the
+  # action out of Studio.
   vision:
     baseUrl: ""
     model: ""
     existingSecret: ""
     apiKeyKey: vision-api-key
     timeoutSeconds: 120
+    # Figures in flight at once. The worker only waits on them, so this is
+    # bounded by what the model server can take.
+    concurrency: 4
   # Text Embeddings Inference, the server `inference.*.bundled` runs. One
   # pinned version for both: TEI returned wrong vectors for Qwen3 until
   # huggingface/text-embeddings-inference#648, plausible enough that nothing
@@ -715,7 +720,13 @@ ingestion:
   # document should have. Past it the remaining pictures go unread instead
   # of the document going unfinished. 0 turns picture reading off while
   # leaving OCR on for PDFs.
+  #
+  # The same bound applies to figures described by `inference.vision`,
+  # which cost one model request each.
   maxPicturesPerDocument: 100
+  # Ask `inference.vision` what each figure shows. false keeps the model
+  # for Studio images only. Without a vision model this does nothing.
+  describeFigures: true
 
 workers:
   parse:
