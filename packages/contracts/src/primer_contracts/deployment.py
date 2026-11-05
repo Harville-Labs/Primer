@@ -37,3 +37,7 @@ class DeploymentStatus(WireModel):
     #: means nobody can, which is worth showing on the page that says so.
     admin_group: str | None = Field(default=None, max_length=200)
     dependencies: tuple[DependencyStatus, ...] = ()
+    #: Whether ingestion was given a vision model for figures and images.
+    #: Control is told by the same values that hand the parse worker its
+    #: model, so this is the deployment's answer rather than a probe of it.
+    vision_configured: bool = False

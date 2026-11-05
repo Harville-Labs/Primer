@@ -103,7 +103,7 @@ class Settings(BaseSettings):
     #: values that configure the parse worker's model.
     vision_enabled: bool = Field(
         default=False,
-        description="Ingestion has a vision model to caption images added to libraries",
+        description="Ingestion has a vision model for figures and for images added to libraries",
     )
     studio_timeout_seconds: float = Field(
         default=900.0,

@@ -122,6 +122,7 @@ async def deployment_status(
         auth_mode=settings.auth_mode,
         admin_group=settings.admin_group,
         dependencies=tuple(reported),
+        vision_configured=settings.vision_enabled,
     )
 
 

@@ -66,11 +66,14 @@ spec:
               value: {{ .maxSide | int | quote }}
             - name: PRIMER_STUDIO_TIMEOUT_SECONDS
               value: {{ .timeoutSeconds | quote }}
-            {{- if $.Values.inference.vision.baseUrl }}
+            {{- end }}
+            {{- end }}
+            {{- /* Outside the Studio block: the settings page reports a vision
+                   model whether or not Studio is on, and Control only offers
+                   the Studio library action when Studio is on as well. */}}
+            {{- if .Values.inference.vision.baseUrl }}
             - name: PRIMER_VISION_ENABLED
               value: "true"
-            {{- end }}
-            {{- end }}
             {{- end }}
           ports:
             - name: http

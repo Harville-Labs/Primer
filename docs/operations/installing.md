@@ -326,7 +326,9 @@ shows](models.md#what-a-figure-shows) explains what it adds.
    to be in `auth.adminGroup`, unless authentication is off. It lists what
    Primer is connected to and whether each one is answering, and the chat
    providers it can answer from. If no chat provider is listed, step 2 of
-   your install didn't take.
+   your install didn't take. Under **Suggestions** it lists the optional
+   parts this deployment doesn't have yet, what each would add, and the
+   settings that turn it on.
 4. **Index a document and ask about it.** Create a library, upload a PDF,
    and wait for its status to reach `ready`. Then ask a question it answers, and
    check that the answer cites a passage. [Getting

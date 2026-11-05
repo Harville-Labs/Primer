@@ -585,6 +585,11 @@ export interface components {
              * @default []
              */
             dependencies: components["schemas"]["DependencyStatus"][];
+            /**
+             * Vision Configured
+             * @default false
+             */
+            vision_configured: boolean;
         };
         /**
          * DocumentSummary
