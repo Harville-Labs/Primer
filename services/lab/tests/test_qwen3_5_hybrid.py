@@ -12,6 +12,7 @@ from collections.abc import Iterator
 from pathlib import Path
 from typing import Any, cast
 
+import nnsight
 import pytest
 import torch
 from fastapi.testclient import TestClient
@@ -70,7 +71,7 @@ def test_its_logits_are_the_multimodal_models_own(hybrid_model):
         expected = reference(input_ids=ids).logits
         model = loaded(hybrid_model).model
         with model.trace(ids):
-            logits = model.logits.save()
+            logits = nnsight.save(model.logits)
     assert torch.allclose(logits, expected, atol=1e-5)
 
 
