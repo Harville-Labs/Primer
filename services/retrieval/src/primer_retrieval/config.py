@@ -87,11 +87,12 @@ class Settings(BaseSettings):
     min_score: float | None = Field(default=None, ge=0.0, le=1.0)
 
     #: Neo4j, holding the entities each passage mentions and the relations
-    #: between them. Off unless a URL is named, and a deployment without one
-    #: never opens a connection to it.
-    graph_url: str | None = Field(default=None)
+    #: between them. Required, like the vector store: every deployment has a
+    #: graph (ADR 0014), and one that lost these settings should stop here
+    #: rather than search on without following relations.
+    graph_url: str
     graph_username: str = Field(default="neo4j")
-    graph_password: SecretStr | None = Field(default=None)
+    graph_password: SecretStr
     graph_database: str = Field(default="neo4j")
     graph_timeout_seconds: float = Field(default=30.0, gt=0)
     #: How far search walks from the entities a question names. One reaches

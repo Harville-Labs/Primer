@@ -55,9 +55,12 @@ Control has switched, the older generation is what searches are reading.
 
 ## The knowledge graph
 
-When `PRIMER_GRAPH_URL` is set, Retrieval also keeps a knowledge graph in
-Neo4j: the entities each passage mentions, and the relations between them.
-See [ADR 0002](../adr/0002-knowledge-graph-in-neo4j.md).
+Retrieval also keeps a knowledge graph in Neo4j: the entities each passage
+mentions, and the relations between them. It is required, like the vector
+store, and Retrieval refuses to start without `PRIMER_GRAPH_URL` and
+`PRIMER_GRAPH_PASSWORD`. See
+[ADR 0002](../adr/0002-knowledge-graph-in-neo4j.md) and
+[ADR 0014](../adr/0014-knowledge-graph-is-always-on.md).
 
 The graph is scoped differently from the vectors, on purpose. A chunk
 belongs to one generation, as it does in the vector store. An entity
@@ -77,13 +80,14 @@ unreachable Neo4j fails that request with a 503 that names the graph store,
 so cleanup is retried rather than reported done.
 
 The graph is written through `/internal/v1/graph/index`, by the ingestion
-worker that extracted it. Retrieval without a graph store refuses that call
-with a 409 rather than accepting and dropping it, and `/verify` reports how
-many chunks the graph holds so activation can refuse a partial one.
+worker that extracted it. `/verify` reports how many chunks the graph
+holds so activation can refuse a partial one. A document indexed with no
+extraction model has a graph count of zero: its vectors are searched, and
+the graph has nothing of it to follow.
 
 ### Hybrid search
 
-With a graph, search runs two rankings and fuses them. The vector ranking
+Search runs two rankings and fuses them. The vector ranking
 is the one Primer always had. The graph ranking starts from every entity
 whose name is a run of words in the question, matched exactly, and follows
 relations up to `PRIMER_GRAPH_HOPS` away; the passages that mention what it

@@ -34,7 +34,11 @@ def schemas() -> dict[str, dict[str, Any]]:
     return {
         "control": create_control(ControlSettings(auth_mode="disabled")).openapi(),
         "chat": create_chat(ChatSettings(auth_mode="disabled")).openapi(),
-        "retrieval": create_retrieval(RetrievalSettings()).openapi(),
+        # The graph is required, but the driver connects on first use and
+        # nothing here is served, so a URL nobody answers on is enough.
+        "retrieval": create_retrieval(
+            RetrievalSettings(graph_url="bolt://localhost:7687", graph_password="unused")  # noqa: S106
+        ).openapi(),
         "lab": create_lab(LabSettings()).openapi(),
     }
 

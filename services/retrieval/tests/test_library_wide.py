@@ -10,7 +10,6 @@ from __future__ import annotations
 import uuid
 from typing import Any
 
-import pytest
 from fastapi.testclient import TestClient
 from haystack import Document
 from neo4j.exceptions import ServiceUnavailable
@@ -85,7 +84,7 @@ class Embedder:
         return {"embedding": [0.1] * 8}
 
 
-def build_client(graph: Graph | None, **settings: Any) -> TestClient:
+def build_client(graph: Graph, **settings: Any) -> TestClient:
     configured = Settings(internal_api_token=SERVICE_TOKEN, embedding_dimensions=8, **settings)
     app = create_app(
         configured,
@@ -96,7 +95,7 @@ def build_client(graph: Graph | None, **settings: Any) -> TestClient:
     )
     state = app.state.retrieval
     state.graph = graph
-    state.communities = Communities(graph, configured) if graph else None  # ty: ignore[invalid-argument-type]
+    state.communities = Communities(graph, configured)  # ty: ignore[invalid-argument-type]
     return TestClient(app, raise_server_exceptions=False)
 
 
@@ -142,11 +141,8 @@ def test_a_passage_the_graph_names_outside_the_callers_scope_is_not_read() -> No
     assert FOREIGN not in chunk_ids
 
 
-@pytest.mark.parametrize("graph", [None, Graph(fail=True)], ids=["no graph", "graph down"])
-def test_without_a_working_graph_a_library_wide_question_gets_the_focused_answer(
-    graph: Graph | None,
-) -> None:
-    client = build_client(graph)
+def test_without_a_working_graph_a_library_wide_question_gets_the_focused_answer() -> None:
+    client = build_client(Graph(fail=True))
 
     assert contents(ask(client, "library")) == contents(ask(client, "focused"))
 

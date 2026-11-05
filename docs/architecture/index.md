@@ -32,12 +32,15 @@ store must guarantee, and
 than a choice of them. The workers extract a graph but hand it to
 Retrieval rather than opening Neo4j themselves.
 
-**The graph is optional and additive.** Without `PRIMER_GRAPH_URL`, Primer
-never opens a connection to Neo4j and search returns exactly what it did
-before the graph existed. With it, search fuses two rankings, and a graph
-that goes down degrades search to vectors alone rather than failing it. See
-[the knowledge graph](retrieval.md#the-knowledge-graph) and
-[ADR 0002](../adr/0002-knowledge-graph-in-neo4j.md).
+**The graph is part of every deployment, and search does not depend on
+it.** Retrieval refuses to start without `PRIMER_GRAPH_URL`, as it does
+without a vector store. Search fuses two rankings, and a graph that goes
+down degrades search to vectors alone rather than failing it. A question
+that names nothing in the graph is answered from the vectors exactly as it
+would be without one. See
+[the knowledge graph](retrieval.md#the-knowledge-graph),
+[ADR 0002](../adr/0002-knowledge-graph-in-neo4j.md) and
+[ADR 0014](../adr/0014-knowledge-graph-is-always-on.md).
 
 **Authorization is a SQL predicate, not a check.** Listing many libraries
 applies the same rule as fetching one, because it is literally the same

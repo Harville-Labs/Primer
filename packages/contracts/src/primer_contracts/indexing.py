@@ -61,10 +61,9 @@ class GenerationCount(WireModel):
     generation_id: UUID
     count: int = Field(ge=0)
     #: Chunks the knowledge graph holds for the generation, counted the same
-    #: way and for the same reason. None when Retrieval has no graph store,
-    #: which a worker that extracted a graph must treat as a deployment
-    #: fault rather than as zero.
-    graph_count: int | None = Field(default=None, ge=0)
+    #: way and for the same reason. Zero for a generation indexed with no
+    #: extraction model, which has vectors and an empty graph.
+    graph_count: int = Field(ge=0)
 
 
 class GraphIndexRequest(WireModel):

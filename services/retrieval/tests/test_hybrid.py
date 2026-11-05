@@ -59,7 +59,7 @@ class Hit:
 
 
 def test_without_graph_hits_the_vector_hits_come_back_untouched() -> None:
-    """A deployment with no graph must answer exactly as it did before."""
+    """A question that names nothing in the graph is answered from the vectors alone."""
     hits: list[Any] = [Hit("a"), Hit("b")]
 
     def fetch(ids: list[str]) -> list[Any]:
@@ -118,7 +118,3 @@ def test_a_mistake_in_a_graph_query_is_not_mistaken_for_an_outage() -> None:
     """Swallowing it would turn a bug into search quietly ignoring the graph."""
     with pytest.raises(CypherSyntaxError):
         ask(FakeGraph(CypherSyntaxError("bad query")))
-
-
-def test_no_graph_means_no_related_chunks() -> None:
-    assert ask(None) == []
