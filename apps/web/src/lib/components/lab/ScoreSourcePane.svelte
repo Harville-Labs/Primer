@@ -1,7 +1,7 @@
 <script lang="ts">
-	import { TriangleAlert } from '@lucide/svelte';
+	import LabFailure from '#lib/components/lab/LabFailure.svelte';
 	import type { Snippet } from 'svelte';
-	import { Composer, Select, Spinner, ToggleGroup } from '@sivir-ui/svelte';
+	import { Alert, Composer, Select, Spinner, ToggleGroup } from '@sivir-ui/svelte';
 	import type { Scorer } from '#lib/lab/scorer.svelte.ts';
 
 	/** Which source, generate or score, the text, and what happened last time. */
@@ -66,10 +66,7 @@
 			</p>
 		{/if}
 		{#each problems as problem (problem.title)}
-			<div role="alert" class="flex gap-2 rounded-lg border border-border bg-card p-3 text-xs">
-				<TriangleAlert size={14} aria-hidden="true" class="mt-px shrink-0 text-warning" />
-				<p><span class="font-medium">{problem.title}.</span> {problem.detail}</p>
-			</div>
+			<LabFailure failure={problem} variant="warning" />
 		{/each}
 	</section>
 
@@ -129,12 +126,10 @@
 	{/if}
 
 	{#if scorer.failure}
-		<div role="alert" class="rounded-lg border border-error/40 bg-error/5 p-3 text-xs">
-			<p class="font-medium text-error">{scorer.failure.title}</p>
-			<p class="mt-1 text-foreground">{scorer.failure.detail}</p>
+		<LabFailure failure={scorer.failure}>
 			{#if scorer.scored}
-				<p class="mt-1 text-muted-foreground">The strip still shows the last score.</p>
+				<Alert.Description>The strip still shows the last score.</Alert.Description>
 			{/if}
-		</div>
+		</LabFailure>
 	{/if}
 </div>

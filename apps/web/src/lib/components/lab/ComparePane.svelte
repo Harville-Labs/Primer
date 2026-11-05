@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { GitCompareArrows, TriangleAlert } from '@lucide/svelte';
+	import LabFailure from '#lib/components/lab/LabFailure.svelte';
+	import { GitCompareArrows } from '@lucide/svelte';
 	import { Spinner } from '@sivir-ui/svelte';
 	import type { Generator } from '#lib/lab/edits.svelte.ts';
 	import { divergence, markTokens } from '#lib/lab/generation.ts';
@@ -29,10 +30,7 @@
 
 <div class="flex h-full flex-col gap-4 overflow-y-auto p-4">
 	{#if view.failure}
-		<div role="alert" class="flex gap-2 rounded-lg border border-error/40 bg-error/5 p-3 text-xs">
-			<TriangleAlert size={14} aria-hidden="true" class="mt-px shrink-0 text-error" />
-			<p><span class="font-medium text-error">{view.failure.title}.</span> {view.failure.detail}</p>
-		</div>
+		<LabFailure failure={view.failure} />
 	{/if}
 
 	{#if !started && !generator.running && !view.failure}

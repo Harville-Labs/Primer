@@ -1,6 +1,7 @@
 <script lang="ts">
-	import { Cpu, TriangleAlert } from '@lucide/svelte';
-	import { Composer, Spinner, Switch } from '@sivir-ui/svelte';
+	import LabFailure from '#lib/components/lab/LabFailure.svelte';
+	import { Cpu } from '@lucide/svelte';
+	import { Alert, Composer, Spinner, Switch } from '@sivir-ui/svelte';
 	import type { Snippet } from 'svelte';
 	import type { LabModelStatus, LabStatus } from '#lib/api/types.ts';
 	import type { Inspector } from '#lib/lab/inspector.svelte.ts';
@@ -58,10 +59,7 @@
 				</dl>
 			</div>
 		{:else if problem}
-			<div role="alert" class="flex gap-2 rounded-lg border border-border bg-card p-3 text-xs">
-				<TriangleAlert size={14} aria-hidden="true" class="mt-px shrink-0 text-warning" />
-				<p><span class="font-medium">{problem.title}.</span> {problem.detail}</p>
-			</div>
+			<LabFailure failure={problem} variant="warning" />
 		{:else}
 			<p class="rounded-lg border border-dashed border-border p-3 text-xs text-muted-foreground">
 				No model is loaded. An operator sets Lab's model with
@@ -112,13 +110,11 @@
 	{/if}
 
 	{#if inspector.failure}
-		<div role="alert" class="rounded-lg border border-error/40 bg-error/5 p-3 text-xs">
-			<p class="font-medium text-error">{inspector.failure.title}</p>
-			<p class="mt-1 text-foreground">{inspector.failure.detail}</p>
+		<LabFailure failure={inspector.failure}>
 			{#if inspector.reading}
-				<p class="mt-1 text-muted-foreground">The grid still shows the last reading.</p>
+				<Alert.Description>The grid still shows the last reading.</Alert.Description>
 			{/if}
-		</div>
+		</LabFailure>
 	{/if}
 
 	{@render children?.()}
