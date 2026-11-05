@@ -2,9 +2,11 @@
 	import { enhance } from '$app/forms';
 	import { Check, Plus, TriangleAlert, Trash2, X } from '@lucide/svelte';
 	import { Alert, Badge, Button, Checkbox, Input } from '@sivir-ui/svelte';
+	import { deploymentSuggestions } from '#lib/settings/suggestions.ts';
 	import type { ActionData, PageData } from './$types';
 	import ImageFields from './ImageFields.svelte';
 	import ProviderImages from './ProviderImages.svelte';
+	import Suggestions from './Suggestions.svelte';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
 
@@ -25,6 +27,14 @@
 
 	let declaring = $state({ supports_logprobs: false, supports_prompt_logprobs: false });
 	let servesChat = $state(true);
+
+	let suggestions = $derived(
+		deploymentSuggestions({
+			capabilities: data.capabilities,
+			status: data.status,
+			providers: data.providers,
+		}),
+	);
 </script>
 
 <div class="mx-auto w-full max-w-4xl">
@@ -109,6 +119,20 @@
 			</dl>
 		{/if}
 	</section>
+
+	<!--
+	  What the deployment could add, between what it is connected to and the
+	  providers an administrator can change here. Nothing is shown once every
+	  part is configured, rather than a panel saying so.
+	-->
+	{#if suggestions.length > 0}
+		<section class="mt-10">
+			<h2 class="font-mono text-[10px] uppercase tracking-[0.09em] text-muted-foreground">
+				Suggestions
+			</h2>
+			<Suggestions {suggestions} />
+		</section>
+	{/if}
 
 	<!--
 	  Providers second: the part an administrator comes here to change rather
