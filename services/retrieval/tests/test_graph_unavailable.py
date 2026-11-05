@@ -21,6 +21,7 @@ from haystack import Document
 from primer_contracts.identity import Principal
 from primer_retrieval.app import create_app
 from primer_retrieval.config import Settings
+from pydantic import ValidationError
 
 SERVICE_TOKEN = "test-service-token"  # noqa: S105 - a fixture value, not a real credential
 
@@ -95,55 +96,28 @@ def test_an_unreachable_graph_fails_erasure_by_name(route: str) -> None:
     assert "graph store could not be reached" in response.json()["detail"]
 
 
-def test_without_a_graph_url_there_is_no_graph() -> None:
-    client = build_client()
-    assert client.app.state.retrieval.graph is None  # ty: ignore[unresolved-attribute]
+@pytest.mark.parametrize("missing", ["PRIMER_GRAPH_URL", "PRIMER_GRAPH_PASSWORD"])
+def test_retrieval_without_a_graph_refuses_to_start(
+    missing: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Every deployment has a graph (ADR 0014).
 
-    response = client.post(
-        "/internal/v1/delete",
-        json=delete_body(),
-        headers={"X-Primer-Service-Token": SERVICE_TOKEN},
-    )
-
-    assert response.status_code == 200, response.text
-
-
-def test_a_graph_sent_to_a_retrieval_without_one_is_refused_not_dropped() -> None:
-    """A 409 that names the missing setting, so the worker stops.
-
-    Accepting and discarding would let a worker activate a generation it
-    believes has a graph.
+    Starting without one would search on from the vectors alone, and the
+    only symptom would be answers that never follow a relation.
     """
-    client = build_client()
-    body = {
-        **delete_body(),
-        "graphs": [{"chunk_id": str(uuid.uuid4()), "entities": [{"name": "A"}]}],
-    }
+    monkeypatch.delenv(missing)
 
-    response = client.post(
-        "/internal/v1/graph/index", json=body, headers={"X-Primer-Service-Token": SERVICE_TOKEN}
-    )
+    with pytest.raises(ValidationError) as raised:
+        Settings(internal_api_token=SERVICE_TOKEN)
 
-    assert response.status_code == 409, response.text
-    assert "PRIMER_GRAPH_URL" in response.json()["detail"]
-
-
-def test_verify_without_a_graph_reports_no_graph_count_rather_than_zero() -> None:
-    client = build_client()
-
-    response = client.post(
-        "/internal/v1/verify", json=delete_body(), headers={"X-Primer-Service-Token": SERVICE_TOKEN}
-    )
-
-    assert response.status_code == 200, response.text
-    assert response.json()["graph_count"] is None
+    assert missing.removeprefix("PRIMER_").lower() in str(raised.value)
 
 
 def test_an_unreachable_graph_leaves_search_answering_from_vectors() -> None:
     """Through the real driver, so the error a refused connection raises is
-    the one search knows to search past. Since the graph is optional, waiting
-    the driver's full transaction retry budget before falling back is not
-    useful to the searcher."""
+    the one search knows to search past. The vectors are a correct answer on
+    their own, so waiting the driver's full transaction retry budget before
+    falling back to them is not useful to the searcher."""
     client = build_client(graph_url="bolt://127.0.0.1:1", graph_timeout_seconds=2)
     body = delete_body()
     body.pop("document_version_id")

@@ -72,7 +72,12 @@ def control(database: Database) -> TestClient:
 def retrieval(store: Any) -> TestClient:
     return TestClient(
         retrieval_app(
-            RetrievalSettings(qdrant_url=SECRET_URL, internal_api_token=TEST_TOKEN),
+            RetrievalSettings(
+                qdrant_url=SECRET_URL,
+                internal_api_token=TEST_TOKEN,
+                graph_url="bolt://127.0.0.1:1",
+                graph_password=TEST_TOKEN,
+            ),
             store=store,
             document_embedder=Unused(),  # ty: ignore[invalid-argument-type]
             text_embedder=Unused(),  # ty: ignore[invalid-argument-type]

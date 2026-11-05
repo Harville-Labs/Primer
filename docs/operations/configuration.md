@@ -84,9 +84,9 @@ with one.
 | `PRIMER_EMBEDDING_DOCUMENT_PREFIX` | from the model | Prompt put before every passage |
 | `PRIMER_EMBEDDING_BASE_URL` | unset | Any OpenAI-compatible endpoint |
 | `PRIMER_EMBEDDING_API_KEY` | unset | |
-| `PRIMER_GRAPH_URL` | unset | Neo4j `bolt://` or `neo4j://` URL |
+| `PRIMER_GRAPH_URL` | unset | **Required.** Neo4j `bolt://` or `neo4j://` URL. Retrieval refuses to start without it |
 | `PRIMER_GRAPH_USERNAME` | `neo4j` | |
-| `PRIMER_GRAPH_PASSWORD` | unset | |
+| `PRIMER_GRAPH_PASSWORD` | unset | **Required** |
 | `PRIMER_GRAPH_DATABASE` | `neo4j` | Community edition has only this one |
 | `PRIMER_GRAPH_TIMEOUT_SECONDS` | `30` | Per transaction, and for connecting |
 | `PRIMER_GRAPH_HOPS` | `2` | How far search follows relations from the entities a question names. `0` to `2` |

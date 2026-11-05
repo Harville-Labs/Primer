@@ -55,9 +55,12 @@ Control has switched, the older generation is what searches are reading.
 
 ## The knowledge graph
 
-When `PRIMER_GRAPH_URL` is set, Retrieval also keeps a knowledge graph in
-Neo4j: the entities each passage mentions, and the relations between them.
-See [ADR 0002](../adr/0002-knowledge-graph-in-neo4j.md).
+Retrieval also keeps a knowledge graph in Neo4j: the entities each passage
+mentions, and the relations between them. It is required, like the vector
+store, and Retrieval refuses to start without `PRIMER_GRAPH_URL` and
+`PRIMER_GRAPH_PASSWORD`. See
+[ADR 0002](../adr/0002-knowledge-graph-in-neo4j.md) and
+[ADR 0014](../adr/0014-knowledge-graph-is-always-on.md).
 
 The graph is scoped differently from the vectors, on purpose. A chunk
 belongs to one generation, as it does in the vector store. An entity
@@ -77,13 +80,14 @@ unreachable Neo4j fails that request with a 503 that names the graph store,
 so cleanup is retried rather than reported done.
 
 The graph is written through `/internal/v1/graph/index`, by the ingestion
-worker that extracted it. Retrieval without a graph store refuses that call
-with a 409 rather than accepting and dropping it, and `/verify` reports how
-many chunks the graph holds so activation can refuse a partial one.
+worker that extracted it. `/verify` reports how many chunks the graph
+holds so activation can refuse a partial one. A document indexed with no
+extraction model has a graph count of zero: its vectors are searched, and
+the graph has nothing of it to follow.
 
 ### Hybrid search
 
-With a graph, search runs two rankings and fuses them. The vector ranking
+Search runs two rankings and fuses them. The vector ranking
 is the one Primer always had. The graph ranking starts from every entity
 whose name is a run of words in the question, matched exactly, and follows
 relations up to `PRIMER_GRAPH_HOPS` away; the passages that mention what it
@@ -103,6 +107,15 @@ floor applies to graph passages as well, and they are the ones most likely
 to fall under it: the point of them is that they do not resemble the
 question. A deployment with a floor and no reranker will drop many of
 them.
+
+Each passage a search returns says which ranking found it: `vector`,
+`graph`, or `both`. A passage the graph reached also names up to five of
+the entities that led to it, nearest first. Chat stores both with the
+citation, so a reopened answer still shows them, and the sources panel
+marks the passage "via graph" with the entities written underneath. A
+library-wide answer is built from the graph's communities, so every
+passage in it is marked `graph`, with no entities named. Citations stored
+before this was recorded carry no provenance and show no mark.
 
 An unreachable graph does not fail a search. It is logged, and the vector
 results are returned alone. Without a graph, search returns exactly what it
@@ -134,6 +147,28 @@ refused with a 422 that names the setting, because clustering runs in
 Retrieval's memory. Without a graph, or with the graph down, a
 library-wide question gets the focused answer. Passages that mention no
 entity belong to no community and are not reached this way.
+
+### Graph status
+
+`POST /internal/v1/graph/status` describes one library's graph within the
+generations the caller names: how many entities its passages mention, how
+many relations those generations wrote, how many communities a
+library-wide question would read, and which document versions have any
+passage in the graph. Chat serves it to the library page as
+`GET /api/v1/libraries/{id}/graph`, after Control has authorized the
+reader, in the same way it serves passages.
+
+The community count comes from the same cache library-wide questions use,
+so the number on the page is the one answers read, and showing it pays for
+the clustering a library-wide question would otherwise pay for. A library
+over `PRIMER_GRAPH_COMMUNITY_MAX_MENTIONS` reports `communities: null`
+rather than failing: the counts are still worth showing, and the null is
+what tells the page to say library-wide questions are unavailable.
+
+A document version with no passage in the graph was indexed without an
+extraction model. Retrieval writes a `Chunk` node for every passage it
+extracts, mentions or not, so a version is listed in `graphed_versions` as
+soon as it was extracted at all, and missing from it only when it was not.
 
 ## No Primer vector adapter
 

@@ -12,6 +12,7 @@ from datetime import datetime
 from typing import Any
 
 from primer_contracts.chat import MessageRole, MessageState, ToolPhase
+from primer_contracts.retrieval import FoundBy
 from sqlalchemy import (
     Boolean,
     CheckConstraint,
@@ -24,7 +25,7 @@ from sqlalchemy import (
     Text,
     func,
 )
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -223,6 +224,9 @@ class MessageCitation(Base):
     section: Mapped[str | None] = mapped_column(String(500))
     filename: Mapped[str | None] = mapped_column(String(255))
     excerpt: Mapped[str | None] = mapped_column(String(2000))
+    #: Null for citations recorded before Primer kept how a passage was found.
+    found_by: Mapped[FoundBy | None] = mapped_column(String(8))
+    graph_entities: Mapped[list[str] | None] = mapped_column(ARRAY(Text))
 
 
 #: Persisted phases, taken from the wire enum so a stored value and a

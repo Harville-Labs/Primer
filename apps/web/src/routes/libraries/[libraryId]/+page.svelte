@@ -5,6 +5,7 @@
 	import { Alert, AlertDialog, Breadcrumb, Button, Spinner } from '@sivir-ui/svelte';
 	import type { DocumentSummary } from '#lib/api/types.ts';
 	import DocumentStatus from '#lib/components/DocumentStatus.svelte';
+	import LibraryGraph from '#lib/components/LibraryGraph.svelte';
 	import SharePanel from '#lib/components/SharePanel.svelte';
 	import UploadDropzone from '#lib/components/UploadDropzone.svelte';
 	import { eachLimited, UPLOAD_CONCURRENCY } from '#lib/concurrency.ts';
@@ -263,6 +264,10 @@
   politely rather than interrupting whatever they are reading.
 -->
 <p class="sr-only" aria-live="polite">{announcement}</p>
+
+{#if data.documents.length > 0}
+	<LibraryGraph reading={data.graph} documents={data.documents} owned={data.owned} />
+{/if}
 
 {#if data.documents.length === 0 && uploading.length === 0}
 	<div class="mt-16 text-center">

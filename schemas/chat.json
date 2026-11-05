@@ -191,6 +191,33 @@
             ],
             "title": "Excerpt"
           },
+          "found_by": {
+            "anyOf": [
+              {
+                "enum": [
+                  "vector",
+                  "graph",
+                  "both"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Found By"
+          },
+          "graph_entities": {
+            "default": [],
+            "items": {
+              "maxLength": 200,
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 5,
+            "title": "Graph Entities",
+            "type": "array"
+          },
           "locator": {
             "anyOf": [
               {
@@ -460,6 +487,53 @@
           "message"
         ],
         "title": "FollowUpRequest",
+        "type": "object"
+      },
+      "GraphStatus": {
+        "additionalProperties": false,
+        "description": "How much of a library the knowledge graph covers.",
+        "properties": {
+          "communities": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Topics a library-wide question reads from: the largest communities, at most PRIMER_GRAPH_COMMUNITIES. Null when the library is too large to group into topics, which is also when library-wide questions are refused.",
+            "title": "Communities"
+          },
+          "entities": {
+            "description": "Distinct entities the library's passages mention",
+            "minimum": 0.0,
+            "title": "Entities",
+            "type": "integer"
+          },
+          "graphed_versions": {
+            "default": [],
+            "description": "Document versions with a graph. A searchable version missing from this list was indexed with no extraction model, and needs reindexing to gain one.",
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Graphed Versions",
+            "type": "array"
+          },
+          "relations": {
+            "description": "Relations extracted between those entities",
+            "minimum": 0.0,
+            "title": "Relations",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "entities",
+          "relations"
+        ],
+        "title": "GraphStatus",
         "type": "object"
       },
       "HTTPValidationError": {
@@ -2242,6 +2316,50 @@
         "summary": "Generate or edit images, reporting progress",
         "tags": [
           "images"
+        ]
+      }
+    },
+    "/api/v1/libraries/{library_id}/graph": {
+      "get": {
+        "description": "Entity, relation, and topic counts for a library you can read, and which document versions have a graph. A searchable version with none was indexed with no extraction model, and gains one when it is reindexed.",
+        "operationId": "graph_status_api_v1_libraries__library_id__graph_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "library_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Library Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GraphStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "How much of a library the knowledge graph covers",
+        "tags": [
+          "passages"
         ]
       }
     },

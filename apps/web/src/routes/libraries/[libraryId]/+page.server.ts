@@ -1,11 +1,35 @@
 import { error, fail } from '@sveltejs/kit';
 import { ApiError } from '#lib/api/client.ts';
+import type { GraphReading } from '#lib/graph-status.ts';
 import { owns } from '#lib/libraries.ts';
 import { apiFor } from '#lib/server/api.ts';
+import { chatFor } from '#lib/server/chat.ts';
 import type { Actions, PageServerLoad } from './$types';
+
+/**
+ * The library's graph coverage, or what stopped it being read.
+ *
+ * Not awaited by the load: SvelteKit streams it, so the document list is
+ * on screen while Retrieval counts the graph and groups it into topics,
+ * which on a large library takes noticeably longer than listing documents.
+ */
+async function readGraph(
+	chat: ReturnType<typeof chatFor>,
+	libraryId: string,
+): Promise<GraphReading> {
+	try {
+		return { status: await chat.graphStatus(libraryId) };
+	} catch (cause) {
+		// Shown in the graph card, not thrown: a graph that cannot be read
+		// is no reason to lose the document list beside it.
+		if (cause instanceof ApiError) return { error: cause.message };
+		throw cause;
+	}
+}
 
 export const load: PageServerLoad = async ({ params, parent, request, fetch }) => {
 	const api = apiFor(request, fetch);
+	const graph = readGraph(chatFor(request, fetch), params.libraryId);
 	try {
 		// The library comes from the list the layout already fetched, so
 		// opening a document list does not re-fetch every library to name one.
@@ -27,6 +51,7 @@ export const load: PageServerLoad = async ({ params, parent, request, fetch }) =
 		return {
 			library,
 			documents,
+			graph,
 			owned,
 			shares: owned ? await api.shares(params.libraryId) : [],
 		};

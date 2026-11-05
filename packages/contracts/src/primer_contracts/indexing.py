@@ -61,10 +61,9 @@ class GenerationCount(WireModel):
     generation_id: UUID
     count: int = Field(ge=0)
     #: Chunks the knowledge graph holds for the generation, counted the same
-    #: way and for the same reason. None when Retrieval has no graph store,
-    #: which a worker that extracted a graph must treat as a deployment
-    #: fault rather than as zero.
-    graph_count: int | None = Field(default=None, ge=0)
+    #: way and for the same reason. Zero for a generation indexed with no
+    #: extraction model, which has vectors and an empty graph.
+    graph_count: int = Field(ge=0)
 
 
 class GraphIndexRequest(WireModel):
@@ -170,6 +169,41 @@ class PassagesResult(WireModel):
     passages: tuple[Passage, ...] = ()
     #: How many the library holds, of which `passages` is the first part.
     total: int = 0
+
+
+class GraphStatusRequest(WireModel):
+    """Describe one library's knowledge graph, within its active generations.
+
+    Scoped like a search: a pending rebuild's graph is not yet the
+    library's, and an empty scope is refused rather than read as everything.
+    """
+
+    principal: Principal
+    library_id: UUID
+    generation_ids: tuple[UUID, ...] = Field(min_length=1)
+
+
+class GraphStatus(WireModel):
+    """How much of a library the knowledge graph covers."""
+
+    entities: int = Field(ge=0, description="Distinct entities the library's passages mention")
+    relations: int = Field(ge=0, description="Relations extracted between those entities")
+    communities: int | None = Field(
+        default=None,
+        ge=0,
+        description=(
+            "Topics a library-wide question reads from: the largest communities, at most "
+            "PRIMER_GRAPH_COMMUNITIES. Null when the library is too large to group into "
+            "topics, which is also when library-wide questions are refused."
+        ),
+    )
+    graphed_versions: tuple[UUID, ...] = Field(
+        default=(),
+        description=(
+            "Document versions with a graph. A searchable version missing from this list "
+            "was indexed with no extraction model, and needs reindexing to gain one."
+        ),
+    )
 
 
 class DeleteRequest(WireModel):

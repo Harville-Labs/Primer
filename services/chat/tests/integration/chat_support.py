@@ -24,6 +24,8 @@ from primer_chat.rag import HistoryTurn
 from primer_chat.reasoning import Channel, Fragment
 from primer_contracts.identity import Principal
 from primer_contracts.indexing import (
+    GraphStatus,
+    GraphStatusRequest,
     LibraryScope,
     Passage,
     PassagesRequest,
@@ -61,6 +63,7 @@ class FakeRetrieval:
         self.failure = failure
         self.searches: list[SearchRequest] = []
         self.listings: list[PassagesRequest] = []
+        self.described: list[GraphStatusRequest] = []
 
     async def search(self, request: SearchRequest) -> SearchResult:
         self.searches.append(request)
@@ -77,6 +80,10 @@ class FakeRetrieval:
                     score=1.0 - index / 100,
                     locator=SourceLocator(page=index + 1, section="Findings"),
                     index_generation=request.generation_ids[0],
+                    # As the graph would report it, so a stored citation can
+                    # be checked for what it says the graph contributed.
+                    found_by="graph",
+                    graph_entities=("trial",),
                 )
                 for index, content in enumerate(self.contents)
             )
@@ -100,6 +107,12 @@ class FakeRetrieval:
             ),
             total=len(self.contents),
         )
+
+    async def graph_status(self, request: GraphStatusRequest) -> GraphStatus:
+        self.described.append(request)
+        if self.failure is not None:
+            raise self.failure
+        return GraphStatus(entities=4, relations=2, communities=1)
 
 
 def deployment(**overrides: object) -> Settings:

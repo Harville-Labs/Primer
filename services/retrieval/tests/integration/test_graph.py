@@ -147,6 +147,19 @@ def test_hops_bound_how_far_a_neighbourhood_reaches(graph: GraphStore) -> None:
     assert far.chunk_id not in reached(graph, library, [generation], "A", hops=1)
 
 
+def test_a_neighbourhood_says_which_entities_reached_each_chunk(graph: GraphStore) -> None:
+    """Nearest first, so a citation names the entity closest to the question."""
+    library, generation = uuid.uuid4(), uuid.uuid4()
+    first = chunk_graph(("B", "A"), relate("A", "B"))
+    second = chunk_graph(("C", "B"), relate("B", "C"))
+    graph.write(library, uuid.uuid4(), generation, [first, second])
+
+    hits = graph.neighbourhood(library, [generation], ["A"], hops=2, limit=50)
+
+    entities = {hit.chunk_id: hit.entities for hit in hits}
+    assert entities == {first.chunk_id: ("A", "B"), second.chunk_id: ("B", "C")}
+
+
 def test_more_hops_than_the_query_can_express_is_refused(graph: GraphStore) -> None:
     with pytest.raises(ValueError, match="hops"):
         graph.neighbourhood(uuid.uuid4(), [uuid.uuid4()], ["A"], hops=3, limit=5)
@@ -177,6 +190,32 @@ def test_mentions_are_read_from_one_library_and_the_named_generations(
 
     assert sorted(found) == [(str(mine.chunk_id), "marie curie"), (str(mine.chunk_id), "polonium")]
     assert len(graph.mentions(library, [active], limit=1)) == 1
+
+
+def test_coverage_counts_one_library_within_the_named_generations(graph: GraphStore) -> None:
+    """What the library page's graph card shows, and its needs-reindex list.
+
+    The pending generation and the other library both share entity names
+    with the counted one, so a scope that leaked would change every number.
+    """
+    library, active, pending = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
+    graphed, empty, other = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
+    graph.write(
+        library,
+        graphed,
+        active,
+        [chunk_graph(("A", "B"), relate("A", "B")), chunk_graph(("B", "C"), relate("B", "C"))],
+    )
+    # A chunk that named nothing still marks its version as extracted.
+    graph.write(library, empty, active, [chunk_graph(())])
+    graph.write(library, other, pending, [chunk_graph(("D",)), chunk_graph(("A", "E"))])
+    graph.write(uuid.uuid4(), other, active, [chunk_graph(("F", "G"), relate("F", "G"))])
+
+    coverage = graph.coverage(library, [active])
+
+    assert (coverage.entities, coverage.relations) == (3, 2)
+    assert coverage.versions == {graphed, empty}
+    assert graph.coverage(library, []).versions == frozenset()
 
 
 def test_rewriting_a_chunk_replaces_what_it_said(graph: GraphStore, count: Count) -> None:

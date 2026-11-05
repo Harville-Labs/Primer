@@ -37,9 +37,7 @@ LIBRARY = uuid.uuid5(uuid.NAMESPACE_URL, "library")
 class RecordingIndex:
     """A Retrieval that records what it was asked to store."""
 
-    def __init__(
-        self, reported_count: int | None = None, reported_graph_count: int | None = None
-    ) -> None:
+    def __init__(self, reported_count: int | None = None, reported_graph_count: int = 0) -> None:
         self.requests: list[IndexRequest] = []
         self.graph_requests: list[GraphIndexRequest] = []
         self.purges: list[PurgeRequest] = []
@@ -252,19 +250,6 @@ def test_a_short_graph_is_refused_and_retried(
 
     assert raised.value.code == "incomplete_graph"
     assert type(raised.value) is StageError
-
-
-def test_extraction_against_a_retrieval_with_no_graph_fails_permanently(
-    settings: Settings, artifacts: ArtifactStore, claim: JobClaim
-) -> None:
-    """Two services configured differently disagree on every retry."""
-    write_chunks(artifacts, 3)
-    index = RecordingIndex(reported_count=3, reported_graph_count=None)
-
-    with pytest.raises(PermanentStageError) as raised:
-        IndexStage(extraction_on(settings), artifacts=artifacts, index=index)(claim)
-
-    assert raised.value.code == "graph_not_configured"
 
 
 def test_the_worker_registers_a_handler_for_every_pipeline_stage() -> None:

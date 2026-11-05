@@ -10,7 +10,6 @@ from __future__ import annotations
 import uuid
 from typing import Any
 
-import pytest
 from fastapi.testclient import TestClient
 from haystack import Document
 from neo4j.exceptions import ServiceUnavailable
@@ -18,6 +17,7 @@ from primer_contracts.identity import Principal
 from primer_retrieval.app import create_app
 from primer_retrieval.breadth import Communities
 from primer_retrieval.config import Settings
+from primer_retrieval.graph import GraphCoverage, GraphHit
 
 SERVICE_TOKEN = "test-service-token"  # noqa: S105 - a fixture value, not a real credential
 LIBRARY = uuid.uuid4()
@@ -42,6 +42,8 @@ def passage(content: str, score: float) -> Document:
 #: passage that does not. A focused search never reaches the astronomy.
 CHEMISTRY = [passage(f"Polonium, part {i}.", 0.9 - i / 100) for i in range(3)]
 ASTRONOMY = passage("Comets have elliptical orbits.", 0.1)
+#: The one document version the fake graph has extracted.
+GRAPHED = uuid.uuid4()
 #: Named by the graph, absent from the scoped store: another library's.
 FOREIGN = str(uuid.uuid4())
 
@@ -79,13 +81,18 @@ class Graph:
     def neighbourhood(self, *args: Any, **kwargs: Any) -> list[Any]:
         return []
 
+    def coverage(self, library_id: uuid.UUID, generation_ids: Any) -> GraphCoverage:
+        if self.fail:
+            raise ServiceUnavailable("graph down")
+        return GraphCoverage(entities=3, relations=1, versions=frozenset({GRAPHED}))
+
 
 class Embedder:
     def run(self, text: str) -> dict[str, Any]:
         return {"embedding": [0.1] * 8}
 
 
-def build_client(graph: Graph | None, **settings: Any) -> TestClient:
+def build_client(graph: Graph, **settings: Any) -> TestClient:
     configured = Settings(internal_api_token=SERVICE_TOKEN, embedding_dimensions=8, **settings)
     app = create_app(
         configured,
@@ -96,7 +103,7 @@ def build_client(graph: Graph | None, **settings: Any) -> TestClient:
     )
     state = app.state.retrieval
     state.graph = graph
-    state.communities = Communities(graph, configured) if graph else None  # ty: ignore[invalid-argument-type]
+    state.communities = Communities(graph, configured)  # ty: ignore[invalid-argument-type]
     return TestClient(app, raise_server_exceptions=False)
 
 
@@ -142,11 +149,8 @@ def test_a_passage_the_graph_names_outside_the_callers_scope_is_not_read() -> No
     assert FOREIGN not in chunk_ids
 
 
-@pytest.mark.parametrize("graph", [None, Graph(fail=True)], ids=["no graph", "graph down"])
-def test_without_a_working_graph_a_library_wide_question_gets_the_focused_answer(
-    graph: Graph | None,
-) -> None:
-    client = build_client(graph)
+def test_without_a_working_graph_a_library_wide_question_gets_the_focused_answer() -> None:
+    client = build_client(Graph(fail=True))
 
     assert contents(ask(client, "library")) == contents(ask(client, "focused"))
 
@@ -185,3 +189,82 @@ def test_a_focused_question_never_clusters() -> None:
     ask(build_client(graph), "focused")
 
     assert graph.reads == []
+
+
+class NamingGraph(Graph):
+    """A graph that reaches the astronomy passage and the top chemistry one."""
+
+    def neighbourhood(self, *args: Any, **kwargs: Any) -> list[GraphHit]:
+        return [
+            GraphHit(chunk_id=uuid.UUID(ASTRONOMY.id), distance=1, support=1, entities=("comet",)),
+            GraphHit(chunk_id=uuid.UUID(CHEMISTRY[0].id), distance=0, support=2),
+        ]
+
+
+def test_each_passage_says_which_ranking_found_it() -> None:
+    """What a citation's "via graph" badge is drawn from."""
+    client = build_client(NamingGraph())
+
+    response = ask(client, "focused")
+
+    assert response.status_code == 200, response.text
+    found = {
+        chunk["content"]: (chunk["found_by"], chunk["graph_entities"])
+        for chunk in response.json()["chunks"]
+    }
+    assert found["Comets have elliptical orbits."] == ("graph", ["comet"])
+    assert found["Polonium, part 0."] == ("both", [])
+
+
+def test_a_library_wide_answer_is_marked_as_the_graphs() -> None:
+    chunks = ask(build_client(Graph()), "library").json()["chunks"]
+
+    assert chunks
+    assert {chunk["found_by"] for chunk in chunks} == {"graph"}
+
+
+def describe(client: TestClient) -> Any:
+    reader = Principal(subject="reader", user_id=uuid.uuid4())
+    return client.post(
+        "/internal/v1/graph/status",
+        json={
+            "principal": reader.model_dump(mode="json"),
+            "library_id": str(LIBRARY),
+            "generation_ids": [str(GENERATION)],
+        },
+        headers={"X-Primer-Service-Token": SERVICE_TOKEN},
+    )
+
+
+def test_a_graph_status_counts_the_communities_a_library_wide_question_reads() -> None:
+    """The same clustering, so the number on the page is the one answers use."""
+    graph = Graph()
+    client = build_client(graph)
+
+    status = describe(client)
+    ask(client, "library")
+
+    assert status.status_code == 200, status.text
+    assert status.json() == {
+        "entities": 3,
+        "relations": 1,
+        "communities": 2,
+        "graphed_versions": [str(GRAPHED)],
+    }
+    assert len(graph.reads) == 1, "the question reused the clustering the status computed"
+
+
+def test_a_library_too_large_to_cluster_still_has_a_status() -> None:
+    """Library-wide questions are refused; the page that says so is not."""
+    response = describe(build_client(Graph(), graph_community_max_mentions=3))
+
+    assert response.status_code == 200, response.text
+    assert response.json()["communities"] is None
+    assert response.json()["entities"] == 3
+
+
+def test_a_graph_status_with_the_graph_down_says_which_store_failed() -> None:
+    response = describe(build_client(Graph(fail=True)))
+
+    assert response.status_code == 503, response.text
+    assert response.json()["code"] == "dependency_unavailable"

@@ -37,14 +37,6 @@ RETRY_INTERVAL_SECONDS = 2.0
 
 def apply(settings: Settings, deadline_seconds: float = READY_DEADLINE_SECONDS) -> None:
     store = build_graph_store(settings)
-    if store is None:
-        # A step that only runs when the graph is on, finding it off, means
-        # the deployment's two halves disagree. Succeeding quietly would
-        # leave Retrieval writing into a graph with no constraints.
-        raise SystemExit(
-            "PRIMER_GRAPH_URL is not set, so there is no graph to apply a schema to. "
-            "Set it to the Neo4j URL Retrieval uses, or do not run this step."
-        )
     try:
         until_reachable(store.apply_schema, deadline_seconds, time.sleep, time.monotonic)
     except AuthError as error:

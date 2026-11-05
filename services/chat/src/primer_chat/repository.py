@@ -159,6 +159,8 @@ class ChatRepository:
                     page=citation.locator.page if citation.locator else None,
                     section=citation.locator.section if citation.locator else None,
                     excerpt=citation.excerpt,
+                    found_by=citation.found_by,
+                    graph_entities=list(citation.graph_entities),
                 )
             )
         await self._session.flush()
@@ -243,6 +245,8 @@ class ChatRepository:
                     chunk_id=row.chunk_id,
                     locator=SourceLocator(page=row.page, section=row.section),
                     excerpt=row.excerpt,
+                    found_by=row.found_by,
+                    graph_entities=tuple(row.graph_entities or ()),
                 )
             )
         return {key: tuple(value) for key, value in grouped.items()}

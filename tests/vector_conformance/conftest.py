@@ -39,6 +39,10 @@ def settings(qdrant_url: str, request: pytest.FixtureRequest) -> Settings:
         qdrant_url=qdrant_url,
         qdrant_index=f"conformance_{unique}",
         embedding_dimensions=DIMENSIONS,
+        # Required, but these tests never reach the graph and the driver
+        # connects on first use.
+        graph_url="bolt://127.0.0.1:1",
+        graph_password="unused",  # noqa: S106 - never sent anywhere
     )
 
 

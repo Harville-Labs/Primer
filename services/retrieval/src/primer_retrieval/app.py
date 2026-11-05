@@ -19,6 +19,7 @@ from fastapi import APIRouter, Depends, FastAPI, Request
 from fastapi.responses import JSONResponse
 from haystack.document_stores.types import DuplicatePolicy
 from haystack_integrations.document_stores.qdrant import QdrantDocumentStore
+from primer_contracts.errors import ErrorCode
 from primer_contracts.indexing import (
     DeleteRequest,
     DeleteResult,
@@ -26,6 +27,8 @@ from primer_contracts.indexing import (
     GenerationQuery,
     GraphIndexRequest,
     GraphIndexResult,
+    GraphStatus,
+    GraphStatusRequest,
     IndexRequest,
     IndexResult,
     PassagesRequest,
@@ -42,11 +45,10 @@ from primer_retrieval.config import Settings
 from primer_retrieval.errors import (
     embedding_endpoint,
     graph_store,
-    no_graph_store,
     vector_store,
 )
 from primer_retrieval.graph import GraphStore, build_graph_store
-from primer_retrieval.hybrid import blend, related_chunks
+from primer_retrieval.hybrid import blend, provenance, related_chunks
 from primer_retrieval.pipelines import (
     LIBRARY_ID,
     DocumentEmbedder,
@@ -99,9 +101,8 @@ class RetrievalState:
         # None unless an endpoint is configured, and None is what makes a
         # deployment without one behave exactly as it did before.
         self.reranker = reranker if reranker is not None else build_reranker(settings)
-        # None unless Neo4j is configured, for the same reason as above.
-        self.graph: GraphStore | None = build_graph_store(settings)
-        self.communities = Communities(self.graph, settings) if self.graph else None
+        self.graph: GraphStore = build_graph_store(settings)
+        self.communities = Communities(self.graph, settings)
 
 
 def build_reranker(settings: Settings) -> Reranker | None:
@@ -198,10 +199,8 @@ def verify_generation(payload: GenerationQuery, state: State) -> GenerationCount
     count = state.store.count_documents_by_filter(
         scope_filter(payload.library_id, (payload.generation_id,))
     )
-    graph_count = None
-    if state.graph is not None:
-        with graph_store("this document's graph cannot be verified"):
-            graph_count = state.graph.count(payload.library_id, payload.generation_id)
+    with graph_store("this document's graph cannot be verified"):
+        graph_count = state.graph.count(payload.library_id, payload.generation_id)
     return GenerationCount(
         generation_id=payload.generation_id, count=count, graph_count=graph_count
     )
@@ -209,17 +208,8 @@ def verify_generation(payload: GenerationQuery, state: State) -> GenerationCount
 
 @router.post("/graph/index", summary="Write what one generation's chunks say, as a graph")
 def index_graph(payload: GraphIndexRequest, state: State) -> GraphIndexResult:
-    """Write extracted entities and relations into a pending generation.
-
-    Refused rather than ignored when there is no graph store. Accepting and
-    discarding would let a worker activate a generation it believes has a
-    graph, and the only symptom would be hybrid search quietly never
-    finding anything.
-    """
-    consequence = "this document's graph cannot be indexed"
-    if state.graph is None:
-        raise no_graph_store(consequence)
-    with graph_store(consequence):
+    """Write extracted entities and relations into a pending generation."""
+    with graph_store("this document's graph cannot be indexed"):
         state.graph.write(
             payload.library_id, payload.document_version_id, payload.generation_id, payload.graphs
         )
@@ -265,7 +255,11 @@ def search(payload: SearchRequest, state: State) -> SearchResult:
             state.communities, payload.library_id, payload.generation_ids, payload.limit, fetch
         )
         if covering is not None:
-            return SearchResult(chunks=tuple(to_retrieved(hit) for hit in covering))
+            # Chosen to cover the library's communities, so the graph found
+            # every one; no single entity is the reason for any of them.
+            return SearchResult(
+                chunks=tuple(to_retrieved(hit, found_by="graph") for hit in covering)
+            )
 
     # Fetch wider than the answer needs when a reranker will read them: the
     # passage that answers the question is often inside the first twenty and
@@ -290,15 +284,21 @@ def search(payload: SearchRequest, state: State) -> SearchResult:
         limit=state.settings.graph_candidates,
     )
 
+    vector_hits = list(hits["documents"])
     kept = reorder(
         state.reranker,
         payload.query,
-        blend(list(hits["documents"]), related, fetch),
+        blend(vector_hits, [str(hit.chunk_id) for hit in related], fetch),
         lambda hit: hit.content or "",
         payload.limit,
     )
+    vector_ids = frozenset(hit.id for hit in vector_hits)
+    graph_hits = {str(hit.chunk_id): hit for hit in related}
     return SearchResult(
-        chunks=tuple(to_retrieved(hit) for hit in above_floor(kept, state.settings))
+        chunks=tuple(
+            to_retrieved(hit, *provenance(hit.id, vector_ids, graph_hits))
+            for hit in above_floor(kept, state.settings)
+        )
     )
 
 
@@ -349,6 +349,35 @@ def passages(payload: PassagesRequest, state: State) -> PassagesResult:
     )
 
 
+@router.post("/graph/status", summary="Describe how much of a library the graph covers")
+def graph_status(payload: GraphStatusRequest, state: State) -> GraphStatus:
+    """Counts for a library's graph, and which of its versions have one.
+
+    Communities come from the same cache a library-wide question uses, so
+    the number shown is the one those questions read from, and opening the
+    page warms the cache for them.
+    """
+    with graph_store("this library's graph cannot be described"):
+        coverage = state.graph.coverage(payload.library_id, payload.generation_ids)
+        try:
+            communities: int | None = len(
+                state.communities.get(payload.library_id, payload.generation_ids)
+            )
+        except ProblemError as refused:
+            # Too large to cluster. Not an error for a status read: the
+            # page says library-wide questions are unavailable, which is
+            # the true and useful part of the refusal.
+            if refused.code != ErrorCode.QUOTA_EXCEEDED:
+                raise
+            communities = None
+    return GraphStatus(
+        entities=coverage.entities,
+        relations=coverage.relations,
+        communities=communities,
+        graphed_versions=tuple(sorted(coverage.versions, key=str)),
+    )
+
+
 @router.post("/delete", summary="Remove one generation's chunks")
 def delete_generation(payload: DeleteRequest, state: State) -> DeleteResult:
     """Delete by generation, which makes retiring and erasing the same act.
@@ -363,11 +392,10 @@ def delete_generation(payload: DeleteRequest, state: State) -> DeleteResult:
     deleted = state.store.delete_by_filter(
         scope_filter(payload.library_id, (payload.generation_id,))
     )
-    if state.graph is not None:
-        with graph_store("this document's graph cannot be erased"):
-            state.graph.erase(
-                payload.library_id, payload.document_version_id, only=payload.generation_id
-            )
+    with graph_store("this document's graph cannot be erased"):
+        state.graph.erase(
+            payload.library_id, payload.document_version_id, only=payload.generation_id
+        )
     return DeleteResult(generation_id=payload.generation_id, deleted=deleted)
 
 
@@ -384,11 +412,10 @@ def purge_version(payload: PurgeRequest, state: State) -> DeleteResult:
             payload.library_id, payload.document_version_id, payload.keep_generation_id
         )
     )
-    if state.graph is not None:
-        with graph_store("this document's graph cannot be erased"):
-            state.graph.erase(
-                payload.library_id, payload.document_version_id, keep=payload.keep_generation_id
-            )
+    with graph_store("this document's graph cannot be erased"):
+        state.graph.erase(
+            payload.library_id, payload.document_version_id, keep=payload.keep_generation_id
+        )
     return DeleteResult(
         generation_id=payload.keep_generation_id or payload.document_version_id,
         deleted=deleted,

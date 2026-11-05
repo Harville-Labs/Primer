@@ -35,6 +35,7 @@ from neo4j import (
     unit_of_work,
 )
 from primer_contracts.graph import ChunkGraph, entity_key
+from primer_contracts.retrieval import MAX_GRAPH_ENTITIES
 
 if TYPE_CHECKING:
     # Only for annotations: config bounds its hop setting by MAX_HOPS, so
@@ -145,8 +146,11 @@ WHERE length(path) <= $hops
 WITH entity, min(length(path)) AS distance
 MATCH (chunk:Chunk {library_id: $library_id})-[:MENTIONS]->(entity)
 WHERE chunk.generation_id IN $generation_ids
-WITH chunk, min(distance) AS distance, count(DISTINCT entity) AS support
-RETURN chunk.chunk_id AS chunk_id, distance, support
+WITH chunk, entity, distance
+ORDER BY distance ASC, entity.name ASC
+WITH chunk, min(distance) AS distance, count(DISTINCT entity) AS support,
+     collect(entity.name)[..$entity_names] AS entities
+RETURN chunk.chunk_id AS chunk_id, distance, support, entities
 ORDER BY distance ASC, support DESC, chunk_id ASC
 LIMIT $limit
 """
@@ -159,6 +163,22 @@ MATCH (chunk:Chunk {library_id: $library_id})-[:MENTIONS]->(entity:Entity)
 WHERE chunk.generation_id IN $generation_ids
 RETURN chunk.chunk_id AS chunk_id, entity.key AS key
 LIMIT $limit
+"""
+
+#: Relations are matched on their own generation, not reached through the
+#: chunks: a relation joins two entities, not a chunk, and following
+#: MENTIONS out and back would count each one once per entity its chunk
+#: names. That is a scan of the library's relations, which a status read
+#: can afford and a search could not.
+_COVERAGE = """
+MATCH (chunk:Chunk {library_id: $library_id})
+WHERE chunk.generation_id IN $generation_ids
+OPTIONAL MATCH (chunk)-[:MENTIONS]->(entity:Entity)
+WITH collect(DISTINCT chunk.document_version_id) AS versions,
+     count(DISTINCT entity) AS entities
+OPTIONAL MATCH ()-[relation:RELATES {library_id: $library_id}]->()
+WHERE relation.generation_id IN $generation_ids
+RETURN versions, entities, count(relation) AS relations
 """
 
 #: `only` and `keep` mirror the vector store's delete and purge: one
@@ -205,6 +225,17 @@ DELETE entity
 
 
 @dataclass(frozen=True)
+class GraphCoverage:
+    """What a library's graph holds, within some generations."""
+
+    entities: int
+    relations: int
+    #: Document versions with at least one chunk in the graph, whether or
+    #: not it named anything. A version with none was never extracted.
+    versions: frozenset[UUID]
+
+
+@dataclass(frozen=True)
 class GraphHit:
     """A chunk reached from the entities a question names."""
 
@@ -215,6 +246,9 @@ class GraphHit:
     #: names three of them is more likely about the question than one that
     #: names one.
     support: int
+    #: Names of the reached entities this chunk mentions, nearest first: why
+    #: the graph found it, in words a reader recognises.
+    entities: tuple[str, ...] = ()
 
 
 class GraphStore:
@@ -315,6 +349,7 @@ class GraphStore:
                 "keys": sorted({entity_key(name) for name in names}),
                 "hops": hops,
                 "limit": limit,
+                "entity_names": MAX_GRAPH_ENTITIES,
             },
             routing_=RoutingControl.READ,
             database_=self._database,
@@ -324,6 +359,7 @@ class GraphStore:
                 chunk_id=UUID(record["chunk_id"]),
                 distance=record["distance"],
                 support=record["support"],
+                entities=tuple(record["entities"]),
             )
             for record in records
         ]
@@ -349,6 +385,25 @@ class GraphStore:
             database_=self._database,
         ).records
         return [(record["chunk_id"], record["key"]) for record in records]
+
+    def coverage(self, library_id: UUID, generation_ids: Sequence[UUID]) -> GraphCoverage:
+        """How much of these generations the graph covers."""
+        if not generation_ids:
+            return GraphCoverage(entities=0, relations=0, versions=frozenset())
+        [record] = self._driver.execute_query(
+            Query(_COVERAGE, timeout=self._timeout),
+            parameters_={
+                "library_id": str(library_id),
+                "generation_ids": [str(generation) for generation in generation_ids],
+            },
+            routing_=RoutingControl.READ,
+            database_=self._database,
+        ).records
+        return GraphCoverage(
+            entities=record["entities"],
+            relations=record["relations"],
+            versions=frozenset(UUID(version) for version in record["versions"]),
+        )
 
     def count(self, library_id: UUID, generation_id: UUID) -> int:
         """Chunks this generation's graph holds, whether or not they named anything."""
@@ -407,18 +462,15 @@ def _collect_orphans(tx: ManagedTransaction, library_id: str, keys: set[str]) ->
         tx.run(_COLLECT_ORPHANS, {"library_id": library_id, "keys": sorted(keys)})
 
 
-def build_graph_store(settings: Settings) -> GraphStore | None:
-    """The configured graph, or nothing at all.
+def build_graph_store(settings: Settings) -> GraphStore:
+    """The configured graph.
 
     The driver connects on first use rather than here, so a deployment
     whose Neo4j is down still starts and still answers from its vectors.
     """
-    if not settings.graph_url:
-        return None
-    password = settings.graph_password.get_secret_value() if settings.graph_password else None
     driver = GraphDatabase.driver(
         settings.graph_url,
-        auth=(settings.graph_username, password) if password else None,
+        auth=(settings.graph_username, settings.graph_password.get_secret_value()),
         connection_timeout=settings.graph_timeout_seconds,
         connection_acquisition_timeout=settings.graph_timeout_seconds,
         max_transaction_retry_time=MAX_TRANSACTION_RETRY_SECONDS,

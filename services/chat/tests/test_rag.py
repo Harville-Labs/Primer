@@ -57,6 +57,17 @@ def test_citations_come_from_retrieval_not_from_text() -> None:
     assert citation.locator.section == "Method"
 
 
+def test_a_citation_says_whether_the_graph_found_its_passage() -> None:
+    """Dropped here, the reader could never see what the graph contributed."""
+    retrieved = chunk("a connected claim").model_copy(
+        update={"found_by": "graph", "graph_entities": ("Pierre Curie",)}
+    )
+
+    citation = build_context((retrieved,)).citations[0]
+
+    assert (citation.found_by, citation.graph_entities) == ("graph", ("Pierre Curie",))
+
+
 def test_the_excerpt_is_stored_with_the_citation() -> None:
     """An answer stays auditable after its document is deleted."""
     context = build_context((chunk("the exact quoted sentence"),))
