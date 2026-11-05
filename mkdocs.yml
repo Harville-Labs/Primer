@@ -106,6 +106,7 @@ nav:
       - Tools: operations/tools.md
       - Deploying: operations/deploying.md
       - Kubernetes: operations/kubernetes.md
+      - Images: operations/images.md
       - Migrations: operations/migrations.md
       - Upgrading: operations/upgrading.md
   - Reference:
