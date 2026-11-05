@@ -23,6 +23,19 @@ LABEL org.opencontainers.image.title="Primer Web" \
       org.opencontainers.image.licenses="Apache-2.0"
 
 ENV NODE_ENV=production
+
+# The base image is rebuilt less often than Debian publishes security
+# fixes, so the image takes them itself rather than waiting for it.
+#
+# The server runs on node alone. npm, corepack and yarn come with the base
+# image, are never run here, and bring their own dependencies for the scan
+# to find.
+RUN apt-get update \
+    && apt-get upgrade -y \
+    && rm -rf /var/lib/apt/lists/* \
+    && rm -rf /usr/local/lib/node_modules /usr/local/bin/npm /usr/local/bin/npx \
+        /usr/local/bin/corepack /usr/local/bin/yarn /usr/local/bin/yarnpkg /opt/yarn-*
+
 WORKDIR /app
 
 COPY --from=build --chown=node:node /app/apps/web/build ./build
