@@ -475,7 +475,7 @@ jobs:
       # The web image ships the adapter's bundle with no node_modules, so the
       # image scan finds no npm packages to check: what the server bundles is
       # checked here, from the lockfile, instead. Every package is a
-      # devDependency (see tests/repo/test_images.py), and Trivy skips those
+      # devDependency (see tests/repo/test_deploy_images.py), and Trivy skips those
       # unless told otherwise - without the variable this scans nothing and
       # passes. That makes it a superset: build tools fail it too.
       - name: Scan the web dependencies
