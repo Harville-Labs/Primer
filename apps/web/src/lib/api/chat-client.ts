@@ -2,6 +2,7 @@ import { ApiError, asProblem } from './client';
 import type {
 	ChatModelList,
 	ConversationSummary,
+	GraphStatus,
 	ImageProvider,
 	MessageSummary,
 	PassagesResult,
@@ -183,6 +184,15 @@ export class ChatApi {
 	passages(libraryId: string, limit: number): Promise<PassagesResult> {
 		const library = encodeURIComponent(libraryId);
 		return this.request(`/api/v1/libraries/${library}/passages?limit=${limit}`);
+	}
+
+	/**
+	 * How much of a library the knowledge graph covers, and which document
+	 * versions have a graph. Authorized by Chat through Control, like
+	 * `passages`.
+	 */
+	graphStatus(libraryId: string): Promise<GraphStatus> {
+		return this.request(`/api/v1/libraries/${encodeURIComponent(libraryId)}/graph`);
 	}
 
 	/**

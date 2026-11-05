@@ -192,6 +192,32 @@ def test_mentions_are_read_from_one_library_and_the_named_generations(
     assert len(graph.mentions(library, [active], limit=1)) == 1
 
 
+def test_coverage_counts_one_library_within_the_named_generations(graph: GraphStore) -> None:
+    """What the library page's graph card shows, and its needs-reindex list.
+
+    The pending generation and the other library both share entity names
+    with the counted one, so a scope that leaked would change every number.
+    """
+    library, active, pending = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
+    graphed, empty, other = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
+    graph.write(
+        library,
+        graphed,
+        active,
+        [chunk_graph(("A", "B"), relate("A", "B")), chunk_graph(("B", "C"), relate("B", "C"))],
+    )
+    # A chunk that named nothing still marks its version as extracted.
+    graph.write(library, empty, active, [chunk_graph(())])
+    graph.write(library, other, pending, [chunk_graph(("D",)), chunk_graph(("A", "E"))])
+    graph.write(uuid.uuid4(), other, active, [chunk_graph(("F", "G"), relate("F", "G"))])
+
+    coverage = graph.coverage(library, [active])
+
+    assert (coverage.entities, coverage.relations) == (3, 2)
+    assert coverage.versions == {graphed, empty}
+    assert graph.coverage(library, []).versions == frozenset()
+
+
 def test_rewriting_a_chunk_replaces_what_it_said(graph: GraphStore, count: Count) -> None:
     library, version, generation = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
     chunk_id = uuid.uuid4()

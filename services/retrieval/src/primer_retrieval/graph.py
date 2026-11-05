@@ -165,6 +165,22 @@ RETURN chunk.chunk_id AS chunk_id, entity.key AS key
 LIMIT $limit
 """
 
+#: Relations are matched on their own generation, not reached through the
+#: chunks: a relation joins two entities, not a chunk, and following
+#: MENTIONS out and back would count each one once per entity its chunk
+#: names. That is a scan of the library's relations, which a status read
+#: can afford and a search could not.
+_COVERAGE = """
+MATCH (chunk:Chunk {library_id: $library_id})
+WHERE chunk.generation_id IN $generation_ids
+OPTIONAL MATCH (chunk)-[:MENTIONS]->(entity:Entity)
+WITH collect(DISTINCT chunk.document_version_id) AS versions,
+     count(DISTINCT entity) AS entities
+OPTIONAL MATCH ()-[relation:RELATES {library_id: $library_id}]->()
+WHERE relation.generation_id IN $generation_ids
+RETURN versions, entities, count(relation) AS relations
+"""
+
 #: `only` and `keep` mirror the vector store's delete and purge: one
 #: generation of a version, or all of a version but the generation in use.
 #: The library and version are matched in the pattern and are never
@@ -206,6 +222,17 @@ MATCH (entity:Entity {library_id: $library_id, key: key})
 WHERE NOT EXISTS { (entity)--() }
 DELETE entity
 """
+
+
+@dataclass(frozen=True)
+class GraphCoverage:
+    """What a library's graph holds, within some generations."""
+
+    entities: int
+    relations: int
+    #: Document versions with at least one chunk in the graph, whether or
+    #: not it named anything. A version with none was never extracted.
+    versions: frozenset[UUID]
 
 
 @dataclass(frozen=True)
@@ -358,6 +385,25 @@ class GraphStore:
             database_=self._database,
         ).records
         return [(record["chunk_id"], record["key"]) for record in records]
+
+    def coverage(self, library_id: UUID, generation_ids: Sequence[UUID]) -> GraphCoverage:
+        """How much of these generations the graph covers."""
+        if not generation_ids:
+            return GraphCoverage(entities=0, relations=0, versions=frozenset())
+        [record] = self._driver.execute_query(
+            Query(_COVERAGE, timeout=self._timeout),
+            parameters_={
+                "library_id": str(library_id),
+                "generation_ids": [str(generation) for generation in generation_ids],
+            },
+            routing_=RoutingControl.READ,
+            database_=self._database,
+        ).records
+        return GraphCoverage(
+            entities=record["entities"],
+            relations=record["relations"],
+            versions=frozenset(UUID(version) for version in record["versions"]),
+        )
 
     def count(self, library_id: UUID, generation_id: UUID) -> int:
         """Chunks this generation's graph holds, whether or not they named anything."""
