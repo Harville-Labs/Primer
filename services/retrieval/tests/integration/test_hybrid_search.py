@@ -5,7 +5,6 @@ from __future__ import annotations
 import uuid
 from typing import Any
 
-import pytest
 from fastapi.testclient import TestClient
 from primer_contracts.graph import ChunkGraph, GraphEntity, GraphRelation
 from primer_contracts.identity import Principal
@@ -65,12 +64,17 @@ def found(client: TestClient, body: dict[str, Any]) -> list[str]:
 
 
 def test_a_passage_two_steps_from_the_question_is_found_through_the_graph(
-    graph_client: TestClient, monkeypatch: pytest.MonkeyPatch
+    graph_client: TestClient,
 ) -> None:
     """The case vector search cannot reach: a passage about someone the
     question never names, connected to it only by another passage that names
     both. More passages share the question's words than the limit allows, so
-    without the graph it is crowded out."""
+    without the graph it is crowded out.
+
+    "Without the graph" is the same library searched before its graph is
+    written. Every deployment has a graph store now, so there is none to
+    switch off; a library whose graph is empty is what vectors alone look
+    like."""
     body = scope(uuid.uuid4(), uuid.uuid4(), uuid.uuid4())
     mentions = passage(body, 0, "Marie Curie discovered polonium.")
     bridge = passage(body, 1, "She married Pierre Curie in 1895.")
@@ -84,6 +88,8 @@ def test_a_passage_two_steps_from_the_question_is_found_through_the_graph(
         "/internal/v1/index", json={**body, "chunks": chunks}, headers=TOKEN_HEADER
     )
     assert indexed.status_code == 200, indexed.text
+    without_graph = found(graph_client, body)
+
     graphs = [
         names(mentions["chunk_id"], "Marie Curie"),
         names(
@@ -102,9 +108,6 @@ def test_a_passage_two_steps_from_the_question_is_found_through_the_graph(
     assert written.status_code == 200, written.text
 
     with_graph = found(graph_client, body)
-    state = graph_client.app.state.retrieval  # ty: ignore[unresolved-attribute]
-    monkeypatch.setattr(state, "graph", None)
-    without_graph = found(graph_client, body)
 
     assert len(without_graph) == LIMIT
     assert distant["content"] not in without_graph
