@@ -221,3 +221,37 @@ def test_extraction_is_on_when_endpoint_and_model_are_set() -> None:
     )
     assert build_graph_extractor(settings) is not None
     assert settings.graph_extraction_enabled is True
+
+
+def test_extraction_falls_back_to_the_chat_endpoint_model_and_key() -> None:
+    """Compose's graph is always on; without this an install with chat set extracts nothing."""
+    settings = Settings(
+        chat_base_url="http://chat:8000/v1", chat_model="llama", chat_api_key="chat-key"
+    )
+
+    assert settings.graph_extraction_base_url == "http://chat:8000/v1"
+    assert settings.graph_extraction_model == "llama"
+    assert settings.graph_extraction_api_key is not None
+    assert settings.graph_extraction_api_key.get_secret_value() == "chat-key"
+
+
+def test_a_named_extraction_endpoint_never_takes_the_chat_key() -> None:
+    """The chat key belongs to the chat endpoint; sending it elsewhere leaks it."""
+    settings = Settings(
+        graph_extraction_base_url="http://extract:8000/v1",
+        graph_extraction_model="small",
+        chat_base_url="http://chat:8000/v1",
+        chat_model="llama",
+        chat_api_key="chat-key",
+    )
+
+    assert settings.graph_extraction_base_url == "http://extract:8000/v1"
+    assert settings.graph_extraction_model == "small"
+    assert settings.graph_extraction_api_key is None
+
+
+def test_chat_without_a_named_model_is_not_a_fallback() -> None:
+    """Chat asks its endpoint which models it serves; extraction cannot."""
+    settings = Settings(chat_base_url="http://chat:8000/v1")
+
+    assert settings.graph_extraction_enabled is False

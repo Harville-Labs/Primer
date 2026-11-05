@@ -269,12 +269,14 @@ so neither is refused too. Reranking is optional, and neither means none.
 {{- end -}}
 
 {{/*
-Where the knowledge graph is, or nothing when it is off. The one place that
-decides it: every template that asks whether the graph is on asks this, so
-a bundled Neo4j and an operator's one cannot be told apart downstream.
+Where the knowledge graph is. The one place that decides it, so a bundled
+Neo4j and an operator's one cannot be told apart downstream.
 
-Both at once is refused rather than resolved. Either choice would quietly
-leave the other unused, and the one ignored is usually the one meant.
+There is no "off": Retrieval does not start without a graph (ADR 0014), so
+neither is refused here, where the message can name the setting, rather
+than in a crash-looping pod. Both at once is refused rather than resolved.
+Either choice would quietly leave the other unused, and the one ignored is
+usually the one meant.
 */}}
 {{- define "primer.graphUrl" -}}
 {{- if .Values.graph.neo4j.enabled -}}
@@ -283,7 +285,7 @@ leave the other unused, and the one ignored is usually the one meant.
 {{- end -}}
 {{- printf "bolt://%s-neo4j:7687" (include "primer.fullname" .) -}}
 {{- else -}}
-{{- .Values.graph.url -}}
+{{- required "graph.neo4j.enabled is off and graph.url is empty. Every release needs a knowledge graph: set graph.url to a Neo4j you run, or turn graph.neo4j.enabled back on." .Values.graph.url -}}
 {{- end -}}
 {{- end -}}
 
@@ -328,9 +330,6 @@ key: graph-password
 {{/*
 How to reach the knowledge graph. Given to Retrieval, which owns it, and to
 the step that prepares its schema - nothing else opens a connection to it.
-
-Included only where the graph is on; each caller guards it, so a deployment
-without a graph renders exactly as it did before there was one.
 */}}
 {{- define "primer.graphEnv" -}}
 - name: PRIMER_GRAPH_URL
@@ -349,16 +348,9 @@ without a graph renders exactly as it did before there was one.
 The model that reads a graph out of each passage. Only the index worker gets
 it: extraction runs in the embed stage, beside the call that embeds the
 same passages.
-
-Refused without a graph rather than rendered anyway. Retrieval with nowhere
-to put a graph refuses every one it is sent, so the deployment would install
-cleanly and then fail every document it indexed.
 */}}
 {{- define "primer.graphExtractionEnv" -}}
 {{- with include "primer.graphExtraction" . | fromYaml }}
-{{- if not (include "primer.graphUrl" $) }}
-{{- fail "graph.extraction.baseUrl is set but the graph is off, so every extracted graph would be refused and every document would fail to index. Set graph.url or graph.neo4j.enabled, or unset graph.extraction.baseUrl." }}
-{{- end }}
 - name: PRIMER_GRAPH_EXTRACTION_BASE_URL
   value: {{ .baseUrl | quote }}
 - name: PRIMER_GRAPH_EXTRACTION_MODEL
@@ -379,13 +371,13 @@ cleanly and then fail every document it indexed.
 
 {{/*
 Which model extracts the graph, as YAML, or nothing when none does: the one
-named in graph.extraction, else the chat model when the graph is on and a
-chat endpoint and model are both set. The one place that decides it, so the
-index worker and the install notes cannot disagree about whether anything
-writes to the graph.
+named in graph.extraction, else the chat model when a chat endpoint and
+model are both set. Decided here rather than left to the index worker,
+which applies the same rule to Compose's variables, so the install notes
+can name the model that writes the graph.
 
-The chat model is the fallback because a graph that is on by default and
-written by nothing is a Neo4j that costs memory and adds nothing to search.
+The chat model is the fallback because a graph written by nothing is a
+Neo4j that costs memory and adds nothing to search.
 It is not the fallback when chat has no model named, because chat then asks
 the endpoint which it serves, and the worker cannot.
 */}}
@@ -394,7 +386,7 @@ the endpoint which it serves, and the worker cannot.
 {{- $chat := .Values.inference.chat -}}
 {{- if $extraction.baseUrl -}}
 {{- dict "baseUrl" $extraction.baseUrl "model" $extraction.model "existingSecret" $extraction.existingSecret "apiKeyKey" $extraction.apiKeyKey | toYaml -}}
-{{- else if and (include "primer.graphUrl" .) $chat.baseUrl $chat.model -}}
+{{- else if and $chat.baseUrl $chat.model -}}
 {{- dict "baseUrl" $chat.baseUrl "model" $chat.model "existingSecret" $chat.existingSecret "apiKeyKey" $chat.apiKeyKey | toYaml -}}
 {{- end -}}
 {{- end -}}

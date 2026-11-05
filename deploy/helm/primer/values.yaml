@@ -424,20 +424,19 @@ vectorStore:
 # The index worker asks a model for the entities and relations each passage
 # names, and search follows them to passages that share no words with the
 # question. See docs/architecture/retrieval.md for what it finds and what it
-# costs. This release runs a Neo4j for it by default, as it does Qdrant:
-# docs/adr/0011-bundle-neo4j-by-default.md says why.
+# costs. Every release has one, as it has a vector store, and runs its own
+# Neo4j unless `url` names yours: docs/adr/0014-knowledge-graph-is-always-on.md
+# says why.
 #
 # Neo4j Community is enough: the schema uses only uniqueness constraints and
 # range indexes.
 graph:
-  # bolt:// or neo4j:// for a Neo4j you run yourself. Empty, with `neo4j`
-  # below off, turns the graph off: nothing below is rendered and no pod
-  # opens a connection to it.
+  # bolt:// or neo4j:// for a Neo4j you run yourself, with `neo4j` below
+  # turned off. One of the two is required.
   url: ""
-  # A Neo4j run by this release. Turn it off to set `url` instead, or to run
-  # without a graph. It is reachable only from Retrieval and the step that
-  # prepares its schema, on the Bolt port, and its HTTP interface and
-  # browser are switched off.
+  # A Neo4j run by this release. Turn it off to set `url` instead. It is
+  # reachable only from Retrieval and the step that prepares its schema, on
+  # the Bolt port, and its HTTP interface and browser are switched off.
   neo4j:
     enabled: true
     image:

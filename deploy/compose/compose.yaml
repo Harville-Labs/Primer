@@ -14,8 +14,9 @@
 # proxy onto Compose would produce something that looks multi-user while one
 # forgotten published port makes authentication decorative.
 #
-# The embedding model and the reranker are bundled, so the stack can index
-# and search as it comes. The chat model is yours: name an OpenAI-compatible
+# The embedding model, the reranker and Neo4j are bundled, so the stack can
+# index and search as it comes; Neo4j's password is the one more line .env
+# needs (ADR 0014). The chat model is yours: name an OpenAI-compatible
 # endpoint - vLLM, Ollama, llama.cpp, or a hosted API - with
 # PRIMER_CHAT_BASE_URL, or add one on the settings page. env.example says how
 # to swap either bundled server for one of your own.
@@ -57,6 +58,14 @@ x-service-env: &service-env
 # tokenizer. Told different models, they disagree without failing.
 x-embedding-model: &embedding-model ${PRIMER_EMBEDDING_MODEL:-onnx-community/Qwen3-Embedding-0.6B-ONNX}
 x-rerank-model: &rerank-model ${PRIMER_RERANK_MODEL:-BAAI/bge-reranker-base}
+
+# Where the knowledge graph is, for Retrieval and the step that prepares its
+# schema. The password is required even with your own Neo4j: Retrieval does
+# not start without a graph (ADR 0014), so there is no stack that runs
+# without one to spare.
+x-graph-env: &graph-env
+  PRIMER_GRAPH_URL: ${PRIMER_GRAPH_URL:-bolt://neo4j:7687}
+  PRIMER_GRAPH_PASSWORD: ${PRIMER_GRAPH_PASSWORD:?set PRIMER_GRAPH_PASSWORD}
 
 # The bundled model servers: Text Embeddings Inference on CPU. The image is
 # published for amd64 only (huggingface/text-embeddings-inference#648), so on
@@ -188,20 +197,15 @@ services:
       retries: 20
     restart: unless-stopped
 
-  # The knowledge graph, off unless the `graph` profile is enabled:
-  #
-  #   COMPOSE_PROFILES=graph
-  #
-  # Every graph variable below falls back to empty rather than being
-  # required, because Compose interpolates the whole file whichever profiles
-  # are on: `:?` here would refuse to start a stack that has no graph at all.
-  # Neo4j itself refuses an empty password, so the profile still cannot run
-  # without one.
+  # The knowledge graph. Stopped when PRIMER_GRAPH_URL names your own, as
+  # Qdrant is. Not published: only Retrieval and its schema step talk to
+  # it. Like the vectors, the graph is derived from your documents, so losing
+  # the volume costs a reindex.
   neo4j:
     image: neo4j:5.26-community
-    profiles: [graph]
+    profiles: ["${PRIMER_GRAPH_URL:+external-graph}"]
     environment:
-      NEO4J_AUTH: neo4j/${PRIMER_GRAPH_PASSWORD:-}
+      NEO4J_AUTH: neo4j/${PRIMER_GRAPH_PASSWORD:?set PRIMER_GRAPH_PASSWORD}
     volumes:
       - graph-data:/data
     healthcheck:
@@ -214,13 +218,13 @@ services:
 
   migrate-graph:
     <<: [*python-image, *hardening]
-    profiles: [graph]
     depends_on:
+      # Not waited for when you name your own.
       neo4j:
         condition: service_healthy
+        required: false
     environment:
-      PRIMER_GRAPH_URL: ${PRIMER_GRAPH_URL:-}
-      PRIMER_GRAPH_PASSWORD: ${PRIMER_GRAPH_PASSWORD:-}
+      <<: *graph-env
     command: ["python", "-m", "primer_retrieval.graph_schema"]
     restart: "no"
 
@@ -234,8 +238,10 @@ services:
   # ahead of time and nothing is evicted: the volume grows by one model per
   # model anyone chooses. On an NVIDIA GPU, add compose.gpu.yaml.
   #
-  # Every variable falls back to empty for the same reason the graph's do,
-  # and Lab reads an empty one as unset. No port is published: the web app
+  # Every variable falls back to empty rather than being required, because
+  # Compose interpolates the whole file whichever profiles are on: `:?` here
+  # would refuse to start a stack without Lab. Lab reads an empty one as
+  # unset. No port is published: the web app
   # is what reaches it, as it is for Chat.
   #
   # Saved experiments are kept in the shared database, in a schema of Lab's
@@ -389,10 +395,8 @@ services:
       reranker:
         condition: service_healthy
         required: false
-      # Only waited for when the `graph` profile is on.
       migrate-graph:
         condition: service_completed_successfully
-        required: false
     environment:
       PRIMER_INTERNAL_API_TOKEN: ${PRIMER_INTERNAL_API_TOKEN:?set PRIMER_INTERNAL_API_TOKEN}
       PRIMER_QDRANT_URL: ${PRIMER_QDRANT_URL:-http://qdrant:6333}
@@ -412,9 +416,7 @@ services:
       PRIMER_RERANK_API_KEY: ${PRIMER_RERANK_API_KEY:-}
       # The bundled reranker accepts at most 32 in one call.
       PRIMER_RERANK_CANDIDATES: ${PRIMER_RERANK_CANDIDATES:-20}
-      # Empty turns the graph off; search answers from vectors alone.
-      PRIMER_GRAPH_URL: ${PRIMER_GRAPH_URL:-}
-      PRIMER_GRAPH_PASSWORD: ${PRIMER_GRAPH_PASSWORD:-}
+      <<: *graph-env
     command:
       ["uvicorn", "primer_retrieval.app:create_app", "--factory",
        "--host", "0.0.0.0", "--port", "8000"]
@@ -514,10 +516,18 @@ services:
     environment:
       <<: *worker-env
       # Reads entities and relations out of each passage for the graph.
-      # Empty leaves extraction off; it needs PRIMER_GRAPH_URL as well.
+      # Empty, the worker extracts with the chat endpoint and model below,
+      # when both are set. With neither, the graph stays empty.
       PRIMER_GRAPH_EXTRACTION_BASE_URL: ${PRIMER_GRAPH_EXTRACTION_BASE_URL:-}
       PRIMER_GRAPH_EXTRACTION_MODEL: ${PRIMER_GRAPH_EXTRACTION_MODEL:-}
       PRIMER_GRAPH_EXTRACTION_API_KEY: ${PRIMER_GRAPH_EXTRACTION_API_KEY:-}
+      # Passed whole rather than as a fallback in each variable above, so the
+      # worker can choose the endpoint, model and key together. Falling back
+      # one variable at a time would send the chat key to an extraction
+      # endpoint that was named without one.
+      PRIMER_CHAT_BASE_URL: ${PRIMER_CHAT_BASE_URL:-}
+      PRIMER_CHAT_MODEL: ${PRIMER_CHAT_MODEL:-}
+      PRIMER_CHAT_API_KEY: ${PRIMER_CHAT_API_KEY:-}
     volumes:
       - source-objects:/var/lib/primer/sources
     # Threads, because every task here waits on the network.
