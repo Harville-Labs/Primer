@@ -462,6 +462,13 @@ export interface components {
             document_version_id: string;
             /** Excerpt */
             excerpt?: string | null;
+            /** Found By */
+            found_by?: ("vector" | "graph" | "both") | null;
+            /**
+             * Graph Entities
+             * @default []
+             */
+            graph_entities: string[];
             locator?: components["schemas"]["SourceLocator"] | null;
         };
         /**

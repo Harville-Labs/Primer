@@ -17,6 +17,7 @@ from primer_contracts.identity import Principal
 from primer_retrieval.app import create_app
 from primer_retrieval.breadth import Communities
 from primer_retrieval.config import Settings
+from primer_retrieval.graph import GraphHit
 
 SERVICE_TOKEN = "test-service-token"  # noqa: S105 - a fixture value, not a real credential
 LIBRARY = uuid.uuid4()
@@ -181,3 +182,35 @@ def test_a_focused_question_never_clusters() -> None:
     ask(build_client(graph), "focused")
 
     assert graph.reads == []
+
+
+class NamingGraph(Graph):
+    """A graph that reaches the astronomy passage and the top chemistry one."""
+
+    def neighbourhood(self, *args: Any, **kwargs: Any) -> list[GraphHit]:
+        return [
+            GraphHit(chunk_id=uuid.UUID(ASTRONOMY.id), distance=1, support=1, entities=("comet",)),
+            GraphHit(chunk_id=uuid.UUID(CHEMISTRY[0].id), distance=0, support=2),
+        ]
+
+
+def test_each_passage_says_which_ranking_found_it() -> None:
+    """What a citation's "via graph" badge is drawn from."""
+    client = build_client(NamingGraph())
+
+    response = ask(client, "focused")
+
+    assert response.status_code == 200, response.text
+    found = {
+        chunk["content"]: (chunk["found_by"], chunk["graph_entities"])
+        for chunk in response.json()["chunks"]
+    }
+    assert found["Comets have elliptical orbits."] == ("graph", ["comet"])
+    assert found["Polonium, part 0."] == ("both", [])
+
+
+def test_a_library_wide_answer_is_marked_as_the_graphs() -> None:
+    chunks = ask(build_client(Graph()), "library").json()["chunks"]
+
+    assert chunks
+    assert {chunk["found_by"] for chunk in chunks} == {"graph"}

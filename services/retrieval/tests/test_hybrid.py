@@ -9,7 +9,7 @@ from typing import Any
 import pytest
 from neo4j.exceptions import CypherSyntaxError, ServiceUnavailable
 from primer_retrieval.graph import GraphHit
-from primer_retrieval.hybrid import blend, fuse, question_names, related_chunks
+from primer_retrieval.hybrid import blend, fuse, provenance, question_names, related_chunks
 
 
 def test_fusion_puts_what_both_rankings_agree_on_first() -> None:
@@ -100,7 +100,8 @@ class FakeGraph:
 
 
 def ask(graph: Any) -> list[str]:
-    return related_chunks(graph, uuid.uuid4(), [uuid.uuid4()], "Marie Curie", hops=2, limit=5)
+    hits = related_chunks(graph, uuid.uuid4(), [uuid.uuid4()], "Marie Curie", hops=2, limit=5)
+    return [str(hit.chunk_id) for hit in hits]
 
 
 def test_related_chunks_names_what_the_question_mentions() -> None:
@@ -118,3 +119,25 @@ def test_a_mistake_in_a_graph_query_is_not_mistaken_for_an_outage() -> None:
     """Swallowing it would turn a bug into search quietly ignoring the graph."""
     with pytest.raises(CypherSyntaxError):
         ask(FakeGraph(CypherSyntaxError("bad query")))
+
+
+def graph_hit(chunk_id: str, *entities: str) -> GraphHit:
+    return GraphHit(chunk_id=uuid.UUID(chunk_id), distance=1, support=1, entities=entities)
+
+
+A, B, C = (str(uuid.UUID(int=n)) for n in (1, 2, 3))
+
+
+def test_a_passage_both_rankings_found_is_marked_both_with_its_entities() -> None:
+    graph = {A: graph_hit(A, "Marie Curie")}
+    assert provenance(A, frozenset({A}), graph) == ("both", ("Marie Curie",))
+
+
+def test_a_passage_only_the_graph_found_says_which_entities_led_to_it() -> None:
+    """The case the badge exists for: vector search alone would not have shown it."""
+    graph = {B: graph_hit(B, "Pierre Curie", "polonium")}
+    assert provenance(B, frozenset({A}), graph) == ("graph", ("Pierre Curie", "polonium"))
+
+
+def test_a_passage_the_graph_did_not_reach_is_vector_alone() -> None:
+    assert provenance(C, frozenset({C}), {A: graph_hit(A, "x")}) == ("vector", ())

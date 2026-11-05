@@ -147,6 +147,19 @@ def test_hops_bound_how_far_a_neighbourhood_reaches(graph: GraphStore) -> None:
     assert far.chunk_id not in reached(graph, library, [generation], "A", hops=1)
 
 
+def test_a_neighbourhood_says_which_entities_reached_each_chunk(graph: GraphStore) -> None:
+    """Nearest first, so a citation names the entity closest to the question."""
+    library, generation = uuid.uuid4(), uuid.uuid4()
+    first = chunk_graph(("B", "A"), relate("A", "B"))
+    second = chunk_graph(("C", "B"), relate("B", "C"))
+    graph.write(library, uuid.uuid4(), generation, [first, second])
+
+    hits = graph.neighbourhood(library, [generation], ["A"], hops=2, limit=50)
+
+    entities = {hit.chunk_id: hit.entities for hit in hits}
+    assert entities == {first.chunk_id: ("A", "B"), second.chunk_id: ("B", "C")}
+
+
 def test_more_hops_than_the_query_can_express_is_refused(graph: GraphStore) -> None:
     with pytest.raises(ValueError, match="hops"):
         graph.neighbourhood(uuid.uuid4(), [uuid.uuid4()], ["A"], hops=3, limit=5)

@@ -77,6 +77,10 @@ class FakeRetrieval:
                     score=1.0 - index / 100,
                     locator=SourceLocator(page=index + 1, section="Findings"),
                     index_generation=request.generation_ids[0],
+                    # As the graph would report it, so a stored citation can
+                    # be checked for what it says the graph contributed.
+                    found_by="graph",
+                    graph_entities=("trial",),
                 )
                 for index, content in enumerate(self.contents)
             )

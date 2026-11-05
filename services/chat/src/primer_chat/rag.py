@@ -231,6 +231,8 @@ def build_context(chunks: tuple[RetrievedChunk, ...]) -> GroundedContext:
                 # The excerpt is stored with the answer, so a citation whose
                 # document is later deleted still shows what was quoted.
                 excerpt=chunk.content.strip()[:2000],
+                found_by=chunk.found_by,
+                graph_entities=chunk.graph_entities,
             )
         )
     return GroundedContext(tuple(passages), tuple(citations))

@@ -74,6 +74,7 @@ describe('turnsFrom', () => {
 			chunk_id: 'k',
 			locator: null,
 			excerpt: 'The measured result.',
+			graph_entities: [],
 		};
 
 		const turns = turnsFrom([

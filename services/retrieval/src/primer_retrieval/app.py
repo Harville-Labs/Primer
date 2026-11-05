@@ -45,7 +45,7 @@ from primer_retrieval.errors import (
     vector_store,
 )
 from primer_retrieval.graph import GraphStore, build_graph_store
-from primer_retrieval.hybrid import blend, related_chunks
+from primer_retrieval.hybrid import blend, provenance, related_chunks
 from primer_retrieval.pipelines import (
     LIBRARY_ID,
     DocumentEmbedder,
@@ -252,7 +252,11 @@ def search(payload: SearchRequest, state: State) -> SearchResult:
             state.communities, payload.library_id, payload.generation_ids, payload.limit, fetch
         )
         if covering is not None:
-            return SearchResult(chunks=tuple(to_retrieved(hit) for hit in covering))
+            # Chosen to cover the library's communities, so the graph found
+            # every one; no single entity is the reason for any of them.
+            return SearchResult(
+                chunks=tuple(to_retrieved(hit, found_by="graph") for hit in covering)
+            )
 
     # Fetch wider than the answer needs when a reranker will read them: the
     # passage that answers the question is often inside the first twenty and
@@ -277,15 +281,21 @@ def search(payload: SearchRequest, state: State) -> SearchResult:
         limit=state.settings.graph_candidates,
     )
 
+    vector_hits = list(hits["documents"])
     kept = reorder(
         state.reranker,
         payload.query,
-        blend(list(hits["documents"]), related, fetch),
+        blend(vector_hits, [str(hit.chunk_id) for hit in related], fetch),
         lambda hit: hit.content or "",
         payload.limit,
     )
+    vector_ids = frozenset(hit.id for hit in vector_hits)
+    graph_hits = {str(hit.chunk_id): hit for hit in related}
     return SearchResult(
-        chunks=tuple(to_retrieved(hit) for hit in above_floor(kept, state.settings))
+        chunks=tuple(
+            to_retrieved(hit, *provenance(hit.id, vector_ids, graph_hits))
+            for hit in above_floor(kept, state.settings)
+        )
     )
 
 

@@ -108,6 +108,15 @@ to fall under it: the point of them is that they do not resemble the
 question. A deployment with a floor and no reranker will drop many of
 them.
 
+Each passage a search returns says which ranking found it: `vector`,
+`graph`, or `both`. A passage the graph reached also names up to five of
+the entities that led to it, nearest first. Chat stores both with the
+citation, so a reopened answer still shows them, and the sources panel
+marks the passage "via graph" with the entities written underneath. A
+library-wide answer is built from the graph's communities, so every
+passage in it is marked `graph`, with no entities named. Citations stored
+before this was recorded carry no provenance and show no mark.
+
 An unreachable graph does not fail a search. It is logged, and the vector
 results are returned alone. Without a graph, search returns exactly what it
 returned before the graph existed.

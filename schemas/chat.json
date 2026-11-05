@@ -191,6 +191,33 @@
             ],
             "title": "Excerpt"
           },
+          "found_by": {
+            "anyOf": [
+              {
+                "enum": [
+                  "vector",
+                  "graph",
+                  "both"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Found By"
+          },
+          "graph_entities": {
+            "default": [],
+            "items": {
+              "maxLength": 200,
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 5,
+            "title": "Graph Entities",
+            "type": "array"
+          },
           "locator": {
             "anyOf": [
               {
