@@ -22,14 +22,13 @@ from primer_storage import IMAGE_EXTENSIONS, SourceStore, SourceStoreError, Stud
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from primer_control.config import Settings
+from primer_control.dispatch import Dispatcher
 from primer_control.identity import CurrentPrincipal, get_settings
-from primer_control.publisher import JobPublisher
 from primer_control.repositories.studio import StudioRepository, view_of
 from primer_control.repositories.users import UserRepository
 from primer_control.routes.documents import (
     as_problem,
     enqueue,
-    get_publisher,
     get_source_store,
     record_version,
     require_library,
@@ -67,7 +66,6 @@ Session = Annotated[AsyncSession, Depends(get_session)]
 Config = Annotated[Settings, Depends(studio_on)]
 Store = Annotated[StudioStore, Depends(get_studio_store)]
 Sources = Annotated[SourceStore, Depends(get_source_store)]
-Publisher = Annotated[JobPublisher, Depends(get_publisher)]
 
 MAX_PAGE = 100
 
@@ -205,7 +203,7 @@ async def add_to_library(
     settings: Config,
     store: Store,
     sources: Sources,
-    publisher: Publisher,
+    dispatcher: Dispatcher,
     background: BackgroundTasks,
 ) -> DocumentSummary:
     """Make the image a document, indexed by what a vision model says it shows.
@@ -233,5 +231,5 @@ async def add_to_library(
     except SourceStoreError as error:
         raise as_problem(error) from error
     record = await record_version(session, stored, filename=filename, library_id=body.library_id)
-    enqueue(background, publisher, record)
+    enqueue(background, dispatcher, record)
     return summarize(record)

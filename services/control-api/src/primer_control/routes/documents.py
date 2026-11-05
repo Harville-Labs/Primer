@@ -30,9 +30,9 @@ from primer_service.errors import ProblemError
 from primer_storage import QuotaExceeded, SourceStore, SourceStoreError, StoredSource
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from primer_control.dispatch import Dispatcher, JobDispatcher
 from primer_control.identity import CurrentPrincipal
 from primer_control.models import Document, Library
-from primer_control.publisher import JobPublisher
 from primer_control.repositories.documents import DocumentRecord, DocumentRepository
 from primer_control.repositories.libraries import LibraryRepository
 from primer_control.services.library_access import LibraryAccess
@@ -53,13 +53,7 @@ def get_source_store(request: Request) -> SourceStore:
     return store
 
 
-def get_publisher(request: Request) -> JobPublisher:
-    publisher: JobPublisher = request.app.state.publisher
-    return publisher
-
-
 Store = Annotated[SourceStore, Depends(get_source_store)]
-Publisher = Annotated[JobPublisher, Depends(get_publisher)]
 
 
 def not_found() -> ProblemError:
@@ -123,7 +117,7 @@ def summarize(record: DocumentRecord) -> DocumentSummary:
     )
 
 
-def enqueue(background: BackgroundTasks, publisher: JobPublisher, record: DocumentRecord) -> None:
+def enqueue(background: BackgroundTasks, dispatcher: JobDispatcher, record: DocumentRecord) -> None:
     """Queue the new version's ingestion, after the upload has committed.
 
     A background task runs once the response is on its way, which is after
@@ -133,7 +127,7 @@ def enqueue(background: BackgroundTasks, publisher: JobPublisher, record: Docume
     """
     if record.job is None:  # pragma: no cover - every version is created with a job
         return
-    background.add_task(publisher.publish, StageName.PARSE, record.job.id)
+    background.add_task(dispatcher.dispatch, StageName.PARSE, record.job.id)
 
 
 async def require_library(
@@ -228,7 +222,7 @@ async def upload_document(
     principal: CurrentPrincipal,
     session: Session,
     store: Store,
-    publisher: Publisher,
+    dispatcher: Dispatcher,
     background: BackgroundTasks,
     request: Request,
 ) -> DocumentSummary:
@@ -236,7 +230,7 @@ async def upload_document(
     record = await store_version(
         document=None, library_id=library_id, request=request, store=store, session=session
     )
-    enqueue(background, publisher, record)
+    enqueue(background, dispatcher, record)
     return summarize(record)
 
 
@@ -252,7 +246,7 @@ async def replace_document(
     principal: CurrentPrincipal,
     session: Session,
     store: Store,
-    publisher: Publisher,
+    dispatcher: Dispatcher,
     background: BackgroundTasks,
     request: Request,
 ) -> DocumentSummary:
@@ -275,7 +269,7 @@ async def replace_document(
         store=store,
         session=session,
     )
-    enqueue(background, publisher, record)
+    enqueue(background, dispatcher, record)
     return summarize(record)
 
 
@@ -326,7 +320,7 @@ async def reindex_library(
     library_id: UUID,
     principal: CurrentPrincipal,
     session: Session,
-    publisher: Publisher,
+    dispatcher: Dispatcher,
     background: BackgroundTasks,
 ) -> ReindexSummary:
     """Rebuild the whole library, one job per document.
@@ -362,7 +356,7 @@ async def reindex_library(
         # After the response, like every other publish here: the session
         # commits with the response, and a message sent before that could
         # hand a worker a generation the database rolled back.
-        background.add_task(publisher.publish, StageName.PARSE, job.id)
+        background.add_task(dispatcher.dispatch, StageName.PARSE, job.id)
     return ReindexSummary(queued=queued, skipped=len(records) - queued)
 
 
@@ -376,7 +370,7 @@ async def reindex_document(
     document_id: UUID,
     principal: CurrentPrincipal,
     session: Session,
-    publisher: Publisher,
+    dispatcher: Dispatcher,
     background: BackgroundTasks,
 ) -> DocumentSummary:
     """Build a new generation, leaving the current one answering.
@@ -396,7 +390,7 @@ async def reindex_document(
 
     job = await repository.start_reindex(record)
     if job is not None:
-        background.add_task(publisher.publish, StageName.PARSE, job.id)
+        background.add_task(dispatcher.dispatch, StageName.PARSE, job.id)
         record = DocumentRecord(record.document, record.version, job)
     return summarize(record)
 
@@ -409,7 +403,7 @@ async def delete_document(
     document_id: UUID,
     principal: CurrentPrincipal,
     session: Session,
-    publisher: Publisher,
+    dispatcher: Dispatcher,
     background: BackgroundTasks,
 ) -> Response:
     """Tombstone first; the passages and bytes go afterwards.
@@ -430,5 +424,5 @@ async def delete_document(
     await repository.soft_delete(record.document)
     job = await repository.start_deletion(record)
     if job is not None:
-        background.add_task(publisher.publish, StageName.DELETE, job.id)
+        background.add_task(dispatcher.dispatch, StageName.DELETE, job.id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)

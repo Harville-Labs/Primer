@@ -17,6 +17,8 @@ instead of silently keeping a default.
 | `PRIMER_SUBJECT_HEADER` | `X-Forwarded-User` | Set by the proxy |
 | `PRIMER_JOB_LEASE_SECONDS` | `300` | Before another worker may re-claim |
 | `PRIMER_MAX_JOB_ATTEMPTS` | `5` | Hard bound, independent of workers |
+| `PRIMER_JOB_RESEND_AFTER_SECONDS` | `120` | How long a job whose message the broker never accepted waits before Control sends it again |
+| `PRIMER_JOB_RESEND_INTERVAL_SECONDS` | `60` | How often Control looks for such jobs. Only runs when `PRIMER_BROKER_URL` is set |
 | `PRIMER_CHAT_SERVICE_URL` | unset | Chat, which Studio asks to make images. Unset turns Studio off whatever `PRIMER_STUDIO_ENABLED` says |
 | `PRIMER_STUDIO_ENABLED` | `false` | Off until you have a policy for generated images |
 | `PRIMER_STUDIO_MAX_UPLOAD_BYTES` | `20971520` | Largest image someone may upload to edit; at most 25 MiB |

@@ -10,7 +10,7 @@ from datetime import datetime
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, BackgroundTasks, Depends, Request, Response, status
+from fastapi import APIRouter, BackgroundTasks, Depends, Response, status
 from primer_contracts.errors import ErrorCode
 from primer_contracts.ingestion import StageName
 from primer_contracts.libraries import LibraryShare, LibrarySummary
@@ -20,9 +20,9 @@ from primer_service.errors import ProblemError
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from primer_control.dispatch import Dispatcher
 from primer_control.identity import CurrentPrincipal
 from primer_control.models import Library, LibraryGrant, User
-from primer_control.publisher import JobPublisher
 from primer_control.repositories.grants import LibraryGrantRepository
 from primer_control.repositories.libraries import LibraryRepository
 from primer_control.repositories.users import UserRepository
@@ -34,12 +34,6 @@ router = APIRouter(prefix="/api/v1/libraries", tags=["libraries"], route_class=D
 Session = Annotated[AsyncSession, Depends(get_session)]
 
 
-def get_publisher(request: Request) -> JobPublisher:
-    publisher: JobPublisher = request.app.state.publisher
-    return publisher
-
-
-Publisher = Annotated[JobPublisher, Depends(get_publisher)]
 access = LibraryAccess()
 
 
@@ -133,7 +127,7 @@ async def duplicate_library(
     background: BackgroundTasks,
     principal: CurrentPrincipal,
     session: Session,
-    publisher: Publisher,
+    dispatcher: Dispatcher,
 ) -> LibrarySummary:
     """Copy a library so the two can diverge.
 
@@ -160,7 +154,7 @@ async def duplicate_library(
         where=readable,
     )
     for job in duplication.jobs:
-        background.add_task(publisher.publish, StageName.PARSE, job.id)
+        background.add_task(dispatcher.dispatch, StageName.PARSE, job.id)
     return await summarize_one(repository, duplication.library)
 
 

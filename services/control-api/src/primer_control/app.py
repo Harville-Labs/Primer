@@ -2,6 +2,11 @@
 
 from __future__ import annotations
 
+import asyncio
+from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager, suppress
+from datetime import timedelta
+
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
@@ -11,9 +16,10 @@ from primer_storage import SourceStore, StudioStore
 
 from primer_control import __version__
 from primer_control.config import Settings
+from primer_control.dispatch import JobDispatcher
 from primer_control.health import DependencyRegistry
 from primer_control.middleware import RequestIDMiddleware
-from primer_control.publisher import JobPublisher, build_publisher
+from primer_control.publisher import JobPublisher, NullPublisher, build_publisher
 from primer_control.routes import admin as admin_routes
 from primer_control.routes import capabilities as capability_routes
 from primer_control.routes import documents as document_routes
@@ -41,10 +47,28 @@ def create_app(
     entrypoints, can compose a deployment without mutating process state.
     """
     settings = settings or Settings()
+
+    @asynccontextmanager
+    async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
+        # No sweep without a broker: the null publisher accepts everything,
+        # so there is never anything to send again.
+        if isinstance(app.state.publisher, NullPublisher):
+            yield
+            return
+        interval = timedelta(seconds=settings.job_resend_interval_seconds)
+        sweep = asyncio.create_task(app.state.dispatcher.run(interval))
+        try:
+            yield
+        finally:
+            sweep.cancel()
+            with suppress(asyncio.CancelledError):
+                await sweep
+
     app = FastAPI(
         title="Primer Control API",
         version=__version__,
         summary="Public domain operations and authorization for Primer",
+        lifespan=lifespan,
     )
     app.state.settings = settings
     app.state.database = database or Database(settings.database_url)
@@ -60,6 +84,11 @@ def create_app(
     #: started it and is not collected while it waits on Chat.
     app.state.studio_runs = set()
     app.state.publisher = publisher or build_publisher(settings.broker_url)
+    app.state.dispatcher = JobDispatcher(
+        app.state.database,
+        app.state.publisher,
+        resend_after=timedelta(seconds=settings.job_resend_after_seconds),
+    )
     registry = dependencies or DependencyRegistry()
     registry.register_async("database", app.state.database.check)
     app.state.dependencies = registry

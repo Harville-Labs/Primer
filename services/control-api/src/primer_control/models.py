@@ -284,6 +284,12 @@ class IngestionJob(Base):
     #: staying stuck until an operator intervenes.
     claimed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     lease_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    #: When the broker accepted the message for the job's current entry
+    #: state. Null means no worker has been told about it - the publish
+    #: failed, or Control stopped between commit and publish - and is what
+    #: `primer_control.dispatch` looks for to send it again. Reset whenever
+    #: the job is put back into an entry state for new work.
+    dispatched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     #: Sanitized for display. Exception traces belong in logs, correlated by
     #: request ID, not in a field a user can read.
     error_code: Mapped[str | None] = mapped_column(String(64))

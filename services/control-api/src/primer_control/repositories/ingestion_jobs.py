@@ -21,7 +21,7 @@ from primer_contracts.ingestion import (
     StageName,
     TransitionResult,
 )
-from sqlalchemy import Row, func, select, update
+from sqlalchemy import Row, case, func, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -37,6 +37,19 @@ from primer_control.services.ingestion_pipeline import (
     TERMINAL_STATES,
     stage_for,
 )
+
+#: The error code a job carries while its message could not be sent. Only
+#: this code is ever cleared by a successful send: a worker's own failure
+#: on a job waiting to be retried is not the dispatcher's to erase.
+UNDISPATCHED_CODE = "workers_unreachable"
+
+#: The stage a message is sent for, by the entry state Control leaves a job
+#: in. Only these two are published by Control; the later stages are queued
+#: by the worker that finished the one before.
+DISPATCHED_STAGES: dict[IngestionStatus, StageName] = {
+    IngestionStatus.QUEUED: StageName.PARSE,
+    IngestionStatus.DELETING: StageName.DELETE,
+}
 
 
 class IngestionJobRepository:
@@ -281,6 +294,68 @@ class IngestionJobRepository:
             .returning(IngestionJob.state)
         )
         return await self._result(job_id, result.scalar_one_or_none())
+
+    async def mark_dispatched(self, job_id: UUID) -> None:
+        """Record that the broker accepted this job's message."""
+        await self._session.execute(
+            update(IngestionJob)
+            .where(IngestionJob.id == job_id)
+            .values(
+                dispatched_at=func.now(),
+                error_code=case(
+                    (IngestionJob.error_code == UNDISPATCHED_CODE, None),
+                    else_=IngestionJob.error_code,
+                ),
+                error_detail=case(
+                    (IngestionJob.error_code == UNDISPATCHED_CODE, None),
+                    else_=IngestionJob.error_detail,
+                ),
+            )
+        )
+
+    async def mark_undispatched(self, job_id: UUID, detail: str) -> None:
+        """Say on the job, where its owner will read it, that it was not sent.
+
+        Leaves an error a worker recorded alone, for the reason given on
+        `UNDISPATCHED_CODE`. Writing the row also moves `updated_at`, which
+        is what spaces the dispatcher's next attempt from this one.
+        """
+        await self._session.execute(
+            update(IngestionJob)
+            .where(
+                IngestionJob.id == job_id,
+                IngestionJob.dispatched_at.is_(None),
+                IngestionJob.error_code.is_(None) | (IngestionJob.error_code == UNDISPATCHED_CODE),
+            )
+            .values(error_code=UNDISPATCHED_CODE, error_detail=detail)
+        )
+
+    async def lock_undispatched(
+        self, *, unchanged_for: timedelta, limit: int
+    ) -> list[tuple[UUID, StageName]]:
+        """Jobs waiting on a message nobody sent, locked for this transaction.
+
+        `unchanged_for` leaves a job just committed to the publish its own
+        request is about to make. `SKIP LOCKED` is what lets every Control
+        replica run this at once: a row one replica is re-sending is not
+        visible to another, so a job gets one message per pass, not one per
+        replica. A live lease excludes a job a worker holds; one that has
+        expired does not, since that worker is gone and sent nothing.
+        """
+        result = await self._session.execute(
+            select(IngestionJob.id, IngestionJob.state)
+            .where(
+                IngestionJob.state.in_([state.value for state in DISPATCHED_STAGES]),
+                IngestionJob.dispatched_at.is_(None),
+                IngestionJob.updated_at < func.now() - unchanged_for,
+                (IngestionJob.lease_expires_at.is_(None))
+                | (IngestionJob.lease_expires_at < func.now()),
+            )
+            .order_by(IngestionJob.updated_at)
+            .limit(limit)
+            .with_for_update(skip_locked=True)
+        )
+        return [(job_id, DISPATCHED_STAGES[IngestionStatus(state)]) for job_id, state in result]
 
     async def _result(self, job_id: UUID, updated: str | None) -> TransitionResult:
         """Report what the row holds now, applied or not.
