@@ -183,6 +183,7 @@ def _comparison_stream(
             edited=describe(model.tokenizer, edited, special),
             diverged_at=first_divergence(baseline, edited),
             target=_target_change(model.tokenizer, target, comparison) if target else None,
+            edited_text=model.tokenizer.decode(edited, skip_special_tokens=True),
         )
 
     async def events() -> AsyncIterator[str]:

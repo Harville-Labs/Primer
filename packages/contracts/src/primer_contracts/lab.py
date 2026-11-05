@@ -489,6 +489,11 @@ class GenerationCompleted(GenerationEvent):
     #: shorter one ends.
     diverged_at: int | None = Field(default=None, ge=0)
     target: TargetChange | None = None
+    #: The edited answer decoded whole, special tokens left out. A steered
+    #: chat keeps it as the assistant's turn: joining the tokens' own texts
+    #: would lose the spaces some tokenizers only restore across tokens, and
+    #: split a character spread over two. None on a run saved before it.
+    edited_text: str | None = None
 
 
 class GenerationFailed(GenerationEvent):

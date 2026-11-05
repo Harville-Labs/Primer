@@ -535,6 +535,17 @@
             "title": "Edited",
             "type": "array"
           },
+          "edited_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Edited Text"
+          },
           "id": {
             "minimum": 0.0,
             "title": "Id",

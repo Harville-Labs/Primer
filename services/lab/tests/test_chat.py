@@ -16,7 +16,7 @@ from fastapi.testclient import TestClient
 from lab_streams import events
 from lab_support import lab, settle, switch_to_chat_model
 from primer_contracts.lab import MAX_CHAT_TURNS
-from transformers import Qwen3ForCausalLM
+from transformers import AutoTokenizer, Qwen3ForCausalLM
 
 CONVERSATION = [
     {"role": "user", "content": "hello world w3"},
@@ -165,3 +165,14 @@ def test_the_conversation_and_reply_are_held_to_the_deployments_limits(weights_d
     assert "13 tokens with the chat template" in long.json()["detail"]
     assert "PRIMER_LAB_MAX_PROMPT_TOKENS" in long.json()["detail"]
     assert "PRIMER_LAB_MAX_NEW_TOKENS" in wordy.json()["detail"]
+
+
+def test_the_steered_reply_comes_back_decoded_whole_for_the_next_turn(chatty, weights_dir):
+    """The caller sends this back as the assistant's turn, so it is the tokenizer's text."""
+    steered = replied(chatty, interventions=[SHIFT])
+
+    tokenizer = AutoTokenizer.from_pretrained(weights_dir / "chatty")
+    assert tokenizer is not None
+    expected = tokenizer.decode(ids(steered["edited"]), skip_special_tokens=True)
+    assert expected, "the steered reply was only special tokens"
+    assert steered["edited_text"] == expected

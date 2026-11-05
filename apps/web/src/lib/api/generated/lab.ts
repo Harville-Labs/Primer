@@ -543,6 +543,8 @@ export interface components {
             diverged_at?: number | null;
             /** Edited */
             edited: components["schemas"]["InspectedToken"][];
+            /** Edited Text */
+            edited_text?: string | null;
             /** Id */
             id: number;
             model: components["schemas"]["LabModelStatus"];
