@@ -29,14 +29,46 @@ LAYOUTS: dict[str, dict[str, Any]] = {
 }
 
 
+class RetryingQdrantDocumentStore(QdrantDocumentStore):
+    """Qdrant whose collection setup is retried until it succeeds.
+
+    The integration creates the collection on first use, and caches its
+    client before that setup runs. A first use while Qdrant is still
+    refusing connections - routine when the chart starts both together -
+    therefore left a cached client and no collection, and every later call
+    failed with a 404 until the pod was restarted. Dropping the client when
+    setup fails makes the next call start over.
+
+    The override is of a private method because that is where the client is
+    cached; the reset goes through the public `close`. Setting the
+    collection up eagerly at startup and exiting when Qdrant is unreachable
+    would also work, but trades one failed probe for a crash loop whose
+    backoff outlasts Qdrant's start by minutes.
+    """
+
+    def _initialize_client(self) -> None:
+        try:
+            super()._initialize_client()
+        except BaseException:
+            self.close()
+            raise
+
+    async def _initialize_async_client(self) -> None:
+        try:
+            await super()._initialize_async_client()
+        except BaseException:
+            await self.close_async()
+            raise
+
+
 def build_document_store(settings: Settings) -> QdrantDocumentStore:
-    """Instantiate Qdrant, unchanged from the integration.
+    """Instantiate Qdrant, unchanged from the integration but for setup retries.
 
     The conformance suite runs Primer's isolation cases against it, so an
     integration upgrade that breaks a filter fails there rather than in a
     library nobody expected to be readable.
     """
-    return QdrantDocumentStore(
+    return RetryingQdrantDocumentStore(
         url=settings.qdrant_url,
         api_key=(
             Secret.from_token(settings.qdrant_api_key.get_secret_value())
