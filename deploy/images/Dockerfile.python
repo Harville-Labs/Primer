@@ -3,38 +3,29 @@
 # Which service runs is chosen by the command, so Compose can pin all three
 # to one digest and know they are the same code.
 
-FROM ghcr.io/astral-sh/uv:python3.13-alpine
+# Both stages start here, so the virtualenv is built against exactly the
+# interpreter that runs it.
+FROM python:3.13-alpine AS python
 
-COPY --from=ghcr.io/astral-sh/uv:0.12.7 /uv /usr/local/bin/uv
-
-LABEL org.opencontainers.image.title="Primer API" \
-      org.opencontainers.image.description="Control, Chat, and Retrieval services" \
-      org.opencontainers.image.source="https://github.com/Harville-Labs/Primer" \
-      org.opencontainers.image.licenses="Apache-2.0"
-
-ENV UV_COMPILE_BYTECODE=1 \
-    HAYSTACK_TELEMETRY_ENABLED=False \
-    UV_LINK_MODE=copy \
-    UV_PYTHON_DOWNLOADS=never \
-    PATH="/app/.venv/bin:$PATH" \
-    PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1
-
-# The base image's pip is never used - uv installs everything - and it
-# carries its own vendored copies of urllib3, msgpack and setuptools, which
-# the image scan reports and nothing here would ever update.
+# The image's pip is never used - uv installs everything - and it carries
+# its own vendored copies of urllib3, msgpack and setuptools, which the
+# image scan reports and nothing here would ever update.
 RUN python -m pip uninstall --yes --root-user-action ignore pip
 
-RUN addgroup -g 10001 primer \
-    && adduser -u 10001 -G primer -s /sbin/nologin -D primer
-
-WORKDIR /app
 
 # One sync, after everything is copied. Splitting it into a dependency
 # layer and a workspace layer looks like better caching, but each `uv sync`
-# writes a complete virtualenv, and the first one stays in its layer - it
-# nearly doubled this image. The uv cache mount already makes a rebuild
-# cheap without leaving a second copy behind.
+# writes a complete virtualenv, and the first one stays in its layer. The
+# uv cache mount already makes a rebuild cheap.
+FROM python AS build
+
+COPY --from=ghcr.io/astral-sh/uv:0.12.7 /uv /usr/local/bin/uv
+
+ENV UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy \
+    UV_PYTHON_DOWNLOADS=never
+
+WORKDIR /app
 COPY pyproject.toml uv.lock ./
 COPY packages/ packages/
 COPY services/control-api/ services/control-api/
@@ -43,9 +34,30 @@ COPY services/retrieval/ services/retrieval/
 COPY services/chat/ services/chat/
 COPY services/lab/pyproject.toml services/lab/
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --locked --group server \
-      --package primer-control --package primer-chat --package primer-retrieval \
-    && chown -R 10001:10001 /app
+    uv sync --locked --no-dev --group server \
+      --package primer-control --package primer-chat --package primer-retrieval
+
+
+# Only the virtualenv and the workspace it points at. uv and the cache stay
+# in the build stage, and the files stay owned by root: the services read
+# their code and never write it, so they cannot change it either.
+FROM python
+
+LABEL org.opencontainers.image.title="Primer API" \
+      org.opencontainers.image.description="Control, Chat, and Retrieval services" \
+      org.opencontainers.image.source="https://github.com/Harville-Labs/Primer" \
+      org.opencontainers.image.licenses="Apache-2.0"
+
+ENV HAYSTACK_TELEMETRY_ENABLED=False \
+    PATH="/app/.venv/bin:$PATH" \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1
+
+RUN addgroup -g 10001 primer \
+    && adduser -u 10001 -G primer -s /sbin/nologin -D primer
+
+WORKDIR /app
+COPY --from=build /app /app
 
 USER 10001:10001
 EXPOSE 8000

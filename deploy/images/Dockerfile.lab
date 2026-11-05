@@ -10,9 +10,70 @@
 # in: they are fetched into /models when a model is chosen, and that volume
 # is the only place this container writes besides /tmp.
 
-FROM ghcr.io/astral-sh/uv:python3.13-bookworm-slim AS base
+# Every stage starts here, so each virtualenv is built against exactly the
+# interpreter that runs it.
+FROM python:3.13-slim-bookworm AS python
+
+# The image's pip is never used - uv installs everything - and it carries
+# its own vendored copies of urllib3, msgpack and setuptools, which the
+# image scan reports and nothing here would ever update.
+RUN python -m pip uninstall --yes --root-user-action ignore pip
+
+
+# nnsight publishes no Linux arm64 wheel, so on an arm64 machine - Apple
+# Silicon building for Compose, or a DGX Spark - it compiles a small C
+# extension. The compiler stays in the build stages with uv.
+FROM python AS build
 
 COPY --from=ghcr.io/astral-sh/uv:0.12.7 /uv /usr/local/bin/uv
+
+ENV UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy \
+    UV_PYTHON_DOWNLOADS=never
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends gcc libc6-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+COPY pyproject.toml uv.lock ./
+COPY services/control-api/pyproject.toml services/control-api/
+COPY services/retrieval/pyproject.toml services/retrieval/
+COPY services/chat/pyproject.toml services/chat/
+COPY services/ingestion/pyproject.toml services/ingestion/
+COPY packages/ packages/
+COPY services/lab/ services/lab/
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --locked --no-dev --group server --package primer-lab
+
+# The lockfile resolves torch from PyTorch's CPU index on Linux, because the
+# worker parses on CPU and a CUDA build would add gigabytes it never uses.
+# Lab on a GPU needs the CUDA build of the same version, and a second lock
+# for one image would be a second set of versions to keep in step. So this
+# stage replaces only torch, at exactly the version the lock chose, and
+# leaves every other package as locked.
+FROM build AS build-cuda
+RUN --mount=type=cache,target=/root/.cache/uv \
+    version="$(/app/.venv/bin/python -c 'import importlib.metadata as m; print(m.version("torch").split("+")[0])')" \
+    && uv pip install --python /app/.venv --reinstall-package torch \
+         --index https://download.pytorch.org/whl/cu132 "torch==${version}"
+
+# Attribution graphs (ADR 0009): the graph builder in an environment of its
+# own, because it needs transformers 4.x and Lab's lock has 5. Lab runs it
+# as a program, so the two never share an interpreter.
+FROM build AS build-graphs
+COPY services/lab-graphs/ services/lab-graphs/
+RUN --mount=type=cache,target=/root/.cache/uv \
+    UV_PROJECT_ENVIRONMENT=/opt/graphs \
+      uv sync --locked --no-dev --no-editable --project services/lab-graphs \
+    && version="$(/opt/graphs/bin/python -c 'import importlib.metadata as m; print(m.version("torch").split("+")[0])')" \
+    && uv pip install --python /opt/graphs --reinstall-package torch \
+         --index https://download.pytorch.org/whl/cu132 "torch==${version}"
+
+
+# What every target runs on. The code it copies in stays owned by root:
+# Lab reads it and never writes it, so it cannot change it either.
+FROM python AS runtime
 
 LABEL org.opencontainers.image.title="Primer Lab" \
       org.opencontainers.image.description="Inspects and edits a small open model as it runs" \
@@ -22,10 +83,7 @@ LABEL org.opencontainers.image.title="Primer Lab" \
 # HF_HOME is pointed at the weights volume so that anything transformers
 # caches beside the model - not only the files Lab fetches itself - lands
 # somewhere writable on a read-only root, and survives a restart.
-ENV UV_COMPILE_BYTECODE=1 \
-    UV_LINK_MODE=copy \
-    UV_PYTHON_DOWNLOADS=never \
-    PATH="/app/.venv/bin:$PATH" \
+ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     HF_HOME=/models/huggingface \
@@ -37,74 +95,27 @@ RUN apt-get update \
     && apt-get upgrade -y \
     && rm -rf /var/lib/apt/lists/*
 
-# The base image's pip is never used - uv installs everything - and it
-# carries its own vendored copies of urllib3, msgpack and setuptools, which
-# the image scan reports and nothing here would ever update.
-RUN python -m pip uninstall --yes --root-user-action ignore pip
-
 RUN groupadd --gid 10001 primer \
-    && useradd --uid 10001 --gid 10001 --create-home --shell /usr/sbin/nologin primer
+    && useradd --uid 10001 --gid 10001 --create-home --shell /usr/sbin/nologin primer \
+    && mkdir -p /models \
+    && chown 10001:10001 /models
 
 WORKDIR /app
-
-COPY pyproject.toml uv.lock ./
-COPY services/control-api/pyproject.toml services/control-api/
-COPY services/retrieval/pyproject.toml services/retrieval/
-COPY services/chat/pyproject.toml services/chat/
-COPY services/ingestion/pyproject.toml services/ingestion/
-COPY packages/ packages/
-COPY services/lab/ services/lab/
-# nnsight publishes no Linux arm64 wheel, so on an arm64 machine - Apple
-# Silicon building for Compose, say - it compiles a small C extension. The
-# compiler is removed in the same layer, so it never reaches the image.
-RUN --mount=type=cache,target=/root/.cache/uv \
-    apt-get update \
-    && apt-get install -y --no-install-recommends gcc libc6-dev \
-    && uv sync --locked --group server --package primer-lab \
-    && apt-get purge -y --auto-remove gcc libc6-dev \
-    && rm -rf /var/lib/apt/lists/* \
-    && mkdir -p /models \
-    && chown -R 10001:10001 /app /models
-
 EXPOSE 8000
 CMD ["uvicorn", "primer_lab.app:create_app", "--factory", "--host", "0.0.0.0", "--port", "8000"]
 
-# The lockfile resolves torch from PyTorch's CPU index on Linux, because the
-# worker parses on CPU and a CUDA build would add gigabytes it never uses.
-# Lab on a GPU needs the CUDA build of the same version, and a second lock
-# for one image would be a second set of versions to keep in step. So this
-# stage replaces only torch, at exactly the version the lock chose, and
-# leaves every other package as locked.
-FROM base AS cuda
-RUN --mount=type=cache,target=/root/.cache/uv \
-    version="$(python -c 'import importlib.metadata as m; print(m.version("torch").split("+")[0])')" \
-    && uv pip install --python /app/.venv --reinstall-package torch \
-         --index https://download.pytorch.org/whl/cu132 "torch==${version}" \
-    && chown -R 10001:10001 /app
+
+FROM runtime AS cuda
+COPY --from=build-cuda /app /app
 USER 10001:10001
 
-# Attribution graphs (ADR 0009): the CUDA image with the graph builder
-# installed beside Lab, in an environment of its own, because the builder
-# needs transformers 4.x and Lab's lock has 5. Lab runs it as a program, so
-# the two never share an interpreter. Only for a GPU: a graph built on a CPU
-# does not finish inside the time Lab gives one.
+# Only for a GPU: a graph built on a CPU does not finish inside the time
+# Lab gives one.
 FROM cuda AS graphs
-USER root
-COPY services/lab-graphs/ services/lab-graphs/
-RUN --mount=type=cache,target=/root/.cache/uv \
-    apt-get update \
-    && apt-get install -y --no-install-recommends gcc libc6-dev \
-    && UV_PROJECT_ENVIRONMENT=/opt/graphs \
-         uv sync --locked --no-dev --no-editable --project services/lab-graphs \
-    && version="$(/opt/graphs/bin/python -c 'import importlib.metadata as m; print(m.version("torch").split("+")[0])')" \
-    && uv pip install --python /opt/graphs --reinstall-package torch \
-         --index https://download.pytorch.org/whl/cu132 "torch==${version}" \
-    && apt-get purge -y --auto-remove gcc libc6-dev \
-    && rm -rf /var/lib/apt/lists/* \
-    && chown -R 10001:10001 /opt/graphs
+COPY --from=build-graphs /opt/graphs /opt/graphs
 # The image is the switch: Lab offers graphs when it is told where the builder is.
 ENV PRIMER_LAB_GRAPH_PYTHON=/opt/graphs/bin/python
-USER 10001:10001
 
-FROM base AS cpu
+FROM runtime AS cpu
+COPY --from=build /app /app
 USER 10001:10001
