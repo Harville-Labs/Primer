@@ -86,15 +86,9 @@ not `localhost`. On Linux that name needs an `extra_hosts` entry; see
 Compose](providers.md#reaching-a-server-on-the-host-from-compose).
 
 `PRIMER_CHAT_MODEL` is optional. Primer asks the endpoint what it serves.
-You can also leave the base URL unset and add a provider on the settings
-page later. But the index worker can't read a provider added there, so the
-knowledge graph then needs `PRIMER_GRAPH_EXTRACTION_*` to be set. See
-[The knowledge graph with
-Compose](deploying.md#the-knowledge-graph-with-compose).
-
-[Connecting model providers](providers.md#chat) has the serving flags for
-vLLM, Ollama, and llama.cpp. [Choosing models](models.md) covers which
-models to pick.
+You can also leave the base URL unset and add the model on the settings
+page once Primer is running. [Connecting model
+providers](#connecting-model-providers) below compares the two.
 
 ### 3. Turn on what you want
 
@@ -201,6 +195,9 @@ inference:
     existingSecret: ""            # a Secret with chat-api-key, if it needs one
 ```
 
+`inference.chat` can be left out and the model added on the settings page
+instead; see [Connecting model providers](#connecting-model-providers).
+
 That is a complete deployment. The release runs Qdrant, Neo4j, the embedder,
 and the reranker itself, and generates Neo4j's password when you name none.
 
@@ -249,6 +246,73 @@ Migrations run as a pre-install hook, before any service starts.
     is `ClusterIP`, and the ingress strips inbound copies of those headers.
     If you replace the ingress, keep that rule.
     [How identity works](kubernetes.md#how-identity-works) explains why.
+
+## Connecting model providers
+
+A *provider* is an OpenAI-compatible endpoint Primer can answer from. There
+are two ways to give Primer one, and a deployment can use both.
+
+| | In `.env` or the values file | On the settings page |
+| --- | --- | --- |
+| Set by | Whoever deploys it | An administrator, in the browser |
+| Changed by | Editing configuration and restarting | Adding, disabling, or removing it on the page |
+| Used for the knowledge graph | Yes | No. The index worker reads only configuration |
+| API key kept | In `.env` or a Secret | Encrypted in Primer's database |
+
+A provider from configuration is listed on the settings page too, marked
+*From the deployment*. It can't be changed there.
+
+### From configuration
+
+This is step 2 of the Compose install, or `inference.chat` in the values
+file. Use it for the model the deployment can't work without, because it is
+also the model that reads the knowledge graph out of each passage.
+
+[Connecting model providers](providers.md#chat) has the serving flags for
+vLLM, Ollama, and llama.cpp, and the URLs for hosted APIs. [Choosing
+models](models.md) covers which models to pick.
+
+### On the settings page
+
+Open **Settings**. Under **Inference providers**, the form below the list
+adds one. It asks for:
+
+- **A name**, which is what people see when they choose a model.
+- **The base URL**, ending in `/v1`. From Compose, a server on your machine
+  is `http://host.docker.internal:<port>/v1`.
+- **An API key**, if the endpoint needs one. Most local servers don't.
+- **Whether it serves chat.** Turn this off for an endpoint that only makes
+  images for [Studio](studio.md).
+- **Whether it returns logprobs.** Declare it only if the server does;
+  Primer doesn't probe for it. See [Declaring
+  logprobs](configuration.md#declaring-logprobs).
+
+A key typed here is encrypted before it is stored. The chart generates the
+encryption key. Compose doesn't, so add one to `.env` before you save a
+provider that needs a key:
+
+```bash
+PRIMER_SETTINGS_ENCRYPTION_KEY=$(openssl rand -hex 32)
+```
+
+Without it the page refuses to store a key rather than keep it in the
+clear. Keep the value: if it changes, stored keys can't be read and have
+to be typed in again.
+
+A provider added here answers questions, but the index worker can't read
+it. If it is your only chat model, the knowledge graph needs
+`PRIMER_GRAPH_EXTRACTION_*`; see [The knowledge graph with
+Compose](deploying.md#the-knowledge-graph-with-compose).
+
+### Embeddings, reranking, and vision
+
+The embedder and reranker are bundled, so a fresh install needs neither.
+To use your own, see [Using your own embedding
+server](providers.md#using-your-own-embedding-server) and [Using your own
+reranker](providers.md#using-your-own-reranker-or-none). The vision model is
+set only in configuration: step 3 of the Compose install, or the optional
+values in step 2 of the Kubernetes one. [What a figure
+shows](models.md#what-a-figure-shows) explains what it adds.
 
 ## Checking that it works
 
