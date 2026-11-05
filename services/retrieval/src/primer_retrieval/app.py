@@ -42,7 +42,6 @@ from primer_retrieval.config import Settings
 from primer_retrieval.errors import (
     embedding_endpoint,
     graph_store,
-    no_graph_store,
     vector_store,
 )
 from primer_retrieval.graph import GraphStore, build_graph_store
@@ -99,9 +98,8 @@ class RetrievalState:
         # None unless an endpoint is configured, and None is what makes a
         # deployment without one behave exactly as it did before.
         self.reranker = reranker if reranker is not None else build_reranker(settings)
-        # None unless Neo4j is configured, for the same reason as above.
-        self.graph: GraphStore | None = build_graph_store(settings)
-        self.communities = Communities(self.graph, settings) if self.graph else None
+        self.graph: GraphStore = build_graph_store(settings)
+        self.communities = Communities(self.graph, settings)
 
 
 def build_reranker(settings: Settings) -> Reranker | None:
@@ -198,10 +196,8 @@ def verify_generation(payload: GenerationQuery, state: State) -> GenerationCount
     count = state.store.count_documents_by_filter(
         scope_filter(payload.library_id, (payload.generation_id,))
     )
-    graph_count = None
-    if state.graph is not None:
-        with graph_store("this document's graph cannot be verified"):
-            graph_count = state.graph.count(payload.library_id, payload.generation_id)
+    with graph_store("this document's graph cannot be verified"):
+        graph_count = state.graph.count(payload.library_id, payload.generation_id)
     return GenerationCount(
         generation_id=payload.generation_id, count=count, graph_count=graph_count
     )
@@ -209,17 +205,8 @@ def verify_generation(payload: GenerationQuery, state: State) -> GenerationCount
 
 @router.post("/graph/index", summary="Write what one generation's chunks say, as a graph")
 def index_graph(payload: GraphIndexRequest, state: State) -> GraphIndexResult:
-    """Write extracted entities and relations into a pending generation.
-
-    Refused rather than ignored when there is no graph store. Accepting and
-    discarding would let a worker activate a generation it believes has a
-    graph, and the only symptom would be hybrid search quietly never
-    finding anything.
-    """
-    consequence = "this document's graph cannot be indexed"
-    if state.graph is None:
-        raise no_graph_store(consequence)
-    with graph_store(consequence):
+    """Write extracted entities and relations into a pending generation."""
+    with graph_store("this document's graph cannot be indexed"):
         state.graph.write(
             payload.library_id, payload.document_version_id, payload.generation_id, payload.graphs
         )
@@ -363,11 +350,10 @@ def delete_generation(payload: DeleteRequest, state: State) -> DeleteResult:
     deleted = state.store.delete_by_filter(
         scope_filter(payload.library_id, (payload.generation_id,))
     )
-    if state.graph is not None:
-        with graph_store("this document's graph cannot be erased"):
-            state.graph.erase(
-                payload.library_id, payload.document_version_id, only=payload.generation_id
-            )
+    with graph_store("this document's graph cannot be erased"):
+        state.graph.erase(
+            payload.library_id, payload.document_version_id, only=payload.generation_id
+        )
     return DeleteResult(generation_id=payload.generation_id, deleted=deleted)
 
 
@@ -384,11 +370,10 @@ def purge_version(payload: PurgeRequest, state: State) -> DeleteResult:
             payload.library_id, payload.document_version_id, payload.keep_generation_id
         )
     )
-    if state.graph is not None:
-        with graph_store("this document's graph cannot be erased"):
-            state.graph.erase(
-                payload.library_id, payload.document_version_id, keep=payload.keep_generation_id
-            )
+    with graph_store("this document's graph cannot be erased"):
+        state.graph.erase(
+            payload.library_id, payload.document_version_id, keep=payload.keep_generation_id
+        )
     return DeleteResult(
         generation_id=payload.keep_generation_id or payload.document_version_id,
         deleted=deleted,

@@ -5,7 +5,6 @@ from __future__ import annotations
 import re
 from typing import LiteralString, cast
 
-import pytest
 from primer_retrieval.config import Settings
 from primer_retrieval.graph import SCHEMA
 from primer_retrieval.graph_schema import apply
@@ -52,11 +51,3 @@ def test_the_step_creates_every_constraint_and_index_the_store_declares(
     apply(neo4j_settings)
 
     assert names.keys() <= present(neo4j)
-
-
-def test_the_step_refuses_to_run_with_the_graph_off() -> None:
-    """Succeeding would leave a deployment believing its graph was prepared."""
-    with pytest.raises(SystemExit) as raised:
-        apply(Settings(graph_url=None))
-
-    assert "PRIMER_GRAPH_URL" in str(raised.value)

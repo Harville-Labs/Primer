@@ -84,7 +84,7 @@ def fuse(rankings: Sequence[Sequence[str]], k: int = RRF_K) -> list[str]:
 
 
 def related_chunks(
-    graph: GraphStore | None,
+    graph: GraphStore,
     library_id: UUID,
     generation_ids: Sequence[UUID],
     question: str,
@@ -98,8 +98,6 @@ def related_chunks(
     graph existed. So an outage is logged and searched past. Anything else
     the driver raises is a mistake in Primer and is left to fail loudly.
     """
-    if graph is None:
-        return []
     try:
         hits = graph.neighbourhood(
             library_id, generation_ids, question_names(question), hops=hops, limit=limit
@@ -126,8 +124,8 @@ def blend(
     return is dropped here rather than trusted.
 
     With nothing from the graph, the vector hits come back untouched -
-    same objects, same order - so a deployment without a graph answers
-    exactly as it did before there was one.
+    same objects, same order - so a question that names nothing in the
+    graph is answered exactly as vector search alone would answer it.
     """
     if not graph_ids:
         return vector_hits

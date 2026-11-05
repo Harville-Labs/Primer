@@ -62,7 +62,7 @@ class Communities:
 
 
 def library_wide(
-    cache: Communities | None,
+    cache: Communities,
     library_id: UUID,
     generation_ids: Sequence[UUID],
     limit: int,
@@ -75,13 +75,10 @@ def library_wide(
     similarity to the question, and they decide only which community goes
     first and which of its passages it offers.
 
-    None when there is no graph, the graph is down, or nothing in the
-    library mentions an entity. Each of those leaves the focused search as
-    the best answer there is, which is the rule focused search follows when
-    the graph is down.
+    None when the graph is down, or nothing in the library mentions an
+    entity. Each of those leaves the focused search as the best answer there
+    is, which is the rule focused search follows when the graph is down.
     """
-    if cache is None:
-        return None
     try:
         probed = cache.get(library_id, generation_ids)
     except GRAPH_OUTAGES:

@@ -407,18 +407,15 @@ def _collect_orphans(tx: ManagedTransaction, library_id: str, keys: set[str]) ->
         tx.run(_COLLECT_ORPHANS, {"library_id": library_id, "keys": sorted(keys)})
 
 
-def build_graph_store(settings: Settings) -> GraphStore | None:
-    """The configured graph, or nothing at all.
+def build_graph_store(settings: Settings) -> GraphStore:
+    """The configured graph.
 
     The driver connects on first use rather than here, so a deployment
     whose Neo4j is down still starts and still answers from its vectors.
     """
-    if not settings.graph_url:
-        return None
-    password = settings.graph_password.get_secret_value() if settings.graph_password else None
     driver = GraphDatabase.driver(
         settings.graph_url,
-        auth=(settings.graph_username, password) if password else None,
+        auth=(settings.graph_username, settings.graph_password.get_secret_value()),
         connection_timeout=settings.graph_timeout_seconds,
         connection_acquisition_timeout=settings.graph_timeout_seconds,
         max_transaction_retry_time=MAX_TRANSACTION_RETRY_SECONDS,
