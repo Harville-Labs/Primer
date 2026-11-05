@@ -1,6 +1,6 @@
 # 0011. Run a Neo4j in every chart release by default
 
-- Status: Accepted
+- Status: Superseded by [0014](0014-knowledge-graph-is-always-on.md)
 - Date: 2026-11-02
 
 ## Context
