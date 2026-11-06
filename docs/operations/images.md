@@ -44,6 +44,12 @@ docker run --gpus all -p 8000:8000 -v primer-models:/models \
   ghcr.io/harville-labs/primer-lab:latest-cuda
 ```
 
+One image a default deployment runs is not built for arm64: Text
+Embeddings Inference, which serves the bundled embedder and reranker. It is
+third-party and published for amd64 only. On an arm64 host, replace both
+with servers of your own; [Connecting model providers](providers.md#using-your-own-embedding-server)
+says how.
+
 Each build pushes by digest, and one later job gives all of an image's
 architectures their tags together. A tag applied by each build would belong
 to whichever architecture finished last, and would serve only that one. The

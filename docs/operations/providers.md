@@ -72,8 +72,11 @@ Inside a container, `localhost` is the container. Use
 
 The bundled server is Text Embeddings Inference on CPU, serving
 `onnx-community/Qwen3-Embedding-0.6B-ONNX`. Replace it when you have a GPU,
-or on Apple Silicon: the image is published for amd64 only, and emulated it
-is slow. A native Ollama is the quick fix there.
+or on any arm64 machine: the image is published for amd64 only. Docker
+Desktop on Apple Silicon runs it emulated, and slowly. An arm64 Linux host
+such as a DGX Spark doesn't run it at all unless amd64 emulation is
+registered, and fails with `exec format error`. The reranker is the same
+server, so replace it too. A native Ollama is the quick fix for embeddings.
 
 Choose before the first upload. The model sets the width of every stored
 vector, so changing it later means reindexing.

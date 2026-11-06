@@ -69,8 +69,9 @@ x-graph-env: &graph-env
 
 # The bundled model servers: Text Embeddings Inference on CPU. The image is
 # published for amd64 only (huggingface/text-embeddings-inference#648), so on
-# Apple Silicon it runs emulated, and slowly; a native server of your own is
-# faster there. The flags are the ones docs/operations/models.md explains:
+# Apple Silicon it runs emulated, and slowly, and on an arm64 Linux host
+# without amd64 emulation it does not start at all; use servers of your own
+# there. The flags are the ones docs/operations/models.md explains:
 # Primer sends 32 inputs per call, and a server accepting fewer refuses every
 # batch.
 x-model-server: &model-server
