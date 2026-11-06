@@ -279,31 +279,34 @@ inference:
     # Figures in flight at once. The worker only waits on them, so this is
     # bounded by what the model server can take.
     concurrency: 4
-  # Text Embeddings Inference, the server `inference.*.bundled` runs. One
-  # pinned version for both: TEI returned wrong vectors for Qwen3 until
-  # huggingface/text-embeddings-inference#648, plausible enough that nothing
-  # failed and retrieval was simply worse, so the version a model was
-  # verified against is part of the model. It is published for amd64 only.
+  # llama.cpp's llama-server, the server `inference.*.bundled` runs for
+  # both roles. Published for amd64 and arm64, so the default install runs
+  # natively on a DGX Spark or Apple Silicon as well as on x86. Pinned to
+  # one build, because the build a model was verified against is part of
+  # the model: a server that pools or tokenizes differently returns vectors
+  # that are plausible, fail nothing, and retrieve worse.
+  #
+  # The tag picks the hardware: `server-<build>` for CPU,
+  # `server-cuda-<build>` (CUDA 12) or `server-cuda13-<build>` (CUDA 13,
+  # which a GB10 needs) for an NVIDIA GPU, with a `nvidia.com/gpu` limit in
+  # each role's `bundled.resources`. docs/adr/0015 says why llama.cpp.
   modelServer:
     image:
-      repository: ghcr.io/huggingface/text-embeddings-inference
-      tag: "cpu-1.9.3"
+      repository: ghcr.io/ggml-org/llama.cpp
+      tag: "server-b11804"
       pullPolicy: IfNotPresent
   embeddings:
-    # An OpenAI-compatible /v1 endpoint you run, or a hosted one. Set this
-    # or `bundled.enabled` - not both, and not neither.
+    # An OpenAI-compatible /v1 endpoint you run - vLLM, llama.cpp, Ollama -
+    # or a hosted one. Set this or `bundled.enabled` - not both, and not
+    # neither.
     baseUrl: ""
-    # The name your server answers to: a Hugging Face id for Text Embeddings
-    # Inference or vLLM, Ollama's own name (`qwen3-embedding:0.6b`), or a
-    # hosted model. Primer knows the width and the query and passage prompts
-    # of the models people commonly run, and applies them itself - see
-    # docs/operations/models.md for the list. Do not also configure the
-    # server to add prompts, or they are applied twice.
-    #
-    # The default is what `bundled` serves, and changing it with `bundled`
-    # on changes what it downloads. With your own endpoint, set it to what
-    # that endpoint calls its model.
-    model: onnx-community/Qwen3-Embedding-0.6B-ONNX
+    # The name Primer knows the model by. It finds the width, the query and
+    # passage prompts and the tokenizer from it - see
+    # docs/operations/models.md for the list - so do not also configure the
+    # server to add prompts, or they are applied twice. With your own
+    # endpoint, this is what that endpoint calls its model; the bundled
+    # server answers to it whatever file it loaded.
+    model: Qwen/Qwen3-Embedding-0.6B
     # Empty takes each of these from Primer's table. Set them only for a
     # model the table does not know - Retrieval refuses to start on one with
     # no width - or to override it, such as serving a truncated Matryoshka
@@ -313,31 +316,46 @@ inference:
     documentPrefix: ""
     existingSecret: ""
     apiKeyKey: embedding-api-key
+    # What the embedding server accepts, declared rather than discovered:
+    # an OpenAI-compatible server says nothing about its limits until a
+    # request breaks one. Primer stays inside them, and the parse worker
+    # refuses to start if `ingestion.maxChunkTokens` would not fit.
+    capabilities:
+      # Passages per embedding call while indexing.
+      batchSize: 32
+      # Tokens in one input, its prompt included. llama.cpp and vLLM refuse
+      # a longer input outright rather than truncating it. The bundled
+      # server is sized to this.
+      maxInputTokens: 2048
     # A model server run by this release, so an install embeds with nothing
-    # configured. CPU only, reachable only from Retrieval, and it downloads
-    # `model` from Hugging Face on first start into the volume below - the
-    # one thing here that needs to reach the internet. A GPU, or one server
-    # shared by several deployments, is a model server you run yourself:
-    # see docs/operations/models.md.
+    # configured. CPU by default, reachable only from Retrieval, and it
+    # downloads `bundled.gguf` from Hugging Face on first start into the
+    # volume below - the one thing here that needs to reach the internet.
+    # One server shared by several deployments is a model server you run
+    # yourself: see docs/operations/providers.md.
     bundled:
       enabled: true
-      # How the model's token states become one vector. Qwen3-Embedding
-      # pools the last token, and the ONNX export does not say so, so TEI
-      # refuses to start without it - better than mean-pooling, which
-      # returns plausible vectors that retrieve badly. Empty lets TEI read
-      # it from a model that ships its pooling config.
-      pooling: last-token
+      # The weights, as `<Hugging Face repository>[:<quantization>]`. The
+      # official GGUF of `model`; change the two together.
+      gguf: Qwen/Qwen3-Embedding-0.6B-GGUF:Q8_0
+      # How the model's token states become one vector: `last` for the
+      # Qwen3 models, `mean` or `cls` for most others - the model card says.
+      # Mean pooling a Qwen3 model returns plausible vectors that retrieve
+      # badly, which is why this is stated rather than left to the file.
+      pooling: last
+      # Inputs embedded at once. Each holds `capabilities.maxInputTokens`
+      # of context, so memory grows with both.
+      parallel: 4
       persistence:
-        # The ONNX weights alone are 2.1 GB, and TEI keeps what it
-        # downloads beside them.
-        size: 10Gi
+        # The Q8_0 weights are 640 MB.
+        size: 4Gi
         storageClass: ""   # the cluster default
       resources:
         requests:
           cpu: "2"
-          memory: 6Gi
+          memory: 2Gi
         limits:
-          memory: 16Gi
+          memory: 4Gi
 
   # Optional. A reranker reads a question and a passage together and scores
   # the pair, which a vector search cannot do - its two embeddings were made
@@ -349,38 +367,39 @@ inference:
   # then goes down also falls back to that ordering rather than failing the
   # search.
   rerank:
-    # A TEI-compatible `/rerank` endpoint you run. Exclusive with
-    # `bundled.enabled`.
+    # A `/rerank` endpoint you run: vLLM and llama.cpp serve it at the root,
+    # so this has no `/v1`. Exclusive with `bundled.enabled`.
     baseUrl: ""
     # What `bundled` serves, or what your endpoint calls its model.
-    # BAAI/bge-reranker-base rather than a larger one: on CPU the reranker
-    # reads twenty passages per question, and this one does that in well
-    # under a second. docs/operations/models.md has the comparison.
-    model: BAAI/bge-reranker-base
+    model: Qwen/Qwen3-Reranker-0.6B
     existingSecret: ""
     apiKeyKey: rerank-api-key
     # How many the vector search fetches before reranking. Wider than the
-    # answer needs on purpose; the shortlist is what the reranker reads.
-    # The bundled server accepts up to 32 in one call.
+    # answer needs on purpose; the shortlist is what the reranker reads, and
+    # reading it is most of a search's time on CPU - about five seconds for
+    # twenty passages on fifteen cores, and milliseconds on a GPU.
     candidates: 20
     # The same kind of server as `embeddings.bundled`, reachable only from
     # Retrieval. Turn it off to search without reranking, on a node that
-    # cannot spare the memory.
+    # cannot spare the CPU.
     bundled:
       enabled: true
+      gguf: ggml-org/Qwen3-Reranker-0.6B-Q8_0-GGUF
+      # Tokens in one question-and-passage pair. A passage of
+      # `ingestion.maxChunkTokens` and a long question fit with room to
+      # spare; a pair that does not fails that search's reranking, which
+      # then keeps the vector ordering.
+      maxInputTokens: 2048
+      parallel: 4
       persistence:
-        size: 6Gi
+        size: 4Gi
         storageClass: ""
       resources:
         requests:
-          # Bursty - once per search, not once per passage - so less CPU
-          # than the embedder, which carries whole ingestion runs.
-          cpu: "1"
-          memory: 3Gi
+          cpu: "2"
+          memory: 2Gi
         limits:
-          # Set by the warmup batch, not the model's size: 6Gi was
-          # OOM-killed on load.
-          memory: 10Gi
+          memory: 4Gi
 
 # --- Vector store -------------------------------------------------------
 #
@@ -694,10 +713,9 @@ ingestion:
   # ask broad questions of; lower it for dense reference material where a
   # long chunk buries the sentence that actually answers.
   #
-  # It must stay under the embedding model's own input limit. Anything
-  # served by Text Embeddings Inference should also be started with
-  # --auto-truncate, so a single over-long chunk is trimmed rather than
-  # failing the whole batch it arrived in.
+  # It must not exceed `inference.embeddings.capabilities.maxInputTokens`,
+  # or the parse worker refuses to start: the embedding server would refuse
+  # every batch holding a longer chunk.
   maxChunkTokens: 512
   # Chunking splits on structure first, and a document whose labels are
   # recognised as headings - a form, a W2, a statement - ends up one value

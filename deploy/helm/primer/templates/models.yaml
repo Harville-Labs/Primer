@@ -1,55 +1,49 @@
 {{/*
 The embedding and reranking servers this release runs, when it runs them.
 
-Text Embeddings Inference for both, on CPU, one replica each. They are one
-template because they are one kind of thing: the same image, the same
-hardening, the same model cache, differing in the model and a few flags. A
-second copy of this would be the one whose securityContext nobody updated.
+llama.cpp's llama-server for both, one replica each. They are one template
+because they are one kind of thing: the same image, the same hardening, the
+same model cache, differing in the weights and a few flags. A second copy of
+this would be the one whose securityContext nobody updated.
 
 A StatefulSet rather than a Deployment for the cache's sake. The model is a
-download of gigabytes onto a ReadWriteOnce volume, and a Deployment's
-rolling update starts the new pod before stopping the old one - on another
-node that waits forever for a volume the old pod still holds.
+download onto a ReadWriteOnce volume, and a Deployment's rolling update
+starts the new pod before stopping the old one - on another node that waits
+forever for a volume the old pod still holds.
 
-Run under the same hardening as every other pod here. TEI writes only the
-model cache, at /data, and /tmp; HF_HOME points the Hugging Face client's
-other state at the cache too, since the image's home is not writable.
+Run under the same hardening as every other pod here. llama-server writes
+only the download cache, which LLAMA_CACHE puts on the volume at /data;
+HOME points the Hugging Face client's other state at /tmp, since the
+image's home is not writable.
 
-The flags are the ones docs/operations/models.md measured. Each cost a
-failure somewhere:
+The flags, and what each one prevents:
 
-  --max-batch-tokens         what warmup allocates against, so it is what an
-                             OOM at startup is made of.
-  --auto-truncate            an over-long input is trimmed rather than
-                             failing the whole batch it arrived in.
-  --max-client-batch-size    at least what Primer sends in one call: 32
-                             passages from the document embedder, and the
-                             whole rerank shortlist.
-  --max-concurrent-requests  counted in inputs, not requests. Below the
-                             client batch size, every batch gets a 429.
-  --tokenization-workers     reranker only. Sized from the node otherwise,
-                             and each holds its own copy of a 250k-entry
-                             vocabulary; on a large node that was OOM-killed
-                             after reporting ready.
+  --alias         the server answers to the name Primer knows the model
+                  by, not the file it loaded, so /v1/models agrees with
+                  Retrieval's configuration.
+  --kv-unified-per-slot
+                  each of the --parallel slots holds the declared input
+                  limit, and the KV cache is sized to all of them. A longer
+                  input is refused with a 400, not truncated; --ctx-size
+                  alone would be divided between the slots, and refuse
+                  chunks the worker was told were fine.
+  --ubatch-size   an embedding is computed over its whole input in one
+                  physical batch, so this has to hold the longest one.
+  --pooling       stated, never left to the file. See values.yaml.
 */}}
 {{- $full := include "primer.fullname" . }}
 {{- $image := .Values.inference.modelServer.image }}
 {{- $servers := list }}
 {{- with .Values.inference.embeddings }}
 {{- if .bundled.enabled }}
-{{- $args := list }}
-{{- with .bundled.pooling }}
-{{- $args = list "--pooling" . }}
-{{- end }}
-{{- $servers = append $servers (dict "component" "embeddings" "model" .model "bundled" .bundled "args" $args "startupSeconds" 900) }}
+{{- $tokens := int .capabilities.maxInputTokens }}
+{{- $args := list "--embedding" "--pooling" .bundled.pooling }}
+{{- $servers = append $servers (dict "component" "embeddings" "model" .model "bundled" .bundled "tokens" $tokens "args" $args) }}
 {{- end }}
 {{- end }}
 {{- with .Values.inference.rerank }}
 {{- if .bundled.enabled }}
-{{- if gt (int .candidates) 32 }}
-{{- fail "inference.rerank.candidates is above 32, the most the bundled reranker accepts in one call. Lower it, or run a reranker of your own and set inference.rerank.baseUrl." }}
-{{- end }}
-{{- $servers = append $servers (dict "component" "reranker" "model" .model "bundled" .bundled "args" (list "--tokenization-workers" "4") "startupSeconds" 600) }}
+{{- $servers = append $servers (dict "component" "reranker" "model" .model "bundled" .bundled "tokens" (int .bundled.maxInputTokens) "args" (list "--reranking")) }}
 {{- end }}
 {{- end }}
 {{- range $server := $servers }}
@@ -96,31 +90,36 @@ spec:
       securityContext:
         {{- toYaml $.Values.podSecurityContext | nindent 8 }}
       containers:
-        - name: tei
+        - name: llama-server
           image: {{ printf "%s:%s" $image.repository $image.tag }}
           imagePullPolicy: {{ $image.pullPolicy }}
           securityContext:
             {{- toYaml $.Values.securityContext | nindent 12 }}
           args:
-            - --model-id
-            - {{ required (printf "a model is required for the bundled %s server" $component) $server.model | quote }}
+            - --host
+            - "0.0.0.0"
             - --port
             - "8080"
-            - --max-batch-tokens
-            - "4096"
-            - --auto-truncate
-            - --max-client-batch-size
-            - "32"
-            - --max-concurrent-requests
-            - "256"
+            - -hf
+            - {{ required (printf "inference.*.bundled.gguf is required for the bundled %s server" $component) $server.bundled.gguf | quote }}
+            - --alias
+            - {{ required (printf "a model is required for the bundled %s server" $component) $server.model | quote }}
+            - --kv-unified-per-slot
+            - {{ $server.tokens | quote }}
+            - --parallel
+            - {{ $server.bundled.parallel | quote }}
+            - --batch-size
+            - {{ $server.tokens | quote }}
+            - --ubatch-size
+            - {{ $server.tokens | quote }}
             {{- range $server.args }}
             - {{ . | quote }}
             {{- end }}
           env:
-            - name: HF_HOME
+            - name: LLAMA_CACHE
               value: /data
-            - name: HUGGINGFACE_HUB_CACHE
-              value: /data
+            - name: HOME
+              value: /tmp
           ports:
             - name: http
               containerPort: 8080
@@ -130,7 +129,7 @@ spec:
           startupProbe:
             httpGet: { path: /health, port: http }
             periodSeconds: 10
-            failureThreshold: {{ div $server.startupSeconds 10 }}
+            failureThreshold: 60
           readinessProbe:
             httpGet: { path: /health, port: http }
             periodSeconds: 15

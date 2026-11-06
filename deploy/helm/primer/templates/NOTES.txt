@@ -22,7 +22,7 @@ What is configured
   Identity      {{ if eq .Values.auth.mode "oidc" }}OIDC via {{ .Values.auth.oidc.issuerUrl }}{{ else }}{{ .Values.auth.mode }}{{ end }}
   Chat          {{ .Values.inference.chat.baseUrl | default "not set - add a provider from the settings page" }}
   Embeddings    {{ .Values.inference.embeddings.model }}{{ with .Values.inference.embeddings.dimensions }} ({{ . }} dimensions){{ end }}
-  Reranking     {{ if .Values.inference.rerank.baseUrl }}{{ .Values.inference.rerank.model }}, {{ .Values.inference.rerank.candidates }} candidates{{ else }}off - vector ordering is used as-is{{ end }}
+  Reranking     {{ if include "primer.rerankUrl" . }}{{ .Values.inference.rerank.model }}{{ if .Values.inference.rerank.bundled.enabled }} (run by this release){{ end }}, {{ .Values.inference.rerank.candidates }} candidates{{ else }}off - vector ordering is used as-is{{ end }}
   Database      {{ if .Values.postgresql.bundled.enabled }}PostgreSQL run by this release - back up its volume{{ else }}from {{ .Values.postgresql.existingSecret }}{{ end }}
   Vector store  {{ include "primer.qdrantUrl" . }}{{ if .Values.vectorStore.qdrant.enabled }} (run by this release){{ end }}
   Graph         {{ include "primer.graphUrl" . }}{{ if .Values.graph.neo4j.enabled }} (run by this release){{ end }}, {{ .Values.graph.hops }} hops{{ with include "primer.graphExtraction" . | fromYaml }}, extracted by {{ .model }}{{ else }}, nothing extracts it{{ end }}

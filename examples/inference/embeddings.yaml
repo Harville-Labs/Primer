@@ -1,44 +1,25 @@
 ---
-# Text Embeddings Inference, CPU-only, serving an OpenAI-compatible
-# /v1/embeddings - which is all Primer asks for.
+# The embedding server the chart runs as `inference.embeddings.bundled`,
+# standing alone: llama.cpp's llama-server with the official GGUF of
+# Qwen3-Embedding-0.6B. The image is published for amd64 and arm64.
 #
-# Every flag below cost debugging time somewhere. See
-# docs/operations/models.md for the measurements.
+# The flags mirror deploy/helm/primer/templates/models.yaml, whose comment
+# says what each one prevents. Keep the two together: a server that pools
+# or tokenizes differently from the one a library was indexed with returns
+# vectors that fail nothing and retrieve worse, and Retrieval refuses it
+# once it notices (docs/operations/configuration.md, "Changing the model").
 #
-#   --model-id      the ONNX export, not Qwen's own repository. That one
-#                   publishes no ONNX, so TEI falls back to Candle and
-#                   runs at roughly a quarter of the throughput - flat
-#                   under batching and concurrency alike. Same vectors.
-#   --pooling       required here and not on Qwen's repository, which
-#                   ships the pooling config TEI reads. Qwen3-Embedding
-#                   pools the last token; mean-pooling it returns
-#                   plausible vectors that retrieve badly. TEI refuses to
-#                   start rather than guess, which is the behaviour you
-#                   want.
-#   --max-batch-tokens        what warmup allocates against, so it is what
-#                   an OOM at startup is usually made of.
-#   --auto-truncate an over-long input is trimmed rather than failing the
-#                   whole batch it arrived in.
-#   --max-client-batch-size   at least what the client sends. Primer's
-#                   document embedder sends 32; a lower ceiling rejects
-#                   every ingestion batch with a 422.
-#   --max-concurrent-requests counted in *inputs*, not requests: a POST
-#                   carrying 32 inputs costs 32 against it. Below the
-#                   client batch size, every ingestion batch gets a 429.
-#
-# The image tag is pinned rather than floating. TEI returned wrong vectors
-# for Qwen3 until huggingface/text-embeddings-inference#648 - a bug that
-# produces plausible embeddings and silently worse retrieval, which is the
-# kind nobody notices. A model whose correctness depends on the server
-# version should name the version it was verified against.
+# A StatefulSet so a rollout stops the old pod before starting the new one:
+# the model cache is ReadWriteOnce.
 apiVersion: apps/v1
-kind: Deployment
+kind: StatefulSet
 metadata:
   name: primer-embeddings
   labels:
     app: primer-embeddings
 spec:
   replicas: 1
+  serviceName: primer-embeddings
   selector:
     matchLabels:
       app: primer-embeddings
@@ -47,70 +28,92 @@ spec:
       labels:
         app: primer-embeddings
     spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
       containers:
-        - name: tei
-          image: ghcr.io/huggingface/text-embeddings-inference:cpu-1.9.3
+        - name: llama-server
+          # `server-cuda-b11804` (CUDA 12) or `server-cuda13-b11804`
+          # (CUDA 13, which a GB10 needs) for an NVIDIA GPU, with a
+          # `nvidia.com/gpu: 1` limit below.
+          image: ghcr.io/ggml-org/llama.cpp:server-b11804
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
           args:
-            - --model-id
-            - onnx-community/Qwen3-Embedding-0.6B-ONNX
-            - --pooling
-            - last-token
+            - --host
+            - "0.0.0.0"
             - --port
             - "8080"
-            - --max-batch-tokens
-            - "4096"
-            - --auto-truncate
-            - --max-client-batch-size
-            - "32"
-            - --max-concurrent-requests
-            - "256"
+            - -hf
+            - Qwen/Qwen3-Embedding-0.6B-GGUF:Q8_0
+            # The name Primer's `inference.embeddings.model` uses.
+            - --alias
+            - Qwen/Qwen3-Embedding-0.6B
+            # Each of the four slots holds 2048 tokens, the input limit
+            # `inference.embeddings.capabilities.maxInputTokens` declares.
+            - --kv-unified-per-slot
+            - "2048"
+            - --parallel
+            - "4"
+            - --batch-size
+            - "2048"
+            - --ubatch-size
+            - "2048"
+            - --embedding
+            # Qwen3 embeds from the last token. Mean pooling returns
+            # plausible vectors that retrieve badly.
+            - --pooling
+            - last
           env:
-            - name: HUGGINGFACE_HUB_CACHE
+            - name: LLAMA_CACHE
               value: /data
+            - name: HOME
+              value: /tmp
           ports:
             - name: http
               containerPort: 8080
-          readinessProbe:
-            httpGet:
-              path: /health
-              port: 8080
-            initialDelaySeconds: 60
-            periodSeconds: 15
+          # The first start downloads 640 MB.
+          startupProbe:
+            httpGet: { path: /health, port: http }
+            periodSeconds: 10
             failureThreshold: 60
+          readinessProbe:
+            httpGet: { path: /health, port: http }
+            periodSeconds: 15
           livenessProbe:
-            httpGet:
-              path: /health
-              port: 8080
+            httpGet: { path: /health, port: http }
             periodSeconds: 30
           resources:
             requests:
               cpu: "2"
-              memory: 6Gi
+              memory: 2Gi
             limits:
-              memory: 16Gi
+              memory: 4Gi
           volumeMounts:
             - name: model-cache
               mountPath: /data
+            - name: tmp
+              mountPath: /tmp
       volumes:
-        - name: model-cache
-          persistentVolumeClaim:
-            claimName: primer-embeddings-model-cache
----
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: primer-embeddings-model-cache
-spec:
-  accessModes:
-    - ReadWriteOnce
-  resources:
-    requests:
-      # 4Gi held the Candle safetensors with room to spare. The ONNX build
-      # is bigger - model.onnx_data alone is 2.09GB - and lands beside them
-      # rather than replacing them, which left 2.8GB free against a ~2.1GB
-      # download. 10Gi is slack enough that this is not revisited.
-      storage: 10Gi
-  # storageClassName: your-storage-class
+        - name: tmp
+          emptyDir:
+            sizeLimit: 1Gi
+  volumeClaimTemplates:
+    - metadata:
+        name: model-cache
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        # storageClassName: your-storage-class
+        resources:
+          requests:
+            storage: 4Gi
 ---
 apiVersion: v1
 kind: Service
@@ -124,4 +127,4 @@ spec:
   ports:
     - name: http
       port: 8080
-      targetPort: 8080
+      targetPort: http
