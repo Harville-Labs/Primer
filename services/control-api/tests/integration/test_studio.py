@@ -19,6 +19,7 @@ from uuid import UUID
 
 import pytest
 import pytest_asyncio
+from control_credentials import FORWARDED
 from httpx2 import ASGITransport, AsyncClient, Response
 from PIL import Image
 from primer_control.app import create_app
@@ -114,7 +115,9 @@ async def make_client(
             source_store=source_store,
             studio_store=studio_store,
         )
-        http = AsyncClient(transport=ASGITransport(app=app), base_url="http://control")
+        http = AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://control", headers=FORWARDED
+        )
         clients.append(http)
         return http
 

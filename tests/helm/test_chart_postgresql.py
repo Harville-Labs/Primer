@@ -13,7 +13,7 @@ import pytest
 from test_chart import containers, named, of_kind, refusal, render, workloads
 
 BUNDLED = ("postgresql.bundled.enabled=true",)
-DATABASE_URL = "postgresql://primer@primer-primer-postgresql:5432/primer"
+DATABASE_ADDRESS = "@primer-primer-postgresql:5432/primer"
 
 
 def database_env(workload: dict[str, Any]) -> dict[str, dict[str, Any]]:
@@ -38,16 +38,18 @@ def test_by_default_no_postgresql_is_run() -> None:
 
 
 def test_every_database_user_is_pointed_at_the_bundled_server() -> None:
-    """With no password in the URI: PGPASSWORD carries it, from the Secret."""
+    """With no password in the URI: PGPASSWORD carries it, from a Secret.
+
+    Which login each one uses is test_chart_database's concern.
+    """
     rendered = render(*BUNDLED)
     users = {name: database_env(w) for name, w in workloads(rendered).items()}
     users = {name: env for name, env in users.items() if env}
 
-    assert len(users) >= 6, "services, workers and the two SQL migrations"
+    assert len(users) >= 4, "Control, Chat and the two SQL migrations"
     for name, env in users.items():
-        assert env["PRIMER_DATABASE_URL"]["value"] == DATABASE_URL, name
-        reference = env["PGPASSWORD"]["valueFrom"]["secretKeyRef"]
-        assert reference == {"name": "primer-postgres", "key": "postgres-password"}, name
+        assert env["PRIMER_DATABASE_URL"]["value"].endswith(DATABASE_ADDRESS), name
+        assert "secretKeyRef" in env["PGPASSWORD"]["valueFrom"], name
         assert "value" not in env["PGPASSWORD"]
 
 

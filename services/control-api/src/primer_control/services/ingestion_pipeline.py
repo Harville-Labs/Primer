@@ -92,3 +92,16 @@ STAGES: dict[StageName, Stage] = {
 
 def stage_for(name: StageName) -> Stage:
     return STAGES[name]
+
+
+#: The stage a job waits for, by the state it rests in between stages. Every
+#: message a worker receives is sent by Control for one of these, whether a
+#: request or a completed stage put the job there.
+WAITING_FOR: dict[IngestionStatus, StageName] = {
+    stage.entry: stage.name for stage in STAGES.values()
+}
+
+
+def stage_waiting(status: IngestionStatus) -> StageName | None:
+    """The stage a job in `status` needs a message for, if any."""
+    return WAITING_FOR.get(status)

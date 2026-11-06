@@ -8,16 +8,15 @@ the edge injects.
 
 from __future__ import annotations
 
-from typing import Annotated, Literal
+from typing import Annotated
 
+from primer_service.identity import IdentitySettings
 from primer_storage import check_url
-from pydantic import AfterValidator, Field, SecretStr, model_validator
+from pydantic import AfterValidator, Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-AuthMode = Literal["disabled", "oidc"]
 
-
-class Settings(BaseSettings):
+class Settings(BaseSettings, IdentitySettings):
     """Deployment configuration for the Control API."""
 
     #: An empty variable is an unset one. Compose can only pass an optional
@@ -25,8 +24,6 @@ class Settings(BaseSettings):
     #: and "" for Studio's retention days would be a parse error rather than
     #: "not set".
     model_config = SettingsConfigDict(env_prefix="PRIMER_", extra="forbid", env_ignore_empty=True)
-
-    auth_mode: AuthMode = "disabled"
 
     database_url: str = Field(
         default="postgresql+asyncpg://primer:primer@localhost:5432/primer",
@@ -116,7 +113,11 @@ class Settings(BaseSettings):
 
     internal_api_token: SecretStr | None = Field(
         default=None,
-        description="Shared credential for the cluster-internal worker API; unset denies it",
+        description="Credential Chat presents to the internal authorization API; unset denies it",
+    )
+    worker_token: SecretStr | None = Field(
+        default=None,
+        description="Credential the ingestion workers present to the job API; unset denies it",
     )
     job_lease_seconds: int = Field(
         default=300,
@@ -142,31 +143,4 @@ class Settings(BaseSettings):
         description="How often Control looks for jobs whose message was never sent",
     )
 
-    subject_header: str = Field(
-        default="X-Forwarded-User",
-        description="Edge-injected header carrying the stable OIDC subject",
-    )
-    email_header: str = Field(default="X-Forwarded-Email")
-    groups_header: str = Field(default="X-Forwarded-Groups")
-    groups_delimiter: str = Field(default=",", min_length=1)
-    #: The group whose members may see and change how this deployment is
-    #: wired. Unset with authentication on means nobody, which is the safe
-    #: reading of an operator who has not decided yet.
-    admin_group: str | None = Field(default=None)
     request_id_header: str = Field(default="X-Request-ID")
-
-    @model_validator(mode="after")
-    def _oidc_requires_configured_headers(self) -> Settings:
-        """OIDC mode without a subject header would authenticate nobody.
-
-        Failing at startup is the only safe outcome: the alternative is a
-        deployment that believes it is authenticated but rejects every user,
-        or worse, one that silently falls back to a local identity.
-        """
-        if self.auth_mode == "oidc" and not self.subject_header.strip():
-            raise ValueError("auth_mode='oidc' requires a non-empty subject_header")
-        return self
-
-    @property
-    def auth_enabled(self) -> bool:
-        return self.auth_mode == "oidc"

@@ -34,6 +34,7 @@ from primer_contracts.indexing import (
     SearchResult,
 )
 from primer_contracts.retrieval import RetrievedChunk, SourceLocator
+from primer_service.credentials import WEB_TOKEN_HEADER
 
 LIBRARY_ID = uuid.uuid5(uuid.NAMESPACE_URL, "chat-library")
 OTHER_LIBRARY_ID = uuid.uuid5(uuid.NAMESPACE_URL, "other-library")
@@ -229,12 +230,17 @@ def parse_events(body: str) -> list[dict[str, Any]]:
     return events
 
 
+#: What the web app presents with the identity headers it forwards. The
+#: conftest puts it in the environment, so every OIDC `Settings` expects it.
+WEB_TOKEN = "test-web-token"  # noqa: S105 - a test value
+
+
 class ChatUser:
     """One edge-authenticated subject talking to Chat."""
 
     def __init__(self, http: AsyncClient, subject: str) -> None:
         self._http = http
-        self._headers = {"X-Forwarded-User": subject}
+        self._headers = {"X-Forwarded-User": subject, WEB_TOKEN_HEADER: WEB_TOKEN}
 
     async def ask(
         self,

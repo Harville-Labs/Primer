@@ -60,6 +60,28 @@ DDL, which means the role they connect as does not need to be able to. No
 extension is needed, so the database can be one an administrator hands you
 without superuser rights.
 
+### A role per service
+
+Set `PRIMER_DATABASE_RUNTIME_ROLE` and `PRIMER_DATABASE_RUNTIME_PASSWORD`
+when running a service's migrations, and after migrating that service's
+schema they create the role if it is missing, set its password, and grant
+it what the service uses at runtime: the rows of that one schema, and
+nothing else. It can't read another service's schema, alter a table, or
+change Alembic's record of which migrations have run. The grants are made
+again on every run, so the tables a migration adds are covered. To rotate a
+password, change it and migrate again.
+
+The migrations then need a login that may create roles (`CREATEROLE`).
+Set both variables or neither; one alone stops the run.
+
+The chart does this for a bundled PostgreSQL. Control connects as
+`primer_control`, Chat as `primer_chat`, and Lab as `primer_lab`, with
+passwords generated into the release's `-internal` Secret. Only the
+migration Jobs hold the owner's password. For a PostgreSQL you run, the
+chart passes your one URI to every service, because it can't build a URI
+for a role on a server whose address it doesn't know. Compose keeps one
+login too, since it runs one person's Primer on one machine.
+
 ## Checking where you are
 
 ```bash
@@ -82,8 +104,8 @@ Alembic's own version table.
 
 ## Schema layout
 
-Control's tables live in a dedicated `control` schema and Chat's in `chat`.
-Neither service's migrations touch the other's tables, so they can share one
+Control's tables live in a dedicated `control` schema, Chat's in `chat`,
+and Lab's in `lab`. No service's migrations touch another's tables, so they can share one
 PostgreSQL instance without coordinating releases. Retrieval has no schema:
 its vectors are in Qdrant, which creates its collection on first use.
 

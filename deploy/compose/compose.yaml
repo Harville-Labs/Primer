@@ -38,19 +38,27 @@ x-hardening: &hardening
     - /tmp:size=256m,mode=1777
     - /home/primer:size=32m,mode=0700,uid=10001,gid=10001
 
-# One URL for every database user. Setting PRIMER_DATABASE_URL points them
+# One URL for every database user: Compose runs one user's Primer on one
+# machine, so it keeps the one login rather than a role per service as the
+# chart does. Setting PRIMER_DATABASE_URL points them
 # all at your own PostgreSQL and leaves the bundled one stopped; unset, they
 # use the bundled one, which then needs POSTGRES_PASSWORD. It is a plain
 # postgresql:// URL, and each service picks its own driver from it.
 x-database-url: &database-url ${PRIMER_DATABASE_URL:-postgresql://primer:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD, or PRIMER_DATABASE_URL to use your own PostgreSQL}@postgres:5432/primer}
+
+# Two credentials, one per kind of caller. Chat presents the internal token
+# to Control and Retrieval; the workers present the worker token, which
+# reaches only the job API and Retrieval's writes. A worker parses whatever
+# is uploaded, so it is the likeliest thing to be compromised, and it is not
+# handed what would let it ask Control on any user's behalf.
+x-internal-token: &internal-token ${PRIMER_INTERNAL_API_TOKEN:?set PRIMER_INTERNAL_API_TOKEN}
+x-worker-token: &worker-token ${PRIMER_WORKER_TOKEN:?set PRIMER_WORKER_TOKEN, a second random value like PRIMER_INTERNAL_API_TOKEN}
 
 # Retrieval is not given this: it holds vectors in Qdrant and the graph in
 # Neo4j, and a service with no use for the database should not hold its
 # password.
 x-service-env: &service-env
   PRIMER_DATABASE_URL: *database-url
-  PRIMER_INTERNAL_API_TOKEN: ${PRIMER_INTERNAL_API_TOKEN:?set PRIMER_INTERNAL_API_TOKEN}
-  PRIMER_SERVICE_TOKEN: ${PRIMER_INTERNAL_API_TOKEN:?set PRIMER_INTERNAL_API_TOKEN}
   PRIMER_SOURCE_STORE_URL: ${PRIMER_SOURCE_STORE_URL:-file:///var/lib/primer/sources}
 
 # PRIMER_SOURCE_DIR, PRIMER_POSTGRES_DIR, PRIMER_QDRANT_DIR and
@@ -117,8 +125,11 @@ x-model-server: &model-server
   restart: unless-stopped
 
 # What both ingestion workers share; each adds the settings for its stages.
+# No database: the workers reach jobs through Control's API.
 x-worker-env: &worker-env
-  <<: [*service-env, *source-store-env]
+  <<: *source-store-env
+  PRIMER_SOURCE_STORE_URL: ${PRIMER_SOURCE_STORE_URL:-file:///var/lib/primer/sources}
+  PRIMER_SERVICE_TOKEN: *worker-token
   PRIMER_BROKER_URL: amqp://primer:${RABBITMQ_PASSWORD:?set RABBITMQ_PASSWORD}@rabbitmq:5672//
   PRIMER_CONTROL_URL: http://control:8000
   PRIMER_RETRIEVAL_URL: http://retrieval:8000
@@ -373,6 +384,8 @@ services:
         condition: service_healthy
     environment:
       <<: [*service-env, *source-store-env]
+      PRIMER_INTERNAL_API_TOKEN: *internal-token
+      PRIMER_WORKER_TOKEN: *worker-token
       # Fixed, not configurable: see the note at the top of this file.
       PRIMER_AUTH_MODE: disabled
       PRIMER_BROKER_URL: amqp://primer:${RABBITMQ_PASSWORD:?set RABBITMQ_PASSWORD}@rabbitmq:5672//
@@ -421,7 +434,8 @@ services:
       migrate-graph:
         condition: service_completed_successfully
     environment:
-      PRIMER_INTERNAL_API_TOKEN: ${PRIMER_INTERNAL_API_TOKEN:?set PRIMER_INTERNAL_API_TOKEN}
+      PRIMER_INTERNAL_API_TOKEN: *internal-token
+      PRIMER_WORKER_TOKEN: *worker-token
       PRIMER_QDRANT_URL: ${PRIMER_QDRANT_URL:-http://qdrant:6333}
       PRIMER_QDRANT_API_KEY: ${PRIMER_QDRANT_API_KEY:-}
       PRIMER_QDRANT_LAYOUT: ${PRIMER_QDRANT_LAYOUT:-memory}
@@ -462,6 +476,7 @@ services:
         condition: service_healthy
     environment:
       <<: *service-env
+      PRIMER_SERVICE_TOKEN: *internal-token
       # Fixed, not configurable: see the note at the top of this file.
       PRIMER_AUTH_MODE: disabled
       PRIMER_CONTROL_URL: http://control:8000

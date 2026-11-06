@@ -360,7 +360,7 @@ metadata:
   labels:
     {{- include "primer.labels" . | nindent 4 }}
 spec:
-  # The services and workers that are given the database, and the hooks that
+  # The services that are given the database, and the hooks that
   # migrate it. The web app and the proxy never open it.
   podSelector:
     matchLabels:
@@ -373,7 +373,7 @@ spec:
         - port: 5432
           protocol: TCP
       from:
-        {{- range $component := concat (list "control" "chat") $workers $migrations $lab $studio }}
+        {{- range $component := concat (list "control" "chat") $migrations $lab $studio }}
         - podSelector:
             matchLabels:
               {{- include "primer.selectorLabels" $ | nindent 14 }}

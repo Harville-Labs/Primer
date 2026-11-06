@@ -2,10 +2,12 @@ import type { RequestEvent } from '@sveltejs/kit';
 import { describe, expect, it, vi } from 'vitest';
 import type { DeploymentCapabilities, SteeredChatRequest } from '#lib/api/types.ts';
 
-vi.mock('$app/env/private', () => ({
-	PRIMER_CONTROL_URL: 'http://control.test',
-	PRIMER_LAB_URL: 'http://lab.test',
-}));
+vi.mock('$app/env/private', async () =>
+	(await import('#lib/server/private-env.testing.ts')).privateEnv({
+		PRIMER_CONTROL_URL: 'http://control.test',
+		PRIMER_LAB_URL: 'http://lab.test',
+	}),
+);
 
 const { POST } = await import('./+server');
 

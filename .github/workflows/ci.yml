@@ -195,11 +195,12 @@ jobs:
         run: helm package deploy/helm/primer --destination dist
 
   images:
-    # Only from main. A pull request builds no image: the arm64 builds of
-    # the worker and Lab cost more runner time than every other job here put
-    # together, and a pull request could not publish what it built anyway.
-    # The price is that a change which breaks a Dockerfile fails here, after
-    # it merges, rather than in review.
+    # Only from main. A pull request builds no image here: the arm64 builds
+    # of the worker and Lab cost more runner time than every other job here
+    # put together, and a pull request could not publish what it built
+    # anyway. The Compose workflow builds the amd64 API, worker and web
+    # images on every pull request, so what can break unseen until merge is
+    # an arm64 build or Lab's.
     #
     # Two architectures, each built on a runner of its own architecture
     # rather than emulated. The worker image carries torch and Docling, and a

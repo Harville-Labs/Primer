@@ -1,6 +1,7 @@
 # Architecture
 
-Primer is four processes, each owning exactly one thing.
+Primer is five processes, each owning exactly one thing, and a sixth that
+an operator can add.
 
 <div class="primer-diagram" markdown>
 ![Primer system architecture](../assets/diagrams/architecture.svg#only-light)
@@ -10,9 +11,11 @@ Primer is four processes, each owning exactly one thing.
 | Process | Owns |
 | --- | --- |
 | Control API | What exists, and who may see it |
+| Chat | Conversations, and the answers in them |
 | Ingestion workers | Turning files into passages, and passages into graphs |
 | Retrieval | The vector store and the knowledge graph — exclusively |
 | Web app | What the user sees |
+| Lab (optional) | A research model it loads itself, and the edits made to it |
 
 ## The rules that shape it
 
@@ -22,7 +25,13 @@ Two workers handed the same message therefore cannot both believe they are
 the one doing the work.
 
 **Workers hold no database credentials.** Every transition is a request to
-Control. A compromised worker cannot read a library it was not handed.
+Control, made with a token only the workers hold. A compromised worker
+cannot read a library it was not handed, and cannot claim to be a user.
+
+**Each service reaches only its own schema.** Control, Chat and Lab share a
+PostgreSQL but, with the bundled one, each connects as a role granted the
+rows of its own schema and nothing else. See
+[a role per service](../operations/migrations.md#a-role-per-service).
 
 **Retrieval is the only index client.** Nothing else names a collection, a
 filter syntax, or a Cypher query, and only Retrieval holds Qdrant's address.

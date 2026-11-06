@@ -46,6 +46,7 @@ def client() -> TestClient:
             embedding_base_url="http://nothing-here:8080/v1",
             embedding_dimensions=384,
             internal_api_token=SERVICE_TOKEN,
+            worker_token=SERVICE_TOKEN,
         ),
         store=object(),  # ty: ignore[invalid-argument-type]
         verify_embedder=lambda _consequence: None,
@@ -172,6 +173,7 @@ def client_storing(store: Any) -> TestClient:
             embedding_base_url="http://nothing-here:8080/v1",
             embedding_dimensions=384,
             internal_api_token=SERVICE_TOKEN,
+            worker_token=SERVICE_TOKEN,
         ),
         store=store,
         verify_embedder=lambda _consequence: None,

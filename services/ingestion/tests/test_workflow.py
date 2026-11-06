@@ -97,19 +97,10 @@ class RecordingStage:
             raise self.error
 
 
-class RecordingPublisher:
-    def __init__(self) -> None:
-        self.published: list[tuple[StageName, UUID]] = []
-
-    def __call__(self, stage: StageName, job_id: UUID) -> None:
-        self.published.append((stage, job_id))
-
-
 def run(
     stage: StageName,
     control: FakeControl,
     handler: RecordingStage,
-    publisher: RecordingPublisher,
     *,
     retries_left: bool = True,
 ):
@@ -118,7 +109,6 @@ def run(
         JOB_ID,
         control=control,
         handler=handler,
-        publish=publisher,
         retries_left=retries_left,
     )
 
@@ -126,34 +116,14 @@ def run(
 def test_second_delivery_does_not_repeat_a_completed_stage() -> None:
     """The core guarantee: at-least-once delivery, exactly-once work."""
     control = FakeControl([ClaimOutcome.CLAIMED, ClaimOutcome.ALREADY_COMPLETED])
-    handler, publisher = RecordingStage(), RecordingPublisher()
+    handler = RecordingStage()
 
-    run(StageName.PARSE, control, handler, publisher)
-    second = run(StageName.PARSE, control, handler, publisher)
+    run(StageName.PARSE, control, handler)
+    second = run(StageName.PARSE, control, handler)
 
     assert handler.call_count == 1
     assert second.outcome is ClaimOutcome.ALREADY_COMPLETED
     assert control.completed == [StageName.PARSE]
-
-
-def test_a_completed_stage_publishes_the_next_one() -> None:
-    control = FakeControl()
-    handler, publisher = RecordingStage(), RecordingPublisher()
-
-    run(StageName.PARSE, control, handler, publisher)
-
-    assert publisher.published == [(StageName.EMBED, JOB_ID)]
-
-
-def test_the_last_stage_publishes_nothing() -> None:
-    """Indexing ends the chain; there is no stage after it to enqueue."""
-    control = FakeControl()
-    handler, publisher = RecordingStage(), RecordingPublisher()
-
-    run(StageName.INDEX, control, handler, publisher)
-
-    assert control.completed == [StageName.INDEX]
-    assert publisher.published == []
 
 
 @pytest.mark.parametrize(
@@ -162,9 +132,9 @@ def test_the_last_stage_publishes_nothing() -> None:
 )
 def test_a_refused_claim_does_no_work(outcome: ClaimOutcome) -> None:
     control = FakeControl([outcome])
-    handler, publisher = RecordingStage(), RecordingPublisher()
+    handler = RecordingStage()
 
-    result = run(StageName.PARSE, control, handler, publisher)
+    result = run(StageName.PARSE, control, handler)
 
     assert result.outcome is outcome
     assert result.retry is False
@@ -177,22 +147,20 @@ def test_work_finished_after_supersession_is_discarded() -> None:
     """A reindex during a slow stage must not have its result overwritten."""
     control = FakeControl()
     control.heartbeat_applies = False
-    handler, publisher = RecordingStage(), RecordingPublisher()
+    handler = RecordingStage()
 
-    result = run(StageName.PARSE, control, handler, publisher)
+    result = run(StageName.PARSE, control, handler)
 
     assert handler.call_count == 1
     assert result.outcome is ClaimOutcome.SUPERSEDED
     assert control.completed == []
-    assert publisher.published == []
 
 
 def test_an_unsupported_document_is_not_retried() -> None:
     control = FakeControl()
     handler = RecordingStage(UnsupportedDocument("ocr_required", "This PDF holds no text."))
-    publisher = RecordingPublisher()
 
-    result = run(StageName.PARSE, control, handler, publisher)
+    result = run(StageName.PARSE, control, handler)
 
     assert result.retry is False
     assert control.failures[0].disposition is FailureDisposition.UNSUPPORTED
@@ -203,9 +171,8 @@ def test_an_unsupported_document_is_not_retried() -> None:
 def test_a_transient_failure_is_retried_while_the_budget_allows() -> None:
     control = FakeControl()
     handler = RecordingStage(StageError("embedding_unavailable", "The endpoint timed out."))
-    publisher = RecordingPublisher()
 
-    result = run(StageName.PARSE, control, handler, publisher, retries_left=True)
+    result = run(StageName.PARSE, control, handler, retries_left=True)
 
     assert result.retry is True
     assert control.failures[0].disposition is FailureDisposition.RETRY
@@ -215,9 +182,8 @@ def test_an_exhausted_retry_budget_fails_terminally() -> None:
     """The last attempt reports failure rather than asking for another turn."""
     control = FakeControl()
     handler = RecordingStage(StageError("embedding_unavailable", "The endpoint timed out."))
-    publisher = RecordingPublisher()
 
-    result = run(StageName.PARSE, control, handler, publisher, retries_left=False)
+    result = run(StageName.PARSE, control, handler, retries_left=False)
 
     assert result.retry is False
     assert control.failures[0].disposition is FailureDisposition.FAILED
@@ -227,9 +193,8 @@ def test_an_unexpected_exception_reports_a_sanitized_code() -> None:
     """A stack trace belongs in the log, not in a field a user can read."""
     control = FakeControl()
     handler = RecordingStage(RuntimeError("connection string postgres://user:hunter2@db"))
-    publisher = RecordingPublisher()
 
-    result = run(StageName.PARSE, control, handler, publisher)
+    result = run(StageName.PARSE, control, handler)
 
     failure = control.failures[0]
     assert failure.code == "stage_error"

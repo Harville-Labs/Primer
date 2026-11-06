@@ -93,7 +93,12 @@ class Embedder:
 
 
 def build_client(graph: Graph, **settings: Any) -> TestClient:
-    configured = Settings(internal_api_token=SERVICE_TOKEN, embedding_dimensions=8, **settings)
+    configured = Settings(
+        internal_api_token=SERVICE_TOKEN,
+        worker_token=SERVICE_TOKEN,
+        embedding_dimensions=8,
+        **settings,
+    )
     app = create_app(
         configured,
         store=object(),  # ty: ignore[invalid-argument-type]

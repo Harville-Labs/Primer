@@ -36,6 +36,7 @@ RESOLVE_ENV = {
     "POSTGRES_PASSWORD": "resolve-only",
     "RABBITMQ_PASSWORD": "resolve-only",
     "PRIMER_INTERNAL_API_TOKEN": "resolve-only",
+    "PRIMER_WORKER_TOKEN": "resolve-worker",
     "PRIMER_GRAPH_PASSWORD": "resolve-only",
 }
 
@@ -110,7 +111,12 @@ def test_nothing_bind_mounts_a_host_path(compose_config: dict[str, Any]) -> None
 def test_credentials_have_no_defaults(compose_config: dict[str, Any]) -> None:
     """A password with a default is a password every deployment shares."""
     text = BASE.read_text()
-    for variable in ("POSTGRES_PASSWORD", "RABBITMQ_PASSWORD", "PRIMER_INTERNAL_API_TOKEN"):
+    for variable in (
+        "POSTGRES_PASSWORD",
+        "RABBITMQ_PASSWORD",
+        "PRIMER_INTERNAL_API_TOKEN",
+        "PRIMER_WORKER_TOKEN",
+    ):
         assert f"${{{variable}:?" in text, f"{variable} must be required, not defaulted"
         # The bundled PostgreSQL's own copy may be empty, never a value: it
         # is interpolated even when the server is off, and refuses to start
@@ -458,7 +464,7 @@ def test_every_database_user_shares_the_bundled_url(compose_config: dict[str, An
     """One plain URL, from which each service chooses its own driver."""
     users = database_users(compose_config)
 
-    assert set(users) >= {"control", "chat", *WORKERS, "migrate-control", "migrate-chat"}
+    assert set(users) >= {"control", "chat", "migrate-control", "migrate-chat"}
     assert set(users.values()) == {"postgresql://primer:resolve-only@postgres:5432/primer"}
     assert "postgres" in compose_config["services"]
 

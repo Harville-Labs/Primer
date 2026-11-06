@@ -71,7 +71,8 @@ openssl rand -hex 32
 | `POSTGRES_PASSWORD` | The bundled PostgreSQL's password. Not needed if `PRIMER_DATABASE_URL` names your own |
 | `RABBITMQ_PASSWORD` | The bundled RabbitMQ's password |
 | `PRIMER_GRAPH_PASSWORD` | The knowledge graph's Neo4j password. Required even with your own Neo4j, as that server's password |
-| `PRIMER_INTERNAL_API_TOKEN` | Shared by Primer's services for their internal APIs. Without it ingestion fails |
+| `PRIMER_INTERNAL_API_TOKEN` | What Chat presents to Control and Retrieval. Without it nothing can be asked |
+| `PRIMER_WORKER_TOKEN` | What the ingestion workers present. A different random value from the one above. Without it ingestion fails |
 
 !!! warning "Choose the passwords before the first start"
     PostgreSQL and Neo4j read their passwords only when they first create
@@ -147,7 +148,7 @@ shortest path through it.
 
 ### 1. Prepare what the chart references
 
-The chart makes no secrets except its own internal token, so create these
+The chart makes no secrets except its own internal credentials, so create these
 first. [Secrets you provide](kubernetes.md#secrets-you-provide) lists every
 key.
 

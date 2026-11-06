@@ -13,6 +13,7 @@ from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from typing import Any
 
 import pytest
+from control_credentials import FORWARDED
 from control_support import UserClient
 from httpx2 import ASGITransport, AsyncClient
 from primer_control.app import create_app
@@ -92,7 +93,9 @@ def make_client(database: Database, clean_tables: AsyncEngine, source_store: Sou
     async def build(**overrides: Any) -> AsyncGenerator[AsyncClient]:
         settings = Settings(auth_mode="oidc", admin_group=ADMINS, **overrides)
         app = create_app(settings, database=database, source_store=source_store)
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://control") as http:
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://control", headers=FORWARDED
+        ) as http:
             yield http
 
     return build

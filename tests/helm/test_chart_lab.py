@@ -68,12 +68,15 @@ def test_lab_writes_only_its_weights_and_scratch() -> None:
 
 
 def test_lab_is_given_the_database_and_no_other_shared_secret() -> None:
-    """It keeps saved experiments (ADR 0008); a token it never uses is only exposure."""
+    """It keeps saved experiments (ADR 0008); a token it never uses is only exposure.
+
+    The web token is how it knows an identity header came from the web app.
+    """
     container = containers(lab(render(*ENABLED)))[0]
 
     assert "envFrom" not in container
     secrets = {entry["name"] for entry in container["env"] if "valueFrom" in entry}
-    assert secrets == {"PRIMER_DATABASE_URL"}
+    assert secrets == {"PRIMER_DATABASE_URL", "PRIMER_WEB_TOKEN"}
     names = {entry["name"] for entry in container["env"]}
     assert not any(name.startswith(("PRIMER_INTERNAL", "PRIMER_SETTINGS")) for name in names)
 

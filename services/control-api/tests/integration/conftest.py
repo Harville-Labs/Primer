@@ -12,6 +12,7 @@ from pathlib import Path
 
 import pytest
 import pytest_asyncio
+from control_credentials import FORWARDED, SERVICE_TOKEN, WORKER_TOKEN
 from control_support import ServiceClient, UserClient
 from httpx2 import ASGITransport, AsyncClient
 from primer_control.app import create_app
@@ -85,7 +86,8 @@ async def clean_tables(database: Database) -> AsyncIterator[AsyncEngine]:
 #: Small enough that a test can exceed it with a readable literal.
 MAX_UPLOAD_BYTES = 4096
 
-SERVICE_TOKEN = "test-service-token"  # noqa: S105 - a fixture value, not a real credential
+#: What Chat presents to the authorization API, and what the workers present
+#: to the job API. Different, so a test can prove each reaches only its own.
 
 #: Two, so the retry budget can be exhausted in a readable number of steps.
 MAX_JOB_ATTEMPTS = 2
@@ -112,13 +114,16 @@ async def client(
             auth_mode="oidc",
             max_upload_bytes=MAX_UPLOAD_BYTES,
             internal_api_token=SERVICE_TOKEN,
+            worker_token=WORKER_TOKEN,
             max_job_attempts=MAX_JOB_ATTEMPTS,
         ),
         database=database,
         source_store=source_store,
     )
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://control") as http:
+    async with AsyncClient(
+        transport=transport, base_url="http://control", headers=FORWARDED
+    ) as http:
         yield http
 
 
@@ -152,4 +157,4 @@ async def library_id(owner: UserClient) -> str:
 @pytest.fixture
 def service(client: AsyncClient) -> ServiceClient:
     """A worker, presenting the cluster-internal service credential."""
-    return ServiceClient(client, SERVICE_TOKEN)
+    return ServiceClient(client, WORKER_TOKEN)

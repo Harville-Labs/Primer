@@ -384,8 +384,9 @@ copy of the model in memory, and on a GPU node there is rarely room for the
 second.
 
 Lab accepts connections from the web app and nothing else. Of Primer's
-shared secrets it is given the database URL alone, for saved experiments: no
-internal token, no settings key. It needs egress to the Hugging Face hub, or
+shared secrets it is given the database URL, for saved experiments, and the
+web token, to know an identity came from the web app: no internal token, no
+settings key. It needs egress to the Hugging Face hub, or
 to your mirror, to download a model.
 
 Experiments are kept for 90 days unless you say otherwise:

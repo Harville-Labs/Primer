@@ -1,7 +1,9 @@
 """Stage orchestration.
 
 The shape of every task is the same: claim, work, confirm the claim still
-holds, complete, then publish the next stage. None of those steps trusts the
+holds, complete. Control sends the next stage's message once completion
+commits, so a worker that dies after completing cannot strand the job
+between stages. None of those steps trusts the
 message it arrived on - the message carries only a job id, and Control
 decides at each step whether this worker is still the one doing the work.
 
@@ -27,7 +29,7 @@ from primer_contracts.ingestion import (
     StageName,
 )
 
-from primer_ingestion.celery_app import QUEUE_NAMES, TASK_NAMES, create_celery
+from primer_ingestion.celery_app import TASK_NAMES, create_celery
 from primer_ingestion.config import Settings
 from primer_ingestion.control_client import ControlClient, JobTransitions
 from primer_ingestion.errors import PermanentStageError, StageError
@@ -37,16 +39,6 @@ logger = logging.getLogger(__name__)
 app = create_celery()
 
 StageHandler = Callable[[JobClaim], None]
-Publisher = Callable[[StageName, UUID], None]
-
-#: What a worker publishes once a stage completes. Deletion ends the chain.
-NEXT_STAGE: dict[StageName, StageName | None] = {
-    StageName.PARSE: StageName.EMBED,
-    StageName.EMBED: StageName.INDEX,
-    StageName.INDEX: None,
-    StageName.DELETE: None,
-}
-
 #: Populated by the parsing and retrieval pipelines as they land. A stage
 #: with no handler fails permanently rather than silently succeeding, so a
 #: half-deployed cluster cannot mark documents ready without indexing them.
@@ -79,7 +71,6 @@ def execute_stage(
     *,
     control: JobTransitions,
     handler: StageHandler,
-    publish: Publisher,
     retries_left: bool,
 ) -> StageOutcome:
     """Run one stage of one job.
@@ -118,9 +109,6 @@ def execute_stage(
 
     if control.complete(job_id, stage, claim.generation_id).applied:
         _after_activation(handler, claim)
-        following = NEXT_STAGE[stage]
-        if following is not None:
-            publish(following, job_id)
     return StageOutcome(ClaimOutcome.CLAIMED)
 
 
@@ -184,11 +172,6 @@ def backoff_seconds(retries: int, settings: Settings) -> float:
     return base * (0.5 + secrets.randbelow(1000) / 2000)
 
 
-def publish_stage(stage: StageName, job_id: UUID) -> None:
-    """Chain the next stage explicitly, by job id and nothing else."""
-    app.send_task(TASK_NAMES[stage], args=[str(job_id)], queue=QUEUE_NAMES[stage])
-
-
 def run_task(task: Task, stage: StageName, job_id: str) -> str:
     settings: Settings = task.app.conf.primer_settings
     retries_left = task.request.retries < settings.max_retries
@@ -199,7 +182,6 @@ def run_task(task: Task, stage: StageName, job_id: str) -> str:
             UUID(job_id),
             control=control,
             handler=HANDLERS.get(stage, stage_unavailable),
-            publish=publish_stage,
             retries_left=retries_left,
         )
 

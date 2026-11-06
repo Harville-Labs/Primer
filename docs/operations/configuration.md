@@ -13,8 +13,10 @@ instead of silently keeping a default.
 | `PRIMER_SOURCE_STORE_URL` | `file:///var/lib/primer/sources` | `file://` or `s3://`; see below |
 | `PRIMER_MAX_UPLOAD_BYTES` | `104857600` | Enforced while reading. The web app's own `BODY_SIZE_LIMIT` (adapter-node, default 512K) must be raised above this too, or it rejects a large upload before Control ever sees it |
 | `PRIMER_BROKER_URL` | unset | Unset leaves uploads queued |
-| `PRIMER_INTERNAL_API_TOKEN` | unset | **Unset denies the internal API** |
-| `PRIMER_SUBJECT_HEADER` | `X-Forwarded-User` | Set by the proxy |
+| `PRIMER_INTERNAL_API_TOKEN` | unset | Chat's credential. **Unset denies the authorization API.** See [Internal credentials](#internal-credentials) |
+| `PRIMER_WORKER_TOKEN` | unset | The workers' credential. **Unset denies the job API** |
+| `PRIMER_WEB_TOKEN` | unset | **Required when `PRIMER_AUTH_MODE` is `oidc`** |
+| `PRIMER_SUBJECT_HEADER` | `X-Forwarded-User` | Set by the proxy. Control, Chat, Lab and the web app read the same three header variables |
 | `PRIMER_JOB_LEASE_SECONDS` | `300` | Before another worker may re-claim |
 | `PRIMER_MAX_JOB_ATTEMPTS` | `5` | Hard bound, independent of workers |
 | `PRIMER_JOB_RESEND_AFTER_SECONDS` | `120` | How long a job whose message the broker never accepted waits before Control sends it again |
@@ -37,7 +39,7 @@ instead of silently keeping a default.
 | `PRIMER_BROKER_URL` | local RabbitMQ | Must match Control's |
 | `PRIMER_CONTROL_URL` | `http://control-api:8000` | Cluster-internal |
 | `PRIMER_RETRIEVAL_URL` | `http://retrieval:8000` | Cluster-internal |
-| `PRIMER_SERVICE_TOKEN` | unset | Must match the services' tokens |
+| `PRIMER_SERVICE_TOKEN` | unset | Control's and Retrieval's `PRIMER_WORKER_TOKEN` |
 | `PRIMER_SOURCE_STORE_URL` | `file:///var/lib/primer/sources` | Same store as Control |
 | `PRIMER_ENABLE_OCR` | `true` | Read text from images |
 | `PRIMER_MAX_PICTURES_PER_DOCUMENT` | `100` | Pictures read with OCR, and figures described, per document; `0` turns both off |
@@ -97,7 +99,8 @@ with one.
 | `PRIMER_GRAPH_COMMUNITIES` | `16` | Topics a library-wide question draws passages from. `1` to `100` |
 | `PRIMER_GRAPH_COMMUNITY_MAX_MENTIONS` | `200000` | Largest library a library-wide question is answered for, counted in entity mentions. About 1 KB of Retrieval memory each |
 | `PRIMER_GRAPH_CANDIDATES` | `20` | Passages the graph adds to a search before fusion |
-| `PRIMER_INTERNAL_API_TOKEN` | unset | **Unset denies the internal API** |
+| `PRIMER_INTERNAL_API_TOKEN` | unset | Chat's credential, for search. **Unset denies it** |
+| `PRIMER_WORKER_TOKEN` | unset | The workers' credential, for indexing and deleting. **Unset denies it** |
 
 
 ## Source storage
@@ -146,7 +149,8 @@ Compose and on the chart.
 | `PRIMER_CHAT_COMPACT_HISTORY` | `true` | Summarize turns instead of dropping them |
 | `PRIMER_CHAT_SUMMARY_TOKENS` | `512` | Room reserved for that summary |
 | `PRIMER_TOOLS` | off | JSON naming the MCP servers a model may call, and which of their tools. See [Tools](tools.md) |
-| `PRIMER_SERVICE_TOKEN` | unset | Must match the services' tokens |
+| `PRIMER_SERVICE_TOKEN` | unset | Control's and Retrieval's `PRIMER_INTERNAL_API_TOKEN` |
+| `PRIMER_WEB_TOKEN` | unset | **Required when `PRIMER_AUTH_MODE` is `oidc`** |
 
 ### Offering more than one model
 
@@ -270,6 +274,7 @@ Compose passes one.
 | `PRIMER_LAB_MODEL` | `lab.model` | `{"source": "hub", "repository": "Qwen/Qwen3-1.7B"}` | JSON. `{"source": "local", "path": "..."}` loads a directory inside the weights volume |
 | `PRIMER_LAB_MODEL_CHOICE` | `lab.modelChoice` | `users` | Who may switch the model every run uses: `users`, `admins`, or `operator` |
 | `PRIMER_ADMIN_GROUP` | `auth.adminGroup` | unset | Who counts as an admin for `admins` |
+| `PRIMER_WEB_TOKEN` | generated | unset | **Required when `PRIMER_AUTH_MODE` is `oidc`.** See [Internal credentials](#internal-credentials) |
 | `PRIMER_LAB_REPOSITORY_PATTERNS` | `lab.repositoryPatterns` | `["*/*"]` | JSON list of shell-style patterns a repository must match |
 | `PRIMER_LAB_MAX_MODEL_BYTES` | `lab.maxModelBytes` | `20000000000` | Checked against the hub's file list before anything downloads |
 | `PRIMER_LAB_SAES` | `lab.saes` | Qwen3-1.7B, Qwen3.5-2B, and their Base models to Qwen-Scope | JSON object from a model repository to the SAE repository read with it. `{}` maps none. See [SAE features](lab.md#sae-features) |
@@ -296,6 +301,39 @@ Compose passes one.
 | | `lab.graphs.enabled` | `false` | Uses the `-graphs` image and passes the transcoders. Needs `lab.gpu` |
 | | `lab.persistence.size` | `50Gi` | Nothing is evicted; see [Lab](lab.md) |
 | | `lab.nodeSelector`, `lab.tolerations` | none | To place Lab on a GPU node |
+
+## Internal credentials
+
+Primer's services present one of three credentials to each other. Each
+admits its holder to different routes, so a compromised component can do
+only what that component does. The chart generates all three into its
+`-internal` Secret and gives each workload only the ones it uses. With
+Compose, set `PRIMER_INTERNAL_API_TOKEN` and `PRIMER_WORKER_TOKEN` in `.env`
+to two different random values.
+
+| Credential | Presented by | Accepted by |
+| --- | --- | --- |
+| Internal token | Chat, as `PRIMER_SERVICE_TOKEN` | Control's authorization API; Retrieval's search, passages and graph status |
+| Worker token | The ingestion workers, as `PRIMER_SERVICE_TOKEN` | Control's job API; Retrieval's index, verify, graph index, delete and purge |
+| Web token | The web server | Control, Chat and Lab, as proof that identity headers came from it |
+
+The workers parse whatever users upload, which makes them the likeliest
+component to be compromised. They hold no credential that lets them ask
+Control what a user may read, and no key for stored provider credentials.
+They can still change what Retrieval holds, since writing it is their job.
+
+The web token matters only with authentication on. In OIDC mode a service
+believes the identity headers on a request only when the web token comes
+with them; without it, anything else inside the cluster could send those
+headers and be anyone. The web server reads the header names from the same
+variables the services do: `PRIMER_SUBJECT_HEADER`, `PRIMER_EMAIL_HEADER`
+and `PRIMER_GROUPS_HEADER`, and `PRIMER_WEB_TOKEN`.
+
+The ingestion workers hold no database credential at all: everything they
+do to a job goes through Control's job API. With a bundled PostgreSQL, the
+chart also gives Control, Chat and Lab each their own database login,
+confined to that service's schema. See
+[Migrations](migrations.md#a-role-per-service).
 
 ## Settings that fail at startup
 

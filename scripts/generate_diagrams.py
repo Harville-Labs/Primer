@@ -45,7 +45,7 @@ def system_architecture() -> Canvas:
 
     models = canvas.box(Box(1100, 96, 170, 80, "Your endpoints", "chat, MCP, images", "external"))
     embeddings = canvas.box(Box(1100, 490, 170, 88, "Embeddings", "embedder, reranker", "external"))
-    graph = canvas.box(Box(1100, 640, 170, 62, "Knowledge graph", "Neo4j, optional", "store"))
+    graph = canvas.box(Box(1100, 640, 170, 62, "Knowledge graph", "Neo4j, always on", "store"))
 
     canvas.group(30, 36, 270, 396, "Outside the cluster")
     canvas.group(370, 30, 915, 690, "Inside the cluster")

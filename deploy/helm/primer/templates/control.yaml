@@ -40,7 +40,8 @@ spec:
           {{- include "primer.sourceStoreEnvFrom" . | nindent 10 }}
           env:
             {{- include "primer.commonEnv" . | nindent 12 }}
-            {{- include "primer.databaseEnv" . | nindent 12 }}
+            {{- include "primer.credentialEnv" (list . (dict "PRIMER_INTERNAL_API_TOKEN" "internal-token" "PRIMER_WORKER_TOKEN" "worker-token" "PRIMER_WEB_TOKEN" "web-token")) | nindent 12 }}
+            {{- include "primer.databaseEnv" (list . "control") | nindent 12 }}
             {{- include "primer.brokerEnv" . | nindent 12 }}
             - name: PRIMER_CHAT_SERVICE_URL
               value: http://{{ include "primer.fullname" . }}-chat:8000

@@ -124,7 +124,11 @@ class Settings(BaseSettings):
 
     internal_api_token: SecretStr | None = Field(
         default=None,
-        description="Shared credential for this cluster-internal API; unset denies it",
+        description="Credential Chat presents to search and read passages; unset denies it",
+    )
+    worker_token: SecretStr | None = Field(
+        default=None,
+        description="Credential the ingestion workers present to write and delete; unset denies it",
     )
 
     @model_validator(mode="after")

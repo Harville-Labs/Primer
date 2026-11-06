@@ -35,21 +35,15 @@ from primer_control.models import (
 from primer_control.services.ingestion_pipeline import (
     ABANDONED_STATES,
     TERMINAL_STATES,
+    WAITING_FOR,
     stage_for,
+    stage_waiting,
 )
 
 #: The error code a job carries while its message could not be sent. Only
 #: this code is ever cleared by a successful send: a worker's own failure
 #: on a job waiting to be retried is not the dispatcher's to erase.
 UNDISPATCHED_CODE = "workers_unreachable"
-
-#: The stage a message is sent for, by the entry state Control leaves a job
-#: in. Only these two are published by Control; the later stages are queued
-#: by the worker that finished the one before.
-DISPATCHED_STAGES: dict[IngestionStatus, StageName] = {
-    IngestionStatus.QUEUED: StageName.PARSE,
-    IngestionStatus.DELETING: StageName.DELETE,
-}
 
 
 class IngestionJobRepository:
@@ -165,6 +159,12 @@ class IngestionJobRepository:
         Matching on the generation is what stops a slow worker from marking a
         stage complete after a reindex has already moved the job on.
 
+        A job that moves on to another stage is marked as not yet sent, in
+        the same statement. Control sends that stage's message after the
+        commit, and the sweep sends it again if that fails - so a worker or
+        a broker failing between the two cannot leave the job waiting for a
+        message nobody will send.
+
         Completing the index stage is also what activates the generation.
         They are the same event - "this build is now the answer" - and doing
         them in one transaction means there is no instant where a job is
@@ -180,6 +180,11 @@ class IngestionJobRepository:
             )
             .values(
                 state=definition.done.value,
+                dispatched_at=(
+                    None
+                    if stage_waiting(definition.done) is not None
+                    else IngestionJob.dispatched_at
+                ),
                 claimed_at=None,
                 lease_expires_at=None,
                 error_code=None,
@@ -345,7 +350,7 @@ class IngestionJobRepository:
         result = await self._session.execute(
             select(IngestionJob.id, IngestionJob.state)
             .where(
-                IngestionJob.state.in_([state.value for state in DISPATCHED_STAGES]),
+                IngestionJob.state.in_([state.value for state in WAITING_FOR]),
                 IngestionJob.dispatched_at.is_(None),
                 IngestionJob.updated_at < func.now() - unchanged_for,
                 (IngestionJob.lease_expires_at.is_(None))
@@ -355,7 +360,7 @@ class IngestionJobRepository:
             .limit(limit)
             .with_for_update(skip_locked=True)
         )
-        return [(job_id, DISPATCHED_STAGES[IngestionStatus(state)]) for job_id, state in result]
+        return [(job_id, WAITING_FOR[IngestionStatus(state)]) for job_id, state in result]
 
     async def _result(self, job_id: UUID, updated: str | None) -> TransitionResult:
         """Report what the row holds now, applied or not.

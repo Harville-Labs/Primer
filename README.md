@@ -104,6 +104,7 @@ POSTGRES_PASSWORD=change-me
 RABBITMQ_PASSWORD=change-me
 PRIMER_GRAPH_PASSWORD=change-me
 PRIMER_INTERNAL_API_TOKEN=change-me
+PRIMER_WORKER_TOKEN=change-me-too
 PRIMER_CHAT_BASE_URL=http://host.docker.internal:11434/v1
 ENV
 

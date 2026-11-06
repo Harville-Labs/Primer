@@ -24,10 +24,9 @@ from primer_contracts.indexing import (
     SearchRequest,
     SearchResult,
 )
+from primer_service.credentials import SERVICE_TOKEN_HEADER
 
 from primer_chat.config import Settings
-
-SERVICE_TOKEN_HEADER = "X-Primer-Service-Token"  # noqa: S105 - a header name, not a secret
 
 
 class LibraryAuthority(Protocol):

@@ -82,7 +82,8 @@ spec:
           command: ["alembic", "upgrade", "head"]
           env:
             {{- include "primer.commonEnv" $ | nindent 12 }}
-            {{- include "primer.databaseEnv" $ | nindent 12 }}
+            {{- include "primer.databaseEnv" (list $ "") | nindent 12 }}
+            {{- include "primer.runtimeRoleEnv" (list $ $service) | nindent 12 }}
           resources:
             {{- toYaml $.Values.migrations.resources | nindent 12 }}
           volumeMounts:

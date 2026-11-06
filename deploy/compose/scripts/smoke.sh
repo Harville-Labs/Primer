@@ -4,13 +4,18 @@
 #
 #   deploy/compose/scripts/smoke.sh
 #
+# The question needs Chat, which Compose does not publish, and a chat model,
+# which CI does not have. Set PRIMER_CHAT_URL to a Chat you can reach to ask
+# it; left unset, the check ends once the document is indexed, which is
+# every stage of ingestion and the part most likely to strand.
+#
 # Prints request ids so a failure can be traced in the logs. Never prints
 # document text, answer text, or any credential - a smoke test that dumped
 # the response would put a user's content in CI output.
 set -euo pipefail
 
 control="${PRIMER_CONTROL_URL:-http://localhost:8000}"
-chat="${PRIMER_CHAT_URL:-http://localhost:8100}"
+chat="${PRIMER_CHAT_URL:-}"
 timeout_seconds="${SMOKE_TIMEOUT:-300}"
 library_id=""
 
@@ -69,6 +74,11 @@ while true; do
   [ "$SECONDS" -lt "$deadline" ] || { echo "still '$status' after ${timeout_seconds}s"; exit 1; }
   sleep 3
 done
+
+if [ -z "$chat" ]; then
+  say "smoke test passed (indexed; PRIMER_CHAT_URL unset, so nothing was asked)"
+  exit 0
+fi
 
 say "asking a question"
 citations=$(curl -fsS -N -X POST "$chat/api/v1/conversations" \

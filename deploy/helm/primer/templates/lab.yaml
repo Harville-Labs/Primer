@@ -73,6 +73,7 @@ spec:
           env:
             - name: PRIMER_AUTH_MODE
               value: {{ .Values.auth.mode | quote }}
+            {{- include "primer.credentialEnv" (list . (dict "PRIMER_WEB_TOKEN" "web-token")) | nindent 12 }}
             {{- if .Values.auth.adminGroup }}
             - name: PRIMER_ADMIN_GROUP
               value: {{ .Values.auth.adminGroup | quote }}
@@ -106,7 +107,7 @@ spec:
               value: {{ $lab.dtype | quote }}
             - name: PRIMER_LAB_EXPERIMENT_RETENTION_DAYS
               value: {{ $lab.experimentRetentionDays | int | quote }}
-            {{- include "primer.databaseEnv" . | nindent 12 }}
+            {{- include "primer.databaseEnv" (list . "lab") | nindent 12 }}
           ports:
             - name: http
               containerPort: 8000

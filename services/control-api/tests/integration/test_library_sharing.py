@@ -15,15 +15,12 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
+from control_credentials import SERVICE_TOKEN, WORKER_TOKEN
 from control_support import UserClient
 from httpx2 import AsyncClient
 
 COLLEAGUE_EMAIL = "colleague@example.edu"
 OWNER_EMAIL = "owner@example.edu"
-
-#: The cluster-internal credential the conftest configures. Chat presents
-#: this when it asks Control what a person may read.
-SERVICE_TOKEN = "test-service-token"  # noqa: S105
 
 
 async def create_library(user: UserClient, name: str = "Shared sources") -> dict[str, Any]:
@@ -62,6 +59,29 @@ async def library_scope(http: AsyncClient, library_id: str, user_id: str) -> Any
         },
         headers={"X-Primer-Service-Token": SERVICE_TOKEN},
     )
+
+
+async def test_the_authorization_api_refuses_the_worker_credential(
+    owner: UserClient, client: AsyncClient
+) -> None:
+    """A worker acts on jobs, never on a person's behalf.
+
+    The authorization API answers "what may this person read" for whatever
+    principal the caller names. A worker that could ask it could learn any
+    library's contents, so only Chat's credential opens it.
+    """
+    library = await create_library(owner)
+    response = await client.post(
+        "/internal/v1/authz/library-scope",
+        json={
+            "principal": {"subject": "x", "user_id": library["owner_user_id"], "groups": []},
+            "library_id": library["id"],
+        },
+        headers={"X-Primer-Service-Token": WORKER_TOKEN},
+    )
+
+    assert response.status_code == 401
+    assert (await library_scope(client, library["id"], library["owner_user_id"])).status_code == 200
 
 
 async def test_a_shared_library_becomes_readable(owner: UserClient, colleague: UserClient) -> None:
