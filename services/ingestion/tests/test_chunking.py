@@ -257,3 +257,28 @@ def test_chunks_longer_than_the_model_reads_are_refused() -> None:
             embedding_model="BAAI/bge-small-en-v1.5",
             max_chunk_tokens=1024,
         )
+
+
+def test_chunks_longer_than_the_embedding_server_accepts_are_refused() -> None:
+    """The server's limit is its operator's, not the model's: a Qwen3 that
+    reads 32k tokens served with 2,048-token slots refuses anything longer,
+    and a worker that does not know produces documents whose every batch
+    fails."""
+    with pytest.raises(ValueError, match="PRIMER_EMBEDDING_MAX_INPUT_TOKENS"):
+        Settings(
+            broker_url="memory://",
+            embedding_model="Qwen/Qwen3-Embedding-0.6B",
+            embedding_max_input_tokens=512,
+            max_chunk_tokens=1024,
+        )
+
+
+def test_chunks_inside_the_embedding_servers_limit_are_accepted() -> None:
+    accepted = Settings(
+        broker_url="memory://",
+        embedding_model="Qwen/Qwen3-Embedding-0.6B",
+        embedding_max_input_tokens=2048,
+        max_chunk_tokens=2048,
+    )
+
+    assert accepted.max_chunk_tokens == 2048

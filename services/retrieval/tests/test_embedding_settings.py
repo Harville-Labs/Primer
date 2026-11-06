@@ -80,3 +80,18 @@ def test_an_empty_variable_means_use_the_models_own(monkeypatch: pytest.MonkeyPa
     monkeypatch.setenv("PRIMER_EMBEDDING_DIMENSIONS", "")
 
     assert Settings().vector_dimensions == 384
+
+
+def test_documents_are_sent_in_batches_the_operator_declared(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The batch size is the server's, not Haystack's default of 32.
+
+    A hosted API with a smaller per-request limit refuses every batch above
+    it, which looks to a user like every document failing at once.
+    """
+    monkeypatch.setenv("PRIMER_EMBEDDING_BATCH_SIZE", "8")
+
+    embedder = build_document_embedder(Settings(embedding_model="BAAI/bge-small-en-v1.5"))
+
+    assert embedder.batch_size == 8  # ty: ignore[unresolved-attribute]

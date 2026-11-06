@@ -123,6 +123,14 @@ class Settings(BaseSettings):
         gt=0,
         description="Token ceiling per chunk; ignored when no tokenizer is configured",
     )
+    #: The longest input the embedding server accepts, as its operator
+    #: declared it. llama-server and vLLM refuse a longer one outright rather
+    #: than truncating it, so a chunk above this fails every batch it is in.
+    embedding_max_input_tokens: int | None = Field(
+        default=None,
+        gt=0,
+        description="Longest input the embedding server accepts; chunks must fit inside it",
+    )
     #: Chunking splits on structure first, and a document whose labels are
     #: recognised as headings ends up one value per chunk. Passages under
     #: this length are joined to their neighbours afterwards - see
@@ -224,6 +232,15 @@ class Settings(BaseSettings):
         setting to keep in step with the model, and the two disagreeing
         produces chunks the embedder silently truncates.
         """
+        limit = self.embedding_max_input_tokens
+        if limit is not None and self.max_chunk_tokens > limit:
+            raise ValueError(
+                f"PRIMER_MAX_CHUNK_TOKENS is {self.max_chunk_tokens}, but the embedding server "
+                f"accepts at most {limit} tokens (PRIMER_EMBEDDING_MAX_INPUT_TOKENS) and refuses "
+                f"longer inputs, so every batch holding a longer chunk would fail. Lower "
+                f"PRIMER_MAX_CHUNK_TOKENS to {limit} or less, or start the server with a "
+                f"larger limit and raise PRIMER_EMBEDDING_MAX_INPUT_TOKENS to match."
+            )
         if self.embedding_model is None:
             return self
         if self.chunk_tokenizer is None:
