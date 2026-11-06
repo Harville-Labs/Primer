@@ -13,6 +13,7 @@ from primer_contracts.errors import ErrorCode
 from primer_contracts.lab import (
     ActivationRequest,
     ActivationVector,
+    ChatTurn,
     InspectRequest,
     InspectResponse,
     LabStatus,
@@ -26,8 +27,10 @@ from primer_lab.host import ModelHost, Resident, SwitchInProgress
 from primer_lab.identity import CurrentPrincipal, can_choose_model
 from primer_lab.inspection import (
     Prompt,
+    has_chat_template,
     inspect_prompt,
     read_activation,
+    render_conversation,
     tokenize,
 )
 from primer_lab.queue import PositionCallback, QueueFull, RunQueue, RunTimedOut
@@ -126,12 +129,36 @@ def current_resident(request: Request) -> Resident:
 
 
 def read_prompt(request: Request, resident: Resident, body: PromptInput) -> Prompt:
-    """Tokenize before queueing, so a prompt that is too long never waits to be refused."""
-    settings: Settings = request.app.state.settings
     prompt = tokenize(resident.loaded.model.tokenizer, body.prompt, chat=body.chat)
+    return _within_limit(request, prompt, "The prompt is too long")
+
+
+def read_conversation(request: Request, resident: Resident, messages: list[ChatTurn]) -> Prompt:
+    """Render a conversation through the chat template, refusing one the model cannot hold.
+
+    A base model is refused rather than read as plain text, as a prompt
+    would be: without a template there is nothing to mark whose turn is
+    whose, and its "reply" would be a continuation of the user's words.
+    """
+    tokenizer = resident.loaded.model.tokenizer
+    if not has_chat_template(tokenizer):
+        raise refused(
+            "This model cannot chat",
+            "It has no chat template, so it has no way to tell its turns from yours. Load an "
+            "instruction-tuned model, or compare edits on a prompt instead.",
+        )
+    turns = [turn.model_dump(include={"role", "content"}) for turn in messages]
+    return _within_limit(
+        request, render_conversation(tokenizer, turns), "The conversation is too long"
+    )
+
+
+def _within_limit(request: Request, prompt: Prompt, title: str) -> Prompt:
+    """Checked before queueing, so a prompt that is too long never waits to be refused."""
+    settings: Settings = request.app.state.settings
     if len(prompt.ids) > settings.lab_max_prompt_tokens:
         raise refused(
-            "The prompt is too long",
+            title,
             f"It is {len(prompt.ids)} tokens"
             + (" with the chat template" if prompt.chat_template else "")
             + f", and this Lab reads at most {settings.lab_max_prompt_tokens} "

@@ -179,6 +179,32 @@
         "title": "BuiltGraph",
         "type": "object"
       },
+      "ChatTurn": {
+        "additionalProperties": false,
+        "description": "One turn of a steered conversation, as the chat template reads it.",
+        "properties": {
+          "content": {
+            "maxLength": 20000,
+            "minLength": 1,
+            "title": "Content",
+            "type": "string"
+          },
+          "role": {
+            "enum": [
+              "user",
+              "assistant"
+            ],
+            "title": "Role",
+            "type": "string"
+          }
+        },
+        "required": [
+          "role",
+          "content"
+        ],
+        "title": "ChatTurn",
+        "type": "object"
+      },
       "EntropyEstimate": {
         "description": "How much of each next-token distribution the score could see.",
         "enum": [
@@ -508,6 +534,17 @@
             },
             "title": "Edited",
             "type": "array"
+          },
+          "edited_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Edited Text"
           },
           "id": {
             "minimum": 0.0,
@@ -1007,6 +1044,8 @@
           },
           "value": {
             "default": 0.0,
+            "maximum": 65504.0,
+            "minimum": -65504.0,
             "title": "Value",
             "type": "number"
           },
@@ -2323,6 +2362,41 @@
         "title": "SpanKind",
         "type": "string"
       },
+      "SteeredChatRequest": {
+        "additionalProperties": false,
+        "description": "The conversation so far, ending with the user's turn, and the edits to steer it with.\n\nLab writes the next assistant turn twice: as the model would, and with\nthe edits at every token. The assistant turns sent here are the ones\nthe caller kept - in Lab's web app, the steered ones - so the unsteered\nreply is what the model would say at this point of the same\nconversation, not a second conversation of its own.",
+        "properties": {
+          "interventions": {
+            "items": {
+              "$ref": "#/components/schemas/Intervention"
+            },
+            "maxItems": 256,
+            "title": "Interventions",
+            "type": "array"
+          },
+          "max_new_tokens": {
+            "default": 128,
+            "maximum": 2048.0,
+            "minimum": 1.0,
+            "title": "Max New Tokens",
+            "type": "integer"
+          },
+          "messages": {
+            "items": {
+              "$ref": "#/components/schemas/ChatTurn"
+            },
+            "maxItems": 64,
+            "minItems": 1,
+            "title": "Messages",
+            "type": "array"
+          }
+        },
+        "required": [
+          "messages"
+        ],
+        "title": "SteeredChatRequest",
+        "type": "object"
+      },
       "SteeringVector": {
         "additionalProperties": false,
         "description": "A steering vector Lab holds for its owner until the model changes.",
@@ -2656,6 +2730,72 @@
           }
         },
         "summary": "Read one whole activation vector",
+        "tags": [
+          "lab"
+        ]
+      }
+    },
+    "/api/v1/lab/chat": {
+      "post": {
+        "description": "Renders the conversation through the model's chat template and writes the next assistant turn twice, greedily: first as the model is, then with the interventions applied at every token, the conversation's included. Streams the same events as `/generate`, with `baseline` the unsteered reply and `edited` the steered one. Lab keeps no conversation: send the whole of it, with the assistant turns you kept, each time. A model without a chat template is refused.",
+        "operationId": "chat_api_v1_lab_chat_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SteeredChatRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "discriminator": {
+                    "mapping": {
+                      "completed": "#/components/schemas/GenerationCompleted",
+                      "error": "#/components/schemas/GenerationFailed",
+                      "queued": "#/components/schemas/GenerationQueued",
+                      "token": "#/components/schemas/GeneratedToken"
+                    },
+                    "propertyName": "type"
+                  },
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/GenerationQueued"
+                    },
+                    {
+                      "$ref": "#/components/schemas/GeneratedToken"
+                    },
+                    {
+                      "$ref": "#/components/schemas/GenerationCompleted"
+                    },
+                    {
+                      "$ref": "#/components/schemas/GenerationFailed"
+                    }
+                  ],
+                  "title": "Response 200 Chat Api V1 Lab Chat Post",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Reply in a conversation with and without edits to the forward pass",
         "tags": [
           "lab"
         ]

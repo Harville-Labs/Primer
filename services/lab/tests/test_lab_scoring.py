@@ -14,7 +14,7 @@ from typing import Any
 import pytest
 import torch
 from fastapi.testclient import TestClient
-from lab_support import TINY, build_tiny_model, lab, settle
+from lab_support import TINY, lab, settle, switch_to_chat_model
 from primer_lab import scoring
 from transformers import Qwen3ForCausalLM
 
@@ -23,7 +23,6 @@ EOS, HELLO, WORLD = 61, 62, 63
 PROMPT = "hello world w3 w7 w7 w12"
 PROMPT_IDS = [HELLO, WORLD, 3, 7, 7, 12]
 NAMES = {EOS: "<eos>", HELLO: "hello", WORLD: "world"}
-TEMPLATE = "{% for m in messages %}<eos> {{ m['content'] }} <eos>{% endfor %}"
 
 
 def score(client: TestClient, **body: Any) -> Any:
@@ -82,9 +81,7 @@ def test_special_tokens_are_not_scored(client):
 
 def test_text_is_scored_without_the_chat_template(client, weights_dir):
     """Through the template, the first word would be scored as if predicted from a marker."""
-    build_tiny_model(weights_dir / "chatty", chat_template=TEMPLATE)
-    client.put("/api/v1/lab/model", json={"model": {"source": "local", "path": "chatty"}})
-    assert settle(client)["model"]["reference"]["path"] == "chatty"
+    switch_to_chat_model(client, weights_dir)
 
     body = score(client, chat=True).json()
 

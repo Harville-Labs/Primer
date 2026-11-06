@@ -2,8 +2,9 @@
 	import { GitCompareArrows, TriangleAlert } from '@lucide/svelte';
 	import { Spinner } from '@sivir-ui/svelte';
 	import type { Generator } from '#lib/lab/edits.svelte.ts';
-	import { divergence, type MarkedToken, markTokens } from '#lib/lab/generation.ts';
+	import { divergence, markTokens } from '#lib/lab/generation.ts';
 	import { visibleToken } from '#lib/lab/heatmap.ts';
+	import MarkedAnswer from './MarkedAnswer.svelte';
 
 	/** The model's own answer beside the edited one, and where they part. */
 	interface Props {
@@ -24,38 +25,7 @@
 		signDisplay: 'exceptZero',
 	});
 	const plain = new Intl.NumberFormat(undefined, { maximumFractionDigits: 2 });
-
-	// The first divergent token is outlined in both answers, so the eye can
-	// go straight across; what follows is tinted, because from there the two
-	// are different texts and a token that happens to match is not agreement.
-	const CLASSES: Record<MarkedToken['agreement'], string> = {
-		same: '',
-		first:
-			'rounded-[3px] bg-[color-mix(in_oklab,var(--color-lab-positive)_28%,transparent)] ring-1 ring-[var(--color-lab-positive)]',
-		after: 'bg-[color-mix(in_oklab,var(--color-lab-positive)_10%,transparent)]',
-	};
 </script>
-
-{#snippet answer(title: string, tokens: MarkedToken[], running: boolean)}
-	<section aria-label={title} class="flex min-w-0 flex-col gap-2">
-		<h2 class="font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
-			{title}
-		</h2>
-		<p
-			class="min-h-24 whitespace-pre-wrap break-words rounded-lg border border-border bg-card p-4
-				font-mono text-[13px] leading-relaxed"
-		>
-			{#each tokens as each, index (index)}<span
-					class="{CLASSES[each.agreement]} {each.token.special ? 'text-muted-foreground' : ''}"
-					title={each.agreement === 'first' ? `First difference, token ${index}` : undefined}
-					>{each.token.special ? visibleToken(each.token.text) : each.token.text}</span
-				>{/each}{#if running}<span
-					aria-hidden="true"
-					class="ml-0.5 inline-block h-3.5 w-1.5 animate-pulse bg-muted-foreground align-middle"
-				></span>{/if}
-		</p>
-	</section>
-{/snippet}
 
 <div class="flex h-full flex-col gap-4 overflow-y-auto p-4">
 	{#if view.failure}
@@ -126,12 +96,16 @@
 		{/if}
 
 		<div class="grid gap-4 xl:grid-cols-2">
-			{@render answer(
-				'The model’s own',
-				marked.baseline,
-				generator.running && view.edited.length === 0 && !view.ahead
-			)}
-			{@render answer('Edited', marked.edited, generator.running && view.edited.length > 0)}
+			<MarkedAnswer
+				title="The model’s own"
+				tokens={marked.baseline}
+				running={generator.running && view.edited.length === 0 && !view.ahead}
+			/>
+			<MarkedAnswer
+				title="Edited"
+				tokens={marked.edited}
+				running={generator.running && view.edited.length > 0}
+			/>
 		</div>
 	{/if}
 </div>
