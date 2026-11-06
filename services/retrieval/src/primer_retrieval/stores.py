@@ -12,10 +12,11 @@ methods: without them a count means reading every passage back.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
 from haystack.utils import Secret
 from haystack_integrations.document_stores.qdrant import QdrantDocumentStore
+from qdrant_client import QdrantClient
 
 from primer_retrieval.config import Settings
 
@@ -60,8 +61,25 @@ class RetryingQdrantDocumentStore(QdrantDocumentStore):
             await self.close_async()
             raise
 
+    def collection_metadata(self) -> dict[str, Any]:
+        """What has been recorded on the collection, or nothing.
 
-def build_document_store(settings: Settings) -> QdrantDocumentStore:
+        Here rather than in the caller because the integration exposes its
+        client only privately, and reaching it from outside would be a
+        second place that breaks when the integration changes.
+        """
+        self._initialize_client()
+        client = cast(QdrantClient, self._client)
+        return dict(client.get_collection(self.index).config.metadata or {})
+
+    def record_collection_metadata(self, metadata: dict[str, Any]) -> None:
+        """Merge `metadata` into what the collection already records."""
+        self._initialize_client()
+        client = cast(QdrantClient, self._client)
+        client.update_collection(self.index, metadata=metadata)
+
+
+def build_document_store(settings: Settings) -> RetryingQdrantDocumentStore:
     """Instantiate Qdrant, unchanged from the integration but for setup retries.
 
     The conformance suite runs Primer's isolation cases against it, so an

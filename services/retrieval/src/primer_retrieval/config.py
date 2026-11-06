@@ -55,6 +55,10 @@ class Settings(BaseSettings):
     embedding_base_url: str | None = Field(default=None)
     embedding_api_key: SecretStr | None = Field(default=None)
     embedding_timeout_seconds: float = Field(default=30.0, gt=0)
+    #: How many chunks go to the embedder in one request. A property of the
+    #: server, declared by the operator: llama-server answers a batch larger
+    #: than its slots by queueing it, and a hosted API may refuse one outright.
+    embedding_batch_size: int = Field(default=32, ge=1, le=2048)
 
     #: A reranker reads a question and a passage together and scores the
     #: pair, which a vector search cannot do: its two embeddings were made

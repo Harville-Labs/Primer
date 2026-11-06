@@ -42,7 +42,7 @@ RESOLVE_ENV = {
 #: The bundled model servers. Not hardened by `APPLICATION_SERVICES`'s test
 #: alone, because they are a third-party image run under Primer's rules.
 MODEL_SERVERS = ("embeddings", "reranker")
-DEFAULT_EMBEDDING_MODEL = "onnx-community/Qwen3-Embedding-0.6B-ONNX"
+DEFAULT_EMBEDDING_MODEL = "Qwen/Qwen3-Embedding-0.6B"
 
 
 def resolve(*files: Path, env: dict[str, str] | None = None) -> dict[str, Any]:
@@ -100,7 +100,7 @@ def test_nothing_mounts_the_docker_socket(compose_config: dict[str, Any]) -> Non
 
 
 def test_nothing_bind_mounts_a_host_path(compose_config: dict[str, Any]) -> None:
-    """Named volumes only, so the stack is portable and cannot reach the host."""
+    """Named volumes unless an operator names a directory (tests/compose/test_storage.py)."""
     for name, service in compose_config["services"].items():
         for volume in service.get("volumes", []):
             kind = volume.get("type") if isinstance(volume, dict) else None
@@ -218,24 +218,39 @@ def test_by_default_the_stack_runs_its_own_model_servers(
 
 @pytest.mark.parametrize("name", MODEL_SERVERS)
 def test_the_bundled_model_servers_run_hardened(compose_config: dict[str, Any], name: str) -> None:
-    """A read-only root works only because the cache is the one place TEI writes."""
+    """A read-only root works only because the cache is the one place llama-server writes."""
     service = compose_config["services"][name]
 
     assert service["read_only"] is True
     assert service["cap_drop"] == ["ALL"]
     assert service["user"] == "10001:10001"
-    assert service["environment"]["HF_HOME"] == "/data"
+    assert service["environment"]["LLAMA_CACHE"] == "/data"
+    assert "platform" not in service, "the image is multi-architecture"
     assert [volume["target"] for volume in service["volumes"]] == ["/data"]
 
 
-def test_the_bundled_servers_accept_what_primer_sends_in_one_call(
-    compose_config: dict[str, Any],
-) -> None:
-    """Below 32 inputs per call, every ingestion batch and shortlist is refused."""
-    for name in MODEL_SERVERS:
-        command = compose_config["services"][name]["command"]
-        assert int(worker_option(command, "--max-client-batch-size")) >= 32, name
-        assert int(worker_option(command, "--max-concurrent-requests")) >= 32, name
+def test_one_input_limit_sizes_the_embedder_and_bounds_the_chunks() -> None:
+    """The server's slot and the worker's longest chunk are one number.
+
+    llama-server refuses an input longer than its slot rather than
+    truncating it, so a worker told a larger limit than the server holds
+    would produce chunks whose every batch fails.
+    """
+    if shutil.which("docker") is None:
+        pytest.skip("docker is not installed")
+    services = resolve(BASE, env={"PRIMER_EMBEDDING_MAX_INPUT_TOKENS": "1024"})["services"]
+
+    command = services["embeddings"]["command"]
+    assert worker_option(command, "--kv-unified-per-slot") == "1024"
+    assert worker_option(command, "--ubatch-size") == "1024"
+    assert services["worker-parse"]["environment"]["PRIMER_EMBEDDING_MAX_INPUT_TOKENS"] == "1024"
+
+
+def test_the_bundled_reranker_serves_rerank(compose_config: dict[str, Any]) -> None:
+    """Without --reranking, llama-server has no /rerank and every search falls back."""
+    command = compose_config["services"]["reranker"]["command"]
+    assert "--reranking" in command
+    assert worker_option(command, "--alias") == "Qwen/Qwen3-Reranker-0.6B"
 
 
 def test_the_chat_endpoint_is_not_required(compose_config: dict[str, Any]) -> None:
@@ -273,11 +288,11 @@ def test_an_empty_rerank_url_searches_without_a_reranker() -> None:
 def test_your_own_reranker_replaces_the_bundled_one() -> None:
     if shutil.which("docker") is None:
         pytest.skip("docker is not installed")
-    config = resolve(BASE, env={"PRIMER_RERANK_BASE_URL": "http://tei.example:8080"})
+    config = resolve(BASE, env={"PRIMER_RERANK_BASE_URL": "http://vllm.example:8000"})
 
     assert "reranker" not in config["services"]
     environment = config["services"]["retrieval"]["environment"]
-    assert environment["PRIMER_RERANK_BASE_URL"] == "http://tei.example:8080"
+    assert environment["PRIMER_RERANK_BASE_URL"] == "http://vllm.example:8000"
 
 
 def test_the_embedding_width_follows_from_the_model(compose_config: dict[str, Any]) -> None:
@@ -304,10 +319,8 @@ def test_both_sides_of_the_index_are_told_the_embedding_model(
     assert services["retrieval"]["environment"]["PRIMER_EMBEDDING_MODEL"] == (
         DEFAULT_EMBEDDING_MODEL
     )
-    assert worker_option(services["embeddings"]["command"], "--model-id") == (
-        DEFAULT_EMBEDDING_MODEL
-    )
-    assert worker_option(services["embeddings"]["command"], "--pooling") == "last-token"
+    assert worker_option(services["embeddings"]["command"], "--alias") == (DEFAULT_EMBEDDING_MODEL)
+    assert worker_option(services["embeddings"]["command"], "--pooling") == "last"
 
 
 def test_the_chat_model_is_not_required(compose_config: dict[str, Any]) -> None:

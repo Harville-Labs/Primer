@@ -138,6 +138,29 @@ def wrong_dimensions(stored: str, offered: str, consequence: str) -> ProblemErro
     )
 
 
+def embedder_changed(recorded_model: str, consequence: str) -> ProblemError:
+    """The embedder answers, at the right width, with someone else's vectors.
+
+    A conflict for the same reason as `wrong_dimensions`: retrying changes
+    nothing. It has its own words because the remedy is different. The width
+    is right, so nothing about the collection is wrong; what changed is the
+    server behind the embedding URL - another model, the right model with
+    the wrong pooling, or a prompt that was dropped.
+    """
+    return ProblemError(
+        code=ErrorCode.CONFLICT,
+        title="Embedding model does not match the vector store",
+        status_code=status.HTTP_409_CONFLICT,
+        detail=(
+            f"The vector store was built from {recorded_model!r} vectors, and the embedding "
+            f"endpoint now produces different ones for the same text, so {consequence}. "
+            "Searching one model's vectors with another's returns passages that look ranked "
+            "and are not. Point PRIMER_EMBEDDING_BASE_URL back at the server that built this "
+            "index, or set PRIMER_QDRANT_INDEX to a new collection and reindex every library."
+        ),
+    )
+
+
 @contextmanager
 def vector_store(consequence: str, configured: int) -> Generator[None]:
     """Mark a block that cannot run unless the vector store accepts a write.

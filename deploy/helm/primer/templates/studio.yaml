@@ -49,7 +49,9 @@ spec:
                 {{- toYaml $.Values.control.resources | nindent 16 }}
               volumeMounts:
                 {{- include "primer.scratchMounts" $ | nindent 16 }}
+                {{- include "primer.sourceStoreMounts" $ | nindent 16 }}
           volumes:
             {{- include "primer.scratchVolumes" $ | nindent 12 }}
+            {{- include "primer.sourceStoreVolumes" $ | nindent 12 }}
 {{- end }}
 {{- end }}

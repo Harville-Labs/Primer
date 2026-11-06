@@ -14,6 +14,7 @@ contains a host, a port, a username, and sometimes a password.
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -65,8 +66,13 @@ class Unused:
         return explode
 
 
-def control(database: Database) -> TestClient:
-    return TestClient(control_app(ControlSettings(database_url=SECRET_URL), database=database))
+def control(database: Database, sources: Path | None = None) -> TestClient:
+    """Readiness also probes the source store, and the default one is a path
+    this machine need not have; a test expecting ready has to give it one."""
+    settings = ControlSettings(database_url=SECRET_URL)
+    if sources is not None:
+        settings = ControlSettings(database_url=SECRET_URL, source_store_url=f"file://{sources}")
+    return TestClient(control_app(settings, database=database))
 
 
 def retrieval(store: Any) -> TestClient:
@@ -104,8 +110,8 @@ def test_readiness_reports_a_database_it_cannot_reach() -> None:
     assert response.json()["checks"]["database"] is False
 
 
-def test_readiness_passes_when_the_database_answers() -> None:
-    client = control(ReachableDatabase(SECRET_URL))
+def test_readiness_passes_when_the_database_answers(tmp_path: Path) -> None:
+    client = control(ReachableDatabase(SECRET_URL), sources=tmp_path)
 
     assert client.get("/health/ready").status_code == 200
 

@@ -122,18 +122,6 @@ spec:
           emptyDir:
             medium: Memory
             sizeLimit: 256Mi
-  volumeClaimTemplates:
-    - metadata:
-        name: data
-        labels:
-          {{- include "primer.selectorLabels" . | nindent 10 }}
-          app.kubernetes.io/component: postgresql
-      spec:
-        accessModes: ["ReadWriteOnce"]
-        {{- with $bundled.persistence.storageClass }}
-        storageClassName: {{ . | quote }}
-        {{- end }}
-        resources:
-          requests:
-            storage: {{ $bundled.persistence.size }}
+        {{- include "primer.existingClaimVolume" $bundled.persistence | nindent 8 }}
+  {{- include "primer.claimTemplate" (dict "root" . "component" "postgresql" "persistence" $bundled.persistence) | nindent 2 }}
 {{- end }}

@@ -60,6 +60,7 @@ def client(embedder: RecordingEmbedder) -> TestClient:
     app = create_app(
         Settings(internal_api_token=SERVICE_TOKEN, embedding_dimensions=8),
         store=Tripwire(),  # ty: ignore[invalid-argument-type]
+        verify_embedder=lambda _consequence: None,
         document_embedder=Tripwire(),  # ty: ignore[invalid-argument-type]
         text_embedder=embedder,
         retriever=Tripwire(),
@@ -185,6 +186,7 @@ def test_an_unconfigured_credential_denies_everything() -> None:
     app = create_app(
         Settings(internal_api_token=None, embedding_dimensions=8),
         store=Tripwire(),  # ty: ignore[invalid-argument-type]
+        verify_embedder=lambda _consequence: None,
         document_embedder=Tripwire(),  # ty: ignore[invalid-argument-type]
         text_embedder=Tripwire(),  # ty: ignore[invalid-argument-type]
         retriever=Tripwire(),
@@ -332,6 +334,7 @@ def test_health_endpoints_need_no_credential() -> None:
     app = create_app(
         Settings(internal_api_token=SERVICE_TOKEN, embedding_dimensions=8),
         store=CountingStore(),  # ty: ignore[invalid-argument-type]
+        verify_embedder=lambda _consequence: None,
         document_embedder=Tripwire(),  # ty: ignore[invalid-argument-type]
         text_embedder=Tripwire(),  # ty: ignore[invalid-argument-type]
         retriever=Tripwire(),
@@ -347,6 +350,7 @@ def test_readiness_reports_a_store_it_cannot_reach() -> None:
     app = create_app(
         Settings(internal_api_token=SERVICE_TOKEN, embedding_dimensions=8),
         store=Tripwire(),  # ty: ignore[invalid-argument-type]
+        verify_embedder=lambda _consequence: None,
         document_embedder=Tripwire(),  # ty: ignore[invalid-argument-type]
         text_embedder=Tripwire(),  # ty: ignore[invalid-argument-type]
         retriever=Tripwire(),
@@ -361,6 +365,7 @@ def test_liveness_does_not_touch_the_store() -> None:
     app = create_app(
         Settings(internal_api_token=SERVICE_TOKEN, embedding_dimensions=8),
         store=Tripwire(),  # ty: ignore[invalid-argument-type]
+        verify_embedder=lambda _consequence: None,
         document_embedder=Tripwire(),  # ty: ignore[invalid-argument-type]
         text_embedder=Tripwire(),  # ty: ignore[invalid-argument-type]
         retriever=Tripwire(),

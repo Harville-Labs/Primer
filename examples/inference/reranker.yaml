@@ -1,39 +1,26 @@
 ---
-# A cross-encoder for reordering what the vector search found.
+# The reranker the chart runs as `inference.rerank.bundled`, standing
+# alone: llama-server's /rerank with a GGUF of Qwen3-Reranker-0.6B, the
+# partner to the embedding model beside it. Qwen publishes it as a causal
+# language model that scores by comparing the logits of "yes" and "no";
+# llama-server's --reranking understands that shape, which is why it can
+# serve this model where a sequence-classifier server cannot.
 #
-# A vector search compares a question and a passage through two embeddings
-# made without knowing about each other. A reranker reads the pair together,
-# which is far better and far more expensive - so Primer searches widely and
-# cheaply, then has this read a shortlist.
+# Its scores are close to binary - a passage that answers the question
+# scores near one, others near zero - so an `inference.minScore` set for
+# it belongs close to zero, not at a cosine's 0.5.
 #
-# Not Qwen3-Reranker-0.6B, which would have been the obvious partner to the
-# Qwen3 embedding model beside it. Three things ruled it out, all of them
-# about this being a CPU-only deployment:
-#
-#   1. Qwen publishes it as `Qwen3ForCausalLM` - it scores by comparing the
-#      logits of "yes" and "no", not with a classification head - and TEI's
-#      /rerank needs a sequence classifier. The community conversion that
-#      does have one (tomaarsen/Qwen3-Reranker-0.6B-seq-cls) publishes no
-#      ONNX, so it would run on the Candle backend.
-#   2. Candle is the slow path this cluster just left. The embedding server,
-#      the same 28-layer 1024-hidden shape, measured ~1 sequence/sec on
-#      Candle against ~4/sec on ONNX. Reranking twenty passages there is
-#      twenty seconds added to every question.
-#   3. Twenty seconds to save the model from reading fourteen extra
-#      passages is not a trade worth making.
-#
-# bge-reranker-base is 12 layers and 768 hidden rather than 28 and 1024,
-# publishes `onnx/model.onnx`, and is the model TEI's own documentation
-# reranks with. Its 514-position limit is not a practical constraint here:
-# chunks average ~630 characters, well inside it.
+# Reading a shortlist of twenty is about five seconds on fifteen CPU cores
+# and milliseconds on a GPU; this is the server to give a GPU first.
 apiVersion: apps/v1
-kind: Deployment
+kind: StatefulSet
 metadata:
   name: primer-reranker
   labels:
     app: primer-reranker
 spec:
   replicas: 1
+  serviceName: primer-reranker
   selector:
     matchLabels:
       app: primer-reranker
@@ -42,106 +29,89 @@ spec:
       labels:
         app: primer-reranker
     spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
       containers:
-        - name: tei
-          # The same pinned version as the embedding server, for the same
-          # reason: a server version that changes what a model returns is
-          # not something to discover by floating a tag.
-          image: ghcr.io/huggingface/text-embeddings-inference:cpu-1.9.3
+        - name: llama-server
+          # `server-cuda-b11804` (CUDA 12) or `server-cuda13-b11804`
+          # (CUDA 13, which a GB10 needs) for an NVIDIA GPU, with a
+          # `nvidia.com/gpu: 1` limit below.
+          image: ghcr.io/ggml-org/llama.cpp:server-b11804
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
           args:
-            - --model-id
-            - BAAI/bge-reranker-base
+            - --host
+            - "0.0.0.0"
             - --port
             - "8080"
-            # Warmup allocates against this number, so it is what an OOM
-            # at startup is usually made of - 8192 was tried here and was
-            # killed on load. The model caps a sequence at 512 tokens
-            # anyway, so this is eight of them in a batch, and a shortlist
-            # larger than that is simply inferred in more passes.
-            - --max-batch-tokens
-            - "4096"
-            # A passage longer than the model's 512 positions is trimmed
-            # rather than failing the shortlist it arrived in.
-            - --auto-truncate
-            # Primer sends its whole shortlist in one call, so this has to
-            # be at least `inference.rerank.candidates`.
-            - --max-client-batch-size
-            - "32"
-            # Counted in inputs rather than requests, exactly as on the
-            # embedding server - a shortlist of 20 costs 20 against this.
-            - --max-concurrent-requests
-            - "256"
-            # Sized from the node otherwise, which on a 72-core machine
-            # means 64 of them - and each holds its own tokenizer. This
-            # model is XLM-RoBERTa, whose SentencePiece vocabulary is about
-            # 250k entries, so those copies are not free the way Qwen's BPE
-            # is on the embedding server beside it. That is what was still
-            # being OOM-killed after the batch was already corrected: the
-            # process reached "Ready", bound its port, and died afterwards
-            # rather than during warmup.
-            #
-            # Four is ample. Reranking happens once per search over a
-            # shortlist, not once per chunk over an ingestion run.
-            - --tokenization-workers
+            - -hf
+            - ggml-org/Qwen3-Reranker-0.6B-Q8_0-GGUF
+            # The name Primer's `inference.rerank.model` uses.
+            - --alias
+            - Qwen/Qwen3-Reranker-0.6B
+            # Each of the four slots holds one question-and-passage pair of
+            # up to 2048 tokens. A pair that does not fit fails that
+            # search's reranking, which then keeps the vector ordering.
+            - --kv-unified-per-slot
+            - "2048"
+            - --parallel
             - "4"
+            - --batch-size
+            - "2048"
+            - --ubatch-size
+            - "2048"
+            - --reranking
           env:
-            - name: HUGGINGFACE_HUB_CACHE
+            - name: LLAMA_CACHE
               value: /data
+            - name: HOME
+              value: /tmp
           ports:
             - name: http
               containerPort: 8080
+          # The first start downloads the model.
+          startupProbe:
+            httpGet: { path: /health, port: http }
+            periodSeconds: 10
+            failureThreshold: 60
           readinessProbe:
-            httpGet:
-              path: /health
-              port: 8080
-            # First start downloads the model. Smaller than the embedder's,
-            # so this is tighter, but still generous.
-            initialDelaySeconds: 30
+            httpGet: { path: /health, port: http }
             periodSeconds: 15
-            failureThreshold: 40
           livenessProbe:
-            httpGet:
-              path: /health
-              port: 8080
+            httpGet: { path: /health, port: http }
             periodSeconds: 30
           resources:
             requests:
-              # Reranking is bursty - it runs once per search rather than
-              # once per chunk - so this asks for less CPU than the
-              # embedding server, which carries whole ingestion runs.
-              cpu: "1"
-              memory: 3Gi
+              cpu: "2"
+              memory: 2Gi
             limits:
-              # 6Gi was set from the parameter ratio against the embedding
-              # server and was OOM-killed on load, seventeen times. Model
-              # size is not what decides this: the warmup batch is, and the
-              # 8192 max-batch-tokens above it was paired with made that
-              # batch twice the embedder's while the ceiling was a third.
-              # Both are corrected; this keeps room to spare rather than
-              # finding the edge again.
-              memory: 10Gi
+              memory: 4Gi
           volumeMounts:
             - name: model-cache
               mountPath: /data
+            - name: tmp
+              mountPath: /tmp
       volumes:
-        - name: model-cache
-          persistentVolumeClaim:
-            claimName: primer-reranker-model-cache
----
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: primer-reranker-model-cache
-spec:
-  accessModes:
-    - ReadWriteOnce
-  resources:
-    # The ONNX build plus the safetensors it lands beside, with room to
-    # spare - the embedding server's cache had to be grown mid-flight for
-    # exactly that reason.
-    requests:
-      storage: 6Gi
-  # storageClassName: your-storage-class
+        - name: tmp
+          emptyDir:
+            sizeLimit: 1Gi
+  volumeClaimTemplates:
+    - metadata:
+        name: model-cache
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        # storageClassName: your-storage-class
+        resources:
+          requests:
+            storage: 4Gi
 ---
 apiVersion: v1
 kind: Service
@@ -155,4 +125,4 @@ spec:
   ports:
     - name: http
       port: 8080
-      targetPort: 8080
+      targetPort: http

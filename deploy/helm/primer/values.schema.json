@@ -181,6 +181,13 @@
                 },
                 "storageClass": {
                   "type": "string"
+                },
+                "existingClaim": {
+                  "type": "string"
+                },
+                "accessMode": {
+                  "type": "string",
+                  "enum": ["ReadWriteOnce", "ReadWriteOncePod", "ReadWriteMany"]
                 }
               }
             },
@@ -206,12 +213,23 @@
       "type": "object",
       "properties": {
         "url": {
-          "description": "An fsspec URL. Object storage for more than one replica: a ReadWriteOnce volume cannot be shared between nodes.",
+          "description": "s3:// for an S3-compatible object store, or file:///absolute/path for a directory on sourceStore.volume.",
           "type": "string",
-          "minLength": 1
+          "pattern": "^(s3://|file:///)"
         },
         "existingSecret": {
           "type": "string"
+        },
+        "volume": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "existingClaim": { "type": "string" },
+            "accessMode": { "type": "string", "enum": ["ReadWriteOnce", "ReadWriteOncePod", "ReadWriteMany"] },
+            "storageClass": { "type": "string" },
+            "size": { "type": "string" }
+          }
         }
       }
     },
@@ -326,6 +344,25 @@
               "description": "Prompt put before every passage. Empty takes it from Primer's table of known models.",
               "type": "string"
             },
+            "capabilities": {
+              "type": "object",
+              "description": "What the embedding server accepts. Primer stays inside it.",
+              "additionalProperties": false,
+              "required": ["batchSize", "maxInputTokens"],
+              "properties": {
+                "batchSize": {
+                  "description": "Passages per embedding call while indexing.",
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 2048
+                },
+                "maxInputTokens": {
+                  "description": "Tokens in one input, prompt included. The parse worker refuses chunks that would not fit.",
+                  "type": "integer",
+                  "minimum": 64
+                }
+              }
+            },
             "bundled": {
               "type": "object",
               "description": "An embedding server run by this release. Exclusive with baseUrl.",
@@ -349,9 +386,21 @@
                 "resources": {
                   "type": "object"
                 },
+                "gguf": {
+                  "description": "Hugging Face repository of the GGUF weights, optionally `:<quantization>`.",
+                  "type": "string",
+                  "minLength": 1
+                },
+                "parallel": {
+                  "description": "Inputs the server works on at once. Each gets the full input limit of context.",
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 64
+                },
                 "pooling": {
-                  "description": "TEI's --pooling. Empty reads it from the model.",
-                  "type": "string"
+                  "description": "llama-server's --pooling: how token states become one vector.",
+                  "type": "string",
+                  "enum": ["last", "mean", "cls"]
                 }
               }
             }
@@ -359,7 +408,7 @@
         },
         "modelServer": {
           "type": "object",
-          "description": "The Text Embeddings Inference image the bundled model servers run.",
+          "description": "The llama.cpp llama-server image the bundled model servers run.",
           "additionalProperties": false,
           "properties": {
             "image": {
@@ -394,7 +443,7 @@
           "type": "object",
           "properties": {
             "baseUrl": {
-              "description": "A TEI-compatible /rerank endpoint. Exclusive with bundled.enabled.",
+              "description": "A /rerank endpoint (vLLM, llama.cpp, TEI, Cohere, Jina): the URL before /rerank. Exclusive with bundled.enabled.",
               "type": "string"
             },
             "model": {
@@ -418,6 +467,22 @@
               "properties": {
                 "enabled": {
                   "type": "boolean"
+                },
+                "gguf": {
+                  "description": "Hugging Face repository of the GGUF weights, optionally `:<quantization>`.",
+                  "type": "string",
+                  "minLength": 1
+                },
+                "parallel": {
+                  "description": "Inputs the server works on at once. Each gets the full input limit of context.",
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 64
+                },
+                "maxInputTokens": {
+                  "description": "Tokens in one question-and-passage pair.",
+                  "type": "integer",
+                  "minimum": 64
                 },
                 "persistence": {
                   "type": "object",
@@ -512,6 +577,13 @@
                 },
                 "storageClass": {
                   "type": "string"
+                },
+                "existingClaim": {
+                  "type": "string"
+                },
+                "accessMode": {
+                  "type": "string",
+                  "enum": ["ReadWriteOnce", "ReadWriteOncePod", "ReadWriteMany"]
                 }
               }
             },
@@ -584,6 +656,13 @@
                 },
                 "storageClass": {
                   "type": "string"
+                },
+                "existingClaim": {
+                  "type": "string"
+                },
+                "accessMode": {
+                  "type": "string",
+                  "enum": ["ReadWriteOnce", "ReadWriteOncePod", "ReadWriteMany"]
                 }
               }
             },
@@ -753,7 +832,9 @@
           "additionalProperties": false,
           "properties": {
             "size": { "type": "string" },
-            "storageClass": { "type": "string" }
+            "storageClass": { "type": "string" },
+            "existingClaim": { "type": "string" },
+            "accessMode": { "type": "string", "enum": ["ReadWriteOnce", "ReadWriteOncePod", "ReadWriteMany"] }
           }
         },
         "resources": {

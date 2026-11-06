@@ -208,6 +208,8 @@ know. Retrieval refuses to start on an unknown model with no width.
 - name: PRIMER_EMBEDDING_DOCUMENT_PREFIX
   value: {{ . | quote }}
 {{- end }}
+- name: PRIMER_EMBEDDING_BATCH_SIZE
+  value: {{ .Values.inference.embeddings.capabilities.batchSize | quote }}
 {{- if .Values.inference.embeddings.existingSecret }}
 - name: PRIMER_EMBEDDING_API_KEY
   valueFrom:
@@ -502,6 +504,16 @@ is why there is a ceiling rather than no number.
 {{- end -}}
 
 {{/*
+The embedder's declared input limit, for both processes that have to stay
+inside it: Retrieval, which embeds questions, and the parse worker, which
+refuses to start when its chunks would not fit.
+*/}}
+{{- define "primer.embeddingInputLimit" -}}
+- name: PRIMER_EMBEDDING_MAX_INPUT_TOKENS
+  value: {{ .Values.inference.embeddings.capabilities.maxInputTokens | quote }}
+{{- end -}}
+
+{{/*
 What the parse worker needs to size chunks for the embedding model.
 
 The worker is told the model, not a tokenizer, and finds the tokenizer
@@ -524,6 +536,7 @@ download.
 {{- end }}
 - name: PRIMER_MAX_CHUNK_TOKENS
   value: {{ .Values.ingestion.maxChunkTokens | quote }}
+{{ include "primer.embeddingInputLimit" . }}
 {{- /*
 Joining runs on whatever the chunker produced, and the structural fallback
 - what a hosted model without a named tokenizer gets - is the one that

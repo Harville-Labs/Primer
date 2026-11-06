@@ -17,35 +17,28 @@
 #     --set sourceStore.existingSecret=primer-s3
 #
 # The embedding and reranking servers are the ones the chart runs by
-# default (`inference.*.bundled`), with the serving flags this file's
-# numbers depend on. To run your own instead, see docs/operations/models.md.
+# default (`inference.*.bundled`). To point at a vLLM or another server
+# you already run, see docs/operations/providers.md.
 
 inference:
   embeddings:
-    # The ONNX export rather than Qwen's own repository, which publishes no
-    # ONNX and so falls back to Text Embeddings Inference's Candle backend -
-    # measured at a quarter of the throughput, and flat under batching and
-    # concurrency alike. Same model, same vectors, same 1024 dimensions.
-    #
-    # The bundled server is started with `--pooling last-token` for this
-    # repository, because the export omits the pooling config Qwen ships.
-    # Mean-pooling this model returns plausible vectors that retrieve badly.
-    # Primer knows this export as Qwen3-Embedding-0.6B, so its 1024
-    # dimensions, its query instruction and its tokenizer follow from the
-    # name with nothing else to set.
-    model: onnx-community/Qwen3-Embedding-0.6B-ONNX
+    # Served by the bundled llama-server from Qwen's own Q8_0 GGUF, pooled
+    # by the last token. Primer knows this model, so its 1024 dimensions,
+    # its query instruction and its tokenizer follow from the name with
+    # nothing else to set.
+    model: Qwen/Qwen3-Embedding-0.6B
 
   # A cross-encoder reads the question and a passage together, which a
   # vector search cannot: its two embeddings were made without knowing
   # about each other.
   #
-  # Deliberately not Qwen3-Reranker-0.6B, the obvious partner to the
-  # embedding model above. Qwen publishes it as a causal LM rather than a
-  # sequence classifier, and the conversion that fixes that publishes no
-  # ONNX - which on CPU means about twenty seconds per question. This model
-  # measured 0.17-0.27s for ten passages.
+  # The partner to the embedding model above. On CPU it is the slowest part
+  # of a search - about five seconds for twenty passages on fifteen cores -
+  # which is the price of a reranker that separates answers from passages
+  # that merely share their topic. Lower `candidates`, or turn
+  # `rerank.bundled` off, on a node that cannot spare the time.
   rerank:
-    model: BAAI/bge-reranker-base
+    model: Qwen/Qwen3-Reranker-0.6B
     # Fetched by the vector search, read by the reranker, narrowed to the
     # answer. Wider than the answer needs on purpose - the passage that
     # answers a question is often inside the first twenty and outside the
@@ -57,9 +50,10 @@ inference:
   # cannot answer still arrives with a full set of passages attached, and
   # the model is handed them as evidence.
   #
-  # Measured against the reranker above, whose scores this reads. An
-  # unanswerable question topped out near 0.0003 and the weakest genuine
-  # answer measured 0.143. Re-measure on your own corpus before trusting
+  # Checked against the reranker above, whose scores this reads: it is
+  # close to binary, scoring an answering passage near 1 and an
+  # unanswerable question's best passage under 0.005. That was a small
+  # check, not a benchmark. Re-measure on your own corpus before trusting
   # it, and err low: a floor that is too high discards correct answers.
   #
   # Remove the reranker and this number becomes meaningless - it would then

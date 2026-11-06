@@ -51,13 +51,33 @@ x-service-env: &service-env
   PRIMER_DATABASE_URL: *database-url
   PRIMER_INTERNAL_API_TOKEN: ${PRIMER_INTERNAL_API_TOKEN:?set PRIMER_INTERNAL_API_TOKEN}
   PRIMER_SERVICE_TOKEN: ${PRIMER_INTERNAL_API_TOKEN:?set PRIMER_INTERNAL_API_TOKEN}
-  PRIMER_SOURCE_STORE_URL: file:///var/lib/primer/sources
+  PRIMER_SOURCE_STORE_URL: ${PRIMER_SOURCE_STORE_URL:-file:///var/lib/primer/sources}
 
-# The embedding model, said once: the bundled server loads it, Retrieval
+# PRIMER_SOURCE_DIR, PRIMER_POSTGRES_DIR, PRIMER_QDRANT_DIR and
+# PRIMER_GRAPH_DIR each bind a host directory in place of a named volume when
+# set: a disk with room, or a mounted NAS share for the uploads. The
+# databases want a local disk, not NFS or SMB - their locking and fsync
+# assume one. docs/operations/storage.md has the detail.
+
+# The object store's own settings, for PRIMER_SOURCE_STORE_URL=s3://bucket.
+# Listed without values so an unset one stays unset: an empty endpoint URL
+# is a URL, and would be used. Only the services that open the store get
+# them.
+x-source-store-env: &source-store-env
+  AWS_ACCESS_KEY_ID:
+  AWS_SECRET_ACCESS_KEY:
+  AWS_REGION:
+  FSSPEC_S3_ENDPOINT_URL:
+
+# The embedding model, said once: the bundled server answers to it, Retrieval
 # describes its vectors by it, and the parse worker cuts chunks with its
 # tokenizer. Told different models, they disagree without failing.
-x-embedding-model: &embedding-model ${PRIMER_EMBEDDING_MODEL:-onnx-community/Qwen3-Embedding-0.6B-ONNX}
-x-rerank-model: &rerank-model ${PRIMER_RERANK_MODEL:-BAAI/bge-reranker-base}
+x-embedding-model: &embedding-model ${PRIMER_EMBEDDING_MODEL:-Qwen/Qwen3-Embedding-0.6B}
+x-rerank-model: &rerank-model ${PRIMER_RERANK_MODEL:-Qwen/Qwen3-Reranker-0.6B}
+# The most tokens one embedding input may hold. The bundled server is sized
+# to it, Retrieval and the parse worker stay inside it, and your own server
+# should accept at least this much (vLLM's --max-model-len).
+x-embedding-input-limit: &embedding-input-limit ${PRIMER_EMBEDDING_MAX_INPUT_TOKENS:-2048}
 
 # Where the knowledge graph is, for Retrieval and the step that prepares its
 # schema. The password is required even with your own Neo4j: Retrieval does
@@ -67,24 +87,26 @@ x-graph-env: &graph-env
   PRIMER_GRAPH_URL: ${PRIMER_GRAPH_URL:-bolt://neo4j:7687}
   PRIMER_GRAPH_PASSWORD: ${PRIMER_GRAPH_PASSWORD:?set PRIMER_GRAPH_PASSWORD}
 
-# The bundled model servers: Text Embeddings Inference on CPU. The image is
-# published for amd64 only (huggingface/text-embeddings-inference#648), so on
-# Apple Silicon it runs emulated, and slowly; a native server of your own is
-# faster there. The flags are the ones docs/operations/models.md explains:
-# Primer sends 32 inputs per call, and a server accepting fewer refuses every
-# batch.
+# The bundled model servers: llama.cpp's llama-server on CPU, published for
+# amd64 and arm64, so they run natively on Apple Silicon and a DGX Spark.
+# Pinned to the build the default models were checked against; ADR 0015
+# says why llama.cpp and docs/operations/models.md explains the flags.
+#
+# Each of four slots holds a whole input of the declared limit, and the
+# batch holds one too: an embedding is computed in one pass, and an input
+# longer than its slot is refused, not truncated.
 x-model-server: &model-server
   <<: *hardening
-  image: ghcr.io/huggingface/text-embeddings-inference:cpu-1.9.3
-  platform: linux/amd64
+  image: ghcr.io/ggml-org/llama.cpp:server-b11804
   user: "10001:10001"
   depends_on:
     init-volumes:
       condition: service_completed_successfully
   environment:
-    # The image's home is not writable; the cache volume holds everything.
-    HF_HOME: /data
-    HUGGINGFACE_HUB_CACHE: /data
+    # Weights download into the cache volume; the image's home is not
+    # writable, so the Hugging Face client's other state goes to /tmp.
+    LLAMA_CACHE: /data
+    HOME: /tmp
   # The first start downloads the model, which is minutes on a slow link.
   healthcheck:
     test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/health"]
@@ -96,7 +118,7 @@ x-model-server: &model-server
 
 # What both ingestion workers share; each adds the settings for its stages.
 x-worker-env: &worker-env
-  <<: *service-env
+  <<: [*service-env, *source-store-env]
   PRIMER_BROKER_URL: amqp://primer:${RABBITMQ_PASSWORD:?set RABBITMQ_PASSWORD}@rabbitmq:5672//
   PRIMER_CONTROL_URL: http://control:8000
   PRIMER_RETRIEVAL_URL: http://retrieval:8000
@@ -128,7 +150,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}
       POSTGRES_DB: primer
     volumes:
-      - postgres-data:/var/lib/postgresql/data
+      - ${PRIMER_POSTGRES_DIR:-postgres-data}:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U primer -d primer"]
       interval: 5s
@@ -188,7 +210,7 @@ services:
       # On by default upstream, and it reports to Qdrant's servers.
       QDRANT__TELEMETRY_DISABLED: "true"
     volumes:
-      - qdrant-data:/qdrant/storage
+      - ${PRIMER_QDRANT_DIR:-qdrant-data}:/qdrant/storage
     # The image has no curl or wget, so this is bash opening the port.
     healthcheck:
       test: ["CMD", "bash", "-c", ":> /dev/tcp/127.0.0.1/6333"]
@@ -207,7 +229,7 @@ services:
     environment:
       NEO4J_AUTH: neo4j/${PRIMER_GRAPH_PASSWORD:?set PRIMER_GRAPH_PASSWORD}
     volumes:
-      - graph-data:/data
+      - ${PRIMER_GRAPH_DIR:-graph-data}:/data
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:7474"]
       interval: 5s
@@ -304,13 +326,15 @@ services:
   embeddings:
     <<: *model-server
     profiles: ["${PRIMER_EMBEDDING_BASE_URL:+external-embeddings}"]
-    # The default model's ONNX export carries no pooling config, and the
-    # mean pooling TEI would otherwise pick retrieves badly.
+    # The pooling is stated rather than left to the file: mean pooling a
+    # Qwen3 model returns plausible vectors that retrieve badly.
     command:
-      ["--model-id", *embedding-model, "--port", "8080",
-       "--pooling", "${PRIMER_EMBEDDING_POOLING:-last-token}",
-       "--max-batch-tokens", "4096", "--auto-truncate",
-       "--max-client-batch-size", "32", "--max-concurrent-requests", "256"]
+      ["--host", "0.0.0.0", "--port", "8080",
+       "-hf", "${PRIMER_EMBEDDING_GGUF:-Qwen/Qwen3-Embedding-0.6B-GGUF:Q8_0}",
+       "--alias", *embedding-model,
+       "--embedding", "--pooling", "${PRIMER_EMBEDDING_POOLING:-last}",
+       "--parallel", "4", "--kv-unified-per-slot", *embedding-input-limit,
+       "--batch-size", *embedding-input-limit, "--ubatch-size", *embedding-input-limit]
     volumes:
       - embedding-cache:/data
 
@@ -319,13 +343,12 @@ services:
   reranker:
     <<: *model-server
     profiles: ["${PRIMER_RERANK_BASE_URL+external-reranker}"]
-    # Tokenization workers are otherwise one per host core, each holding its
-    # own copy of a 250k-entry vocabulary.
     command:
-      ["--model-id", *rerank-model, "--port", "8080",
-       "--max-batch-tokens", "4096", "--auto-truncate",
-       "--max-client-batch-size", "32", "--max-concurrent-requests", "256",
-       "--tokenization-workers", "4"]
+      ["--host", "0.0.0.0", "--port", "8080",
+       "-hf", "${PRIMER_RERANK_GGUF:-ggml-org/Qwen3-Reranker-0.6B-Q8_0-GGUF}",
+       "--alias", *rerank-model, "--reranking",
+       "--parallel", "4", "--kv-unified-per-slot", "2048",
+       "--batch-size", "2048", "--ubatch-size", "2048"]
     volumes:
       - rerank-cache:/data
 
@@ -333,7 +356,7 @@ services:
     image: alpine
     restart: "no"
     volumes:
-      - source-objects:/var/lib/primer/sources
+      - ${PRIMER_SOURCE_DIR:-source-objects}:/var/lib/primer/sources
       - model-cache:/var/cache/primer/huggingface
       - embedding-cache:/var/cache/primer/embeddings
       - rerank-cache:/var/cache/primer/reranker
@@ -349,7 +372,7 @@ services:
       rabbitmq:
         condition: service_healthy
     environment:
-      <<: *service-env
+      <<: [*service-env, *source-store-env]
       # Fixed, not configurable: see the note at the top of this file.
       PRIMER_AUTH_MODE: disabled
       PRIMER_BROKER_URL: amqp://primer:${RABBITMQ_PASSWORD:?set RABBITMQ_PASSWORD}@rabbitmq:5672//
@@ -367,7 +390,7 @@ services:
       # model to read the image with; empty leaves it off.
       PRIMER_VISION_ENABLED: ${PRIMER_VISION_MODEL:+true}
     volumes:
-      - source-objects:/var/lib/primer/sources
+      - ${PRIMER_SOURCE_DIR:-source-objects}:/var/lib/primer/sources
     command:
       ["uvicorn", "primer_control.app:create_app", "--factory",
        "--host", "0.0.0.0", "--port", "8000"]
@@ -410,11 +433,12 @@ services:
       PRIMER_EMBEDDING_QUERY_PREFIX: ${PRIMER_EMBEDDING_QUERY_PREFIX:-}
       PRIMER_EMBEDDING_DOCUMENT_PREFIX: ${PRIMER_EMBEDDING_DOCUMENT_PREFIX:-}
       PRIMER_EMBEDDING_API_KEY: ${PRIMER_EMBEDDING_API_KEY:-}
+      PRIMER_EMBEDDING_BATCH_SIZE: ${PRIMER_EMBEDDING_BATCH_SIZE:-32}
       # Set but empty turns reranking off. A rerank URL has no /v1.
       PRIMER_RERANK_BASE_URL: ${PRIMER_RERANK_BASE_URL-http://reranker:8080}
       PRIMER_RERANK_MODEL: *rerank-model
       PRIMER_RERANK_API_KEY: ${PRIMER_RERANK_API_KEY:-}
-      # The bundled reranker accepts at most 32 in one call.
+      # Reading the shortlist is most of a search's time on CPU.
       PRIMER_RERANK_CANDIDATES: ${PRIMER_RERANK_CANDIDATES:-20}
       <<: *graph-env
     command:
@@ -492,6 +516,8 @@ services:
       PRIMER_EMBEDDING_MODEL: *embedding-model
       PRIMER_CHUNK_TOKENIZER: ${PRIMER_CHUNK_TOKENIZER:-}
       PRIMER_MAX_CHUNK_TOKENS: ${PRIMER_MAX_CHUNK_TOKENS:-512}
+      # The worker refuses to start with chunks longer than this.
+      PRIMER_EMBEDDING_MAX_INPUT_TOKENS: *embedding-input-limit
       # Figures in documents, and Studio images added to a library, are
       # indexed by what this model says they show. Unset, figures keep only
       # the text OCR finds in them and Studio offers no way to add an image.
@@ -501,7 +527,7 @@ services:
       PRIMER_VISION_CONCURRENCY: ${PRIMER_VISION_CONCURRENCY:-4}
       PRIMER_DESCRIBE_FIGURES: ${PRIMER_DESCRIBE_FIGURES:-true}
     volumes:
-      - source-objects:/var/lib/primer/sources
+      - ${PRIMER_SOURCE_DIR:-source-objects}:/var/lib/primer/sources
       # Docling downloads layout models on first use. A named volume keeps
       # them across restarts; without it every container start re-downloads
       # half a gigabyte.
@@ -532,7 +558,7 @@ services:
       PRIMER_CHAT_MODEL: ${PRIMER_CHAT_MODEL:-}
       PRIMER_CHAT_API_KEY: ${PRIMER_CHAT_API_KEY:-}
     volumes:
-      - source-objects:/var/lib/primer/sources
+      - ${PRIMER_SOURCE_DIR:-source-objects}:/var/lib/primer/sources
     # Threads, because every task here waits on the network.
     command:
       ["celery", "-A", "primer_ingestion.worker", "worker",

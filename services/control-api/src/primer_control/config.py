@@ -8,9 +8,10 @@ the edge injects.
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Annotated, Literal
 
-from pydantic import Field, SecretStr, model_validator
+from primer_storage import check_url
+from pydantic import AfterValidator, Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 AuthMode = Literal["disabled", "oidc"]
@@ -32,7 +33,9 @@ class Settings(BaseSettings):
         description="PostgreSQL URL; migrations are applied out of band, never at startup",
     )
 
-    source_store_url: str = Field(
+    #: Checked here so an unsupported scheme stops the process at startup
+    #: rather than failing the first upload.
+    source_store_url: Annotated[str, AfterValidator(check_url)] = Field(
         default="file:///var/lib/primer/sources",
         description="fsspec URL for uploaded source bytes; a local path or an object store",
     )

@@ -44,6 +44,15 @@ docker run --gpus all -p 8000:8000 -v primer-models:/models \
   ghcr.io/harville-labs/primer-lab:latest-cuda
 ```
 
+The bundled embedder and reranker run on llama.cpp's `llama-server`, from
+`ghcr.io/ggml-org/llama.cpp`. It is third-party, pinned to one build, and
+published for amd64 and arm64, so a default deployment has nothing that
+needs emulation. Its tag picks the hardware: `server-<build>` for CPU, which
+Compose and the chart use, `server-cuda-<build>` for CUDA 12, and
+`server-cuda13-<build>` for CUDA 13, which the GB10 needs. On the chart that
+is `inference.modelServer.image.tag`;
+[Choosing models](models.md#sizing) says what else changes for a GPU.
+
 Each build pushes by digest, and one later job gives all of an image's
 architectures their tags together. A tag applied by each build would belong
 to whichever architecture finished last, and would serve only that one. The

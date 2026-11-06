@@ -13,12 +13,12 @@ repeating that decision here without Control's data would mean guessing.
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, FastAPI, Request
 from fastapi.responses import JSONResponse
 from haystack.document_stores.types import DuplicatePolicy
-from haystack_integrations.document_stores.qdrant import QdrantDocumentStore
 from primer_contracts.errors import ErrorCode
 from primer_contracts.indexing import (
     DeleteRequest,
@@ -47,6 +47,7 @@ from primer_retrieval.errors import (
     graph_store,
     vector_store,
 )
+from primer_retrieval.fingerprint import EmbeddingFingerprint
 from primer_retrieval.graph import GraphStore, build_graph_store
 from primer_retrieval.hybrid import blend, provenance, related_chunks
 from primer_retrieval.pipelines import (
@@ -66,7 +67,7 @@ from primer_retrieval.pipelines import (
 )
 from primer_retrieval.reranking import Reranker, reorder
 from primer_retrieval.security import require_service_credential
-from primer_retrieval.stores import build_document_store
+from primer_retrieval.stores import RetryingQdrantDocumentStore, build_document_store
 
 logger = logging.getLogger(__name__)
 
@@ -87,11 +88,12 @@ class RetrievalState:
     def __init__(
         self,
         settings: Settings,
-        store: QdrantDocumentStore,
+        store: RetryingQdrantDocumentStore,
         document_embedder: DocumentEmbedder,
         text_embedder: TextEmbedder,
         retriever: Any | None = None,
         reranker: Reranker | None = None,
+        verify_embedder: Callable[[str], None] | None = None,
     ) -> None:
         self.settings = settings
         self.store = store
@@ -101,6 +103,9 @@ class RetrievalState:
         # None unless an endpoint is configured, and None is what makes a
         # deployment without one behave exactly as it did before.
         self.reranker = reranker if reranker is not None else build_reranker(settings)
+        self.verify_embedder = verify_embedder or EmbeddingFingerprint(
+            store, document_embedder, settings
+        )
         self.graph: GraphStore = build_graph_store(settings)
         self.communities = Communities(self.graph, settings)
 
@@ -178,6 +183,7 @@ def index_chunks(payload: IndexRequest, state: State) -> IndexResult:
     and ordinal, so a stage that ran twice rewrites identical rows instead of
     doubling the index.
     """
+    state.verify_embedder("this document cannot be indexed")
     with embedding_endpoint("this document cannot be indexed"):
         documents = to_documents(payload.chunks, state.document_embedder)
     with vector_store("this document cannot be indexed", state.settings.vector_dimensions):
@@ -236,6 +242,7 @@ def search(payload: SearchRequest, state: State) -> SearchResult:
     how well a passage answers the question, and the point of asking across
     the library is to read passages that do not. See ADR 0006.
     """
+    state.verify_embedder("this library cannot be searched")
     with embedding_endpoint("this library cannot be searched"):
         embedded = state.text_embedder.run(payload.query)
 
@@ -424,16 +431,19 @@ def purge_version(payload: PurgeRequest, state: State) -> DeleteResult:
 
 def create_app(
     settings: Settings | None = None,
-    store: QdrantDocumentStore | None = None,
+    store: RetryingQdrantDocumentStore | None = None,
     document_embedder: DocumentEmbedder | None = None,
     text_embedder: TextEmbedder | None = None,
     retriever: Any | None = None,
+    verify_embedder: Callable[[str], None] | None = None,
 ) -> FastAPI:
     """Build the Retrieval service.
 
     The store and embedders are injected rather than read from globals so a
     test can run the real filtering logic against a real backend without an
     embedding endpoint, which is what makes the conformance suite possible.
+    A test whose store is a stand-in passes `verify_embedder`, since the
+    fingerprint lives in the real collection's metadata.
     """
     settings = settings or Settings()
     app = FastAPI(
@@ -448,6 +458,7 @@ def create_app(
         document_embedder or build_document_embedder(settings),
         text_embedder or build_text_embedder(settings),
         retriever,
+        verify_embedder=verify_embedder,
     )
 
     @app.exception_handler(ProblemError)

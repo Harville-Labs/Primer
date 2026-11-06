@@ -41,7 +41,7 @@ def test_aliases_are_written_the_way_they_are_looked_up() -> None:
     ],
 )
 def test_a_model_is_found_under_the_name_its_server_uses(name: str, model_id: str) -> None:
-    """Ollama serves its own names and TEI serves repository ids.
+    """Ollama serves its own names; llama-server and vLLM serve repository ids.
 
     The operator types whichever their server answers to, and both have to
     reach the same prompts.

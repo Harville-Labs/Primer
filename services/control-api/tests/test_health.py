@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from fastapi.testclient import TestClient
 from primer_control.app import create_app
 from primer_control.config import Settings
@@ -20,13 +22,31 @@ def test_liveness_needs_no_identity(oidc_client: TestClient) -> None:
     assert oidc_client.get("/health/live").status_code == 200
 
 
-def test_readiness_passes_when_every_dependency_is_reachable() -> None:
-    settings = Settings(auth_mode="disabled")
+def reachable(tmp_path: Path) -> Settings:
+    """A database that answers, and a source store Control can write."""
+    return Settings(auth_mode="disabled", source_store_url=f"file://{tmp_path}")
+
+
+def test_readiness_passes_when_every_dependency_is_reachable(tmp_path: Path) -> None:
+    settings = reachable(tmp_path)
     app = create_app(settings, database=ReachableDatabase(settings.database_url))
     with TestClient(app) as client:
         response = client.get("/health/ready")
     assert response.status_code == 200
-    assert response.json() == {"status": "ready", "checks": {"database": True}}
+    assert response.json() == {"status": "ready", "checks": {"database": True, "sources": True}}
+
+
+def test_readiness_reports_a_source_store_control_cannot_write(tmp_path: Path) -> None:
+    """A read-only or unmounted volume passes every check that only looks.
+    Control would take traffic and fail each upload; this keeps it out of
+    the Service instead, and says which dependency is why."""
+    (tmp_path / "sources").write_text("a file where the store's directory should be")
+    settings = Settings(auth_mode="disabled", source_store_url=f"file://{tmp_path}/sources")
+    app = create_app(settings, database=ReachableDatabase(settings.database_url))
+    with TestClient(app) as client:
+        response = client.get("/health/ready")
+    assert response.status_code == 503
+    assert response.json()["checks"] == {"database": True, "sources": False}
 
 
 def test_readiness_reports_an_unreachable_database(disabled_client: TestClient) -> None:
@@ -36,20 +56,20 @@ def test_readiness_reports_an_unreachable_database(disabled_client: TestClient) 
     assert response.json()["checks"]["database"] is False
 
 
-def test_a_probe_that_raises_counts_as_unready() -> None:
+def test_a_probe_that_raises_counts_as_unready(tmp_path: Path) -> None:
     def explode() -> bool:
         raise RuntimeError("probe blew up")
 
     registry = DependencyRegistry()
     registry.register("storage", explode)
-    settings = Settings(auth_mode="disabled")
+    settings = reachable(tmp_path)
     app = create_app(
         settings, dependencies=registry, database=ReachableDatabase(settings.database_url)
     )
     with TestClient(app) as client:
         response = client.get("/health/ready")
     assert response.status_code == 503
-    assert response.json()["checks"] == {"storage": False, "database": True}
+    assert response.json()["checks"] == {"storage": False, "database": True, "sources": True}
 
 
 def test_errors_use_the_problem_detail_contract(oidc_client: TestClient) -> None:

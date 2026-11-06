@@ -69,9 +69,10 @@ def _qwen3(size: str, dimensions: int) -> EmbeddingModel:
 #: Ordered by how strongly Primer recommends them. The first is the default
 #: the documentation and the bundled server use.
 KNOWN_MODELS: tuple[EmbeddingModel, ...] = (
-    # Apache-2.0, ungated, and served by Text Embeddings Inference on CPU.
-    # The ONNX export is the same weights producing the same vectors, and
-    # several times faster under TEI, so it is the same row.
+    # Apache-2.0, ungated, and small enough for a CPU: the bundled
+    # llama-server runs its GGUF. Other packagings of the same weights - the
+    # ONNX export, Ollama's tag - produce the same vectors, so they are the
+    # same row.
     EmbeddingModel(
         model_id="Qwen/Qwen3-Embedding-0.6B",
         dimensions=1024,

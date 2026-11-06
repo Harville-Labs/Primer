@@ -1,0 +1,18 @@
+{{- /*
+The source store's volume, when the chart makes it. Kept when the release is
+uninstalled: it holds the documents people uploaded, which no reindex can
+bring back. A claim the operator made (`existingClaim`) is theirs already.
+*/}}
+{{- if and (include "primer.sourceStoreOnVolume" .) (not .Values.sourceStore.volume.existingClaim) }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "primer.sourceStoreClaim" . }}
+  labels:
+    {{- include "primer.labels" . | nindent 4 }}
+    app.kubernetes.io/component: sources
+  annotations:
+    helm.sh/resource-policy: keep
+spec:
+  {{- include "primer.claimSpec" .Values.sourceStore.volume | nindent 2 }}
+{{- end }}

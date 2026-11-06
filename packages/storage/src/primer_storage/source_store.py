@@ -20,8 +20,9 @@ from pathlib import Path, PurePosixPath
 from typing import Any
 from uuid import uuid4
 
-import fsspec
 from anyio import to_thread
+
+from primer_storage.backends import open_filesystem, probe
 
 #: Enough to cover every signature below without buffering a whole file.
 PREFIX_BYTES = 8192
@@ -181,13 +182,17 @@ class SourceStore:
     """Streams uploads into an fsspec filesystem, keyed by content hash."""
 
     def __init__(self, url: str, *, max_bytes: int, chunk_bytes: int = 1024 * 1024) -> None:
-        self._fs, self._root = fsspec.core.url_to_fs(url)
+        self._fs, self._root = open_filesystem(url)
         self._max_bytes = max_bytes
         self._chunk_bytes = chunk_bytes
 
     @property
     def chunk_bytes(self) -> int:
         return self._chunk_bytes
+
+    async def check(self) -> bool:
+        """Readiness: whether an upload could be written here right now."""
+        return await self._run(probe, self._fs, self._root)
 
     def _key(self, *parts: str) -> str:
         return str(PurePosixPath(self._root, *parts))

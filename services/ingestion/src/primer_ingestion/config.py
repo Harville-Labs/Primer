@@ -7,10 +7,11 @@ service credential that identifies this process to Control.
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Annotated, Literal
 
 from primer_contracts.embedding_models import find_embedding_model, tokenizer_for
-from pydantic import Field, SecretStr, model_validator
+from primer_storage import check_url
+from pydantic import AfterValidator, Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -41,7 +42,9 @@ class Settings(BaseSettings):
     #: for a dead worker.
     heartbeat_seconds: float = Field(default=60.0, gt=0)
 
-    source_store_url: str = Field(
+    #: Checked here so an unsupported scheme stops the process at startup
+    #: rather than failing the first upload.
+    source_store_url: Annotated[str, AfterValidator(check_url)] = Field(
         default="file:///var/lib/primer/sources",
         description="The same fsspec URL Control writes uploads to",
     )
@@ -122,6 +125,14 @@ class Settings(BaseSettings):
         default=512,
         gt=0,
         description="Token ceiling per chunk; ignored when no tokenizer is configured",
+    )
+    #: The longest input the embedding server accepts, as its operator
+    #: declared it. llama-server and vLLM refuse a longer one outright rather
+    #: than truncating it, so a chunk above this fails every batch it is in.
+    embedding_max_input_tokens: int | None = Field(
+        default=None,
+        gt=0,
+        description="Longest input the embedding server accepts; chunks must fit inside it",
     )
     #: Chunking splits on structure first, and a document whose labels are
     #: recognised as headings ends up one value per chunk. Passages under
@@ -224,6 +235,15 @@ class Settings(BaseSettings):
         setting to keep in step with the model, and the two disagreeing
         produces chunks the embedder silently truncates.
         """
+        limit = self.embedding_max_input_tokens
+        if limit is not None and self.max_chunk_tokens > limit:
+            raise ValueError(
+                f"PRIMER_MAX_CHUNK_TOKENS is {self.max_chunk_tokens}, but the embedding server "
+                f"accepts at most {limit} tokens (PRIMER_EMBEDDING_MAX_INPUT_TOKENS) and refuses "
+                f"longer inputs, so every batch holding a longer chunk would fail. Lower "
+                f"PRIMER_MAX_CHUNK_TOKENS to {limit} or less, or start the server with a "
+                f"larger limit and raise PRIMER_EMBEDDING_MAX_INPUT_TOKENS to match."
+            )
         if self.embedding_model is None:
             return self
         if self.chunk_tokenizer is None:

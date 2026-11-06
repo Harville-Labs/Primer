@@ -323,8 +323,10 @@ lower one of the two numbers. Raise concurrency only alongside the
 models on first use, and without a persistent volume every pod restart
 re-downloads about half a gigabyte from a third-party host.
 
-**Source storage must be shared.** More than one replica means object
-storage: a `ReadWriteOnce` volume cannot be mounted across nodes.
+**Source storage must be shared.** Control and the workers run on
+different nodes, so a `file://` store needs a ReadWriteMany volume, and the
+chart refuses one with no volume at all. [Storage](storage.md) covers both
+that and object storage.
 
 ### Staying up while a node goes away
 
@@ -503,7 +505,7 @@ and the schema hook:
 
 ## What is not here
 
-No RabbitMQ or model server. Qdrant is run by the release unless you name
+No RabbitMQ or chat model. Qdrant is run by the release unless you name
 your own. So is Neo4j, since the graph is rebuilt from the library by a reindex.
 PostgreSQL can be run by it too, and is off by default. Primer assumes you already have the
 infrastructure you want to keep your documents on, and a database you
@@ -526,9 +528,13 @@ Every key in that Secret is passed through, because the names belong to the
 storage backend rather than to Primer, and enumerating them here would mean
 a chart release each time a provider wanted one this chart had not heard of.
 
-It is mounted into Control and the ingestion workers only. Retrieval, Chat
+It is mounted into Control, the ingestion workers and Studio's retention
+job only. Retrieval, Chat
 and the web app never open a source object, and giving them the bucket's
 credentials would widen what a compromise of any of them reaches.
+
+To keep uploads in a directory instead, such as a NAS share, see
+[Storage](storage.md#uploads-in-a-directory).
 
 For anything else this chart does not model, `extraEnv` is added to every
 Primer workload.

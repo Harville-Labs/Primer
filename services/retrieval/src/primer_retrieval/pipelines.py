@@ -62,6 +62,7 @@ def build_document_embedder(settings: Settings) -> DocumentEmbedder:
         api_base_url=settings.embedding_base_url,
         prefix=settings.embedding_document_prefix or "",
         timeout=settings.embedding_timeout_seconds,
+        batch_size=settings.embedding_batch_size,
         progress_bar=False,
     )
 

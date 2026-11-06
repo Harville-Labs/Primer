@@ -17,12 +17,13 @@ bundle, but either can be turned off, and a deployment without a reranker
 endpoint must behave exactly as it did before this existed - the vector
 ordering, truncated to what was asked for.
 
-The protocol is a `/rerank` endpoint, which text-embeddings-inference,
-vLLM, Cohere and Jina all serve - though not identically, and the
-differences are load-bearing. TEI reads the passages from `texts` and
-returns `score`; the others read `documents` and return `relevance_score`.
-Primer sends both names and reads either, because an operator may swap the
-bundled server for anyone's.
+The protocol is a `/rerank` endpoint, which llama.cpp's llama-server (the
+one Primer bundles), vLLM, text-embeddings-inference, Cohere and Jina all
+serve - though not identically, and the differences are load-bearing.
+text-embeddings-inference reads the passages from `texts` and returns
+`score`; the others read `documents` and return `relevance_score`. Primer
+sends both names and reads either, because an operator may swap the bundled
+server for anyone's.
 """
 
 from __future__ import annotations
@@ -38,7 +39,7 @@ logger = logging.getLogger(__name__)
 def _score_of(entry: dict) -> float:
     """The relevance this server put on a passage, under either name.
 
-    `relevance_score` is Cohere's and `score` is TEI's. Reading only one
+    `relevance_score` is Cohere's and llama-server's, and `score` is TEI's. Reading only one
     with a default is worse than failing: every passage comes back scored
     zero, the ordering still looks reranked because the indices are
     honoured, and a relevance floor then discards the entire result.
@@ -84,7 +85,7 @@ class Reranker:
             # The passages are sent under both names because the servers
             # that speak this endpoint do not agree on one.
             # text-embeddings-inference reads `texts` and rejects a request
-            # without it; Cohere, vLLM and Jina read `documents`. Sending
+            # without it; llama-server, Cohere, vLLM and Jina read `documents`. Sending
             # both satisfies either, and the one that is not read is
             # ignored rather than refused - checked against TEI, which
             # accepts the pair and answers normally.
