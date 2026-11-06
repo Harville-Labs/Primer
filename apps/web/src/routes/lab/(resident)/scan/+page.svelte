@@ -1,4 +1,5 @@
 <script lang="ts">
+	import LabFailure from '#lib/components/lab/LabFailure.svelte';
 	import { Bookmark, ScanSearch, TriangleAlert } from '@lucide/svelte';
 	import { Badge, Button, Progress, Select } from '@sivir-ui/svelte';
 	import { onMount } from 'svelte';
@@ -155,10 +156,7 @@
 			{/if}
 
 			{#if scanner.failure}
-				<div role="alert" class="flex gap-2 rounded-lg border border-border bg-card p-3 text-xs">
-					<TriangleAlert size={14} aria-hidden="true" class="mt-px shrink-0 text-warning" />
-					<p><span class="font-medium">{scanner.failure.title}.</span> {scanner.failure.detail}</p>
-				</div>
+				<LabFailure failure={scanner.failure} variant="warning" />
 			{/if}
 		</div>
 
