@@ -10,10 +10,12 @@ retrieved, not from what is written.
 from __future__ import annotations
 
 import logging
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator, AsyncIterator
+from contextlib import aclosing
 from dataclasses import dataclass
 from uuid import UUID
 
+import anyio
 from haystack.dataclasses import ToolCall as ModelToolCall
 from primer_contracts.chat import (
     CitationEvent,
@@ -40,6 +42,7 @@ from primer_chat.compaction import Compactor
 from primer_chat.config import Settings
 from primer_chat.failures import describe
 from primer_chat.generation import ChatGenerator, Endpoint, ToolExchange
+from primer_chat.interruption import Event, Relayed, abandon
 from primer_chat.models import Conversation
 from primer_chat.rag import (
     NO_CONTEXT_REPLY,
@@ -53,7 +56,7 @@ from primer_chat.rag import (
 )
 from primer_chat.reasoning import Channel
 from primer_chat.repository import ChatRepository, summarize_message
-from primer_chat.tool_turn import MAX_TOOL_ROUNDS, ToolDesk, ToolEvent
+from primer_chat.tool_turn import MAX_TOOL_ROUNDS, ToolDesk
 
 logger = logging.getLogger(__name__)
 
@@ -155,18 +158,26 @@ class Responder:
             - estimate_tokens(empty, characters_per_token=self._characters_per_token)
         )
 
-    async def respond(
-        self, session: AsyncSession, turn: Answering
-    ) -> AsyncIterator[
-        MessageStarted
-        | MessageDelta
-        | ReasoningDelta
-        | CitationEvent
-        | MessageCompleted
-        | StreamError
-        | ToolEvent
-    ]:
-        """Answer one question, emitting events as the answer takes shape."""
+    async def respond(self, session: AsyncSession, turn: Answering) -> AsyncIterator[Event]:
+        """Answer one question, emitting events as the answer takes shape.
+
+        If the reader leaves partway, what they were sent is stored as a
+        failed answer rather than left STREAMING. See `interruption`.
+        """
+        relayed = Relayed()
+        try:
+            async with aclosing(self._turn(session, turn)) as events:
+                async for event in events:
+                    relayed.note(event)
+                    yield event
+        except (anyio.get_cancelled_exc_class(), GeneratorExit):
+            # Shielded, because the scope that was cancelled is this one and
+            # every await inside it would otherwise be cancelled too.
+            with anyio.CancelScope(shield=True):
+                await abandon(session, relayed)
+            raise
+
+    async def _turn(self, session: AsyncSession, turn: Answering) -> AsyncGenerator[Event]:
         repository = ChatRepository(session)
         conversation = turn.conversation
         event_id = 0
