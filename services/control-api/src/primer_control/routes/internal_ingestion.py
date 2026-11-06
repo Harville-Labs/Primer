@@ -12,7 +12,7 @@ from __future__ import annotations
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Request, status
+from fastapi import APIRouter, BackgroundTasks, Depends, Request, status
 from primer_contracts.errors import ErrorCode
 from primer_contracts.ingestion import (
     ClaimResponse,
@@ -27,9 +27,11 @@ from primer_service.errors import ProblemError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from primer_control.config import Settings
+from primer_control.dispatch import Dispatcher
 from primer_control.repositories.documents import DocumentRepository
 from primer_control.repositories.ingestion_jobs import IngestionJobRepository
 from primer_control.security import require_service_credential
+from primer_control.services.ingestion_pipeline import stage_waiting
 
 router = APIRouter(
     prefix="/internal/v1/ingestion",
@@ -122,14 +124,30 @@ async def heartbeat(
 
 @router.post("/jobs/{job_id}/complete", summary="Advance a completed stage")
 async def complete_stage(
-    job_id: UUID, payload: StageCompletion, session: Session
+    job_id: UUID,
+    payload: StageCompletion,
+    session: Session,
+    dispatcher: Dispatcher,
+    background: BackgroundTasks,
 ) -> TransitionResult:
+    """Advance the job, and send the stage it now waits for.
+
+    Control sends it rather than the worker that finished, because the
+    completion and the record that a message is owed commit together here.
+    A worker that published after completing left nothing behind when it
+    died in between, or when the broker refused it: the job sat in
+    `chunking` or `indexing` with no message and no sweep looking for one.
+    """
     try:
-        return await IngestionJobRepository(session).complete(
+        result = await IngestionJobRepository(session).complete(
             job_id, payload.stage, payload.generation_id
         )
     except LookupError as error:
         raise unknown_job(job_id) from error
+    following = stage_waiting(result.status) if result.applied else None
+    if following is not None:
+        background.add_task(dispatcher.dispatch, following, job_id)
+    return result
 
 
 @router.post("/jobs/{job_id}/fail", summary="Record a failed stage")
