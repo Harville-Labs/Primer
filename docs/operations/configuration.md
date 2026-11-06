@@ -45,6 +45,7 @@ instead of silently keeping a default.
 | `PRIMER_PARSE_THREADS` | `4` | CPU threads for Docling's models; match the CPU the worker is given |
 | `PRIMER_EMBEDDING_MODEL` | unset | The model Retrieval embeds with; the parse worker finds its tokenizer from it |
 | `PRIMER_CHUNK_TOKENIZER` | from the model | Set for a hosted model that publishes no tokenizer |
+| `PRIMER_EMBEDDING_MAX_INPUT_TOKENS` | unset | Longest input the embedding server accepts, its prompt included. The worker refuses to start if `PRIMER_MAX_CHUNK_TOKENS` would not fit. Compose and the chart set it |
 | `PRIMER_MAX_CHUNK_TOKENS` | `512` | Ignored without a tokenizer |
 | `PRIMER_MAX_CHUNKS_PER_DOCUMENT` | `5000` | Refuse rather than half-index |
 | `PRIMER_PARSE_DEADLINE_SECONDS` | `900` | Checked between phases |
@@ -86,6 +87,7 @@ with one.
 | `PRIMER_EMBEDDING_DOCUMENT_PREFIX` | from the model | Prompt put before every passage |
 | `PRIMER_EMBEDDING_BASE_URL` | unset | Any OpenAI-compatible endpoint |
 | `PRIMER_EMBEDDING_API_KEY` | unset | |
+| `PRIMER_EMBEDDING_BATCH_SIZE` | `32` | Passages per call to the embedding server. Keep it at or under what the server accepts |
 | `PRIMER_GRAPH_URL` | unset | **Required.** Neo4j `bolt://` or `neo4j://` URL. Retrieval refuses to start without it |
 | `PRIMER_GRAPH_USERNAME` | `neo4j` | |
 | `PRIMER_GRAPH_PASSWORD` | unset | **Required** |
@@ -100,27 +102,23 @@ with one.
 
 ## Source storage
 
-Uploaded files go wherever `PRIMER_SOURCE_STORE_URL` points, through
-`fsspec`. Two schemes are usable, because those are the backends Primer
-installs:
+Uploaded files go wherever `PRIMER_SOURCE_STORE_URL` points. Two schemes
+are accepted, and any other stops Control and the workers at startup:
 
 | Scheme | For |
 | --- | --- |
-| `file://` | One machine. A `ReadWriteOnce` volume cannot be shared between nodes, so this does not survive a second replica. |
-| `s3://` | Anything with more than one replica: S3, MinIO, Ceph, R2. |
+| `file:///<path>` | A directory: a local disk, or a NAS or cluster file system mounted at that path. Every process that opens the store must see the same directory |
+| `s3://<bucket>[/<prefix>]` | Any S3-compatible object store: AWS, MinIO, Garage, Ceph |
 
-`fsspec` imports a backend on first use rather than at startup, so a scheme
-whose package is not installed fails on somebody's first upload rather than
-when the service starts. Adding another one means adding its package to
-`primer-storage` and rebuilding the images; naming it in a URL is not
-enough.
+Credentials are the backend's own environment rather than Primer settings:
+`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`, and
+`FSSPEC_S3_ENDPOINT_URL` for anything that is not AWS. Only Control, the
+ingestion workers and Studio's retention job are given them, because those
+are the only processes that open a source object. Control's readiness check writes, reads back and
+deletes a small object, so a store it cannot write to shows as not ready.
 
-Credentials are the backend's own environment rather than Primer settings —
-`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, and `FSSPEC_S3_ENDPOINT_URL`
-for anything that is not AWS. In Kubernetes they come from
-`sourceStore.existingSecret`, mounted whole into Control and the ingestion
-workers and nothing else: those are the only processes that open a source
-object.
+[Storage](storage.md) covers where to put the store and the databases, in
+Compose and on the chart.
 
 
 ## Chat
@@ -309,8 +307,12 @@ Some combinations are refused rather than accepted and worked around later:
 ## Changing the embedding model
 
 Changing the model or its dimensions invalidates every existing vector.
-Vectors from different models are not comparable, and a store will reject
-the wrong width outright.
+Vectors from different models are not comparable, so Primer refuses to mix
+them. A collection records the embedder that built it, and a Retrieval
+pointed at a different one answers its searches and writes with a
+`409 conflict` that names `PRIMER_EMBEDDING_BASE_URL` and
+`PRIMER_QDRANT_INDEX`. A different width is refused as `wrong_dimensions`.
 
-Reindex your documents after such a change. Primer does not yet do this for
-you, and will not detect it on your behalf.
+To change models, set `PRIMER_QDRANT_INDEX` to a new collection and reindex
+every library into it. [Choosing models](models.md#a-different-model-at-the-same-width-is-refused-too)
+says what the check compares.

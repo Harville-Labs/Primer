@@ -16,3 +16,5 @@
 | [0012](0012-bundle-a-search-mcp-server.md) | Offer a bundled web search MCP server, off by default | Accepted |
 | [0013](0013-lab-loads-multimodal-checkpoints.md) | Load a multimodal checkpoint as the model it is | Accepted |
 | [0014](0014-knowledge-graph-is-always-on.md) | Make the knowledge graph part of every deployment | Accepted |
+| [0015](0015-bundle-llama-cpp-for-embeddings-and-reranking.md) | Bundle llama.cpp for embeddings and reranking, and refuse a changed embedder | Accepted |
+| [0016](0016-store-uploads-in-a-directory-or-s3.md) | Store uploads in a directory or in S3, and nothing else | Accepted |

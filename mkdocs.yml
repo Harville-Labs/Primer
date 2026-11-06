@@ -96,6 +96,8 @@ nav:
           - Bundled search server: adr/0012-bundle-a-search-mcp-server.md
           - Multimodal checkpoints in Lab: adr/0013-lab-loads-multimodal-checkpoints.md
           - Knowledge graph always on: adr/0014-knowledge-graph-is-always-on.md
+          - llama.cpp for embeddings: adr/0015-bundle-llama-cpp-for-embeddings-and-reranking.md
+          - Where uploads are stored: adr/0016-store-uploads-in-a-directory-or-s3.md
   - Operations:
       - Installing: operations/installing.md
       - Configuration: operations/configuration.md
@@ -106,6 +108,7 @@ nav:
       - Tools: operations/tools.md
       - Deploying: operations/deploying.md
       - Kubernetes: operations/kubernetes.md
+      - Storage: operations/storage.md
       - Images: operations/images.md
       - Migrations: operations/migrations.md
       - Upgrading: operations/upgrading.md

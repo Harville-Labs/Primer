@@ -24,7 +24,7 @@ one person will use the deployment, use Kubernetes.
   you. The same model reads the knowledge graph out of each passage unless
   you name a separate one, so it must support structured output.
 - **Disk for the models Primer does run.** The bundled embedder and
-  reranker download a few gigabytes on first start. The parse worker
+  reranker download about 1.3 GB on first start. The parse worker
   downloads Docling's layout models, about half a gigabyte.
 - **Time for the first start.** The downloads above can take minutes on a
   slow link. Later starts read them from a volume.
@@ -37,7 +37,7 @@ Everything else is optional and can be added later:
 | Lab | A tab for looking inside a small open model | [Lab](lab.md) |
 | Studio | Making and editing images, through an image server you run | [Studio](studio.md) |
 | A web search MCP server | The model can search the web, with each call approved by the person asking | [Tools](tools.md) |
-| Your own embedder or reranker | Needed on an arm64 machine, or a model you already serve | [Connecting model providers](providers.md#using-your-own-embedding-server) |
+| Your own embedder or reranker | A vLLM or other model server you already run, or a GPU | [Connecting model providers](providers.md#using-your-own-embedding-server) |
 
 ## Docker Compose
 
@@ -45,14 +45,13 @@ You need Docker with Compose v2 and a checkout of this repository. Run
 every command from the repository root.
 
 **On an arm64 machine** — a DGX Spark, another GB10 box, or Apple Silicon —
-Primer itself runs natively: its images are built for arm64, and so are
-PostgreSQL, RabbitMQ, Qdrant, and Neo4j. The exception is the bundled
-embedder and reranker. Their server, Text Embeddings Inference, is published
-for amd64 only. Under Docker Desktop on a Mac it runs emulated and slowly; on
-an arm64 Linux host it exits with `exec format error` unless the host has
-amd64 emulation registered. Point both at servers of your own before the
-first start, as [Connecting model providers](providers.md#using-your-own-embedding-server)
-describes.
+everything a default install runs is native: Primer's images are built for
+arm64, and so are PostgreSQL, RabbitMQ, Qdrant, Neo4j and the bundled
+model server, llama.cpp's `llama-server`. Nothing needs replacing.
+
+**Where data is kept.** Uploads and each database live in named Docker
+volumes unless you name a directory for them in `.env`, for example on a
+NAS mount or a larger disk. [Storage](storage.md) covers the choices.
 
 ### 1. Fill in `.env`
 

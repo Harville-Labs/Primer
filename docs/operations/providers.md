@@ -12,11 +12,11 @@ protocol works: vLLM, Ollama, llama.cpp's `llama-server`, or a hosted API.
 | --- | --- | --- | --- |
 | Chat | no | the base, ending in `/v1` | `/chat/completions`, `/models` |
 | Embedding | yes | the base, ending in `/v1` | `/embeddings` |
-| Rerank | yes | the base, **without** `/v1` for TEI and vLLM | `/rerank` |
+| Rerank | yes | the base, **without** `/v1` for llama.cpp and vLLM | `/rerank` |
 
-The rerank URL is the one people get wrong. TEI and vLLM serve `/rerank` at
-the root; Cohere and Jina serve it under `/v1`, so for those the base does
-end in `/v1`. Either way it is the URL before `/rerank`.
+The rerank URL is the one people get wrong. llama.cpp and vLLM serve
+`/rerank` at the root; Cohere and Jina serve it under `/v1`, so for those
+the base does end in `/v1`. Either way it is the URL before `/rerank`.
 
 ## Chat
 
@@ -70,23 +70,35 @@ Inside a container, `localhost` is the container. Use
 
 ## Using your own embedding server
 
-The bundled server is Text Embeddings Inference on CPU, serving
-`onnx-community/Qwen3-Embedding-0.6B-ONNX`. Replace it when you have a GPU,
-or on any arm64 machine: the image is published for amd64 only. Docker
-Desktop on Apple Silicon runs it emulated, and slowly. An arm64 Linux host
-such as a DGX Spark doesn't run it at all unless amd64 emulation is
-registered, and fails with `exec format error`. The reranker is the same
-server, so replace it too. A native Ollama is the quick fix for embeddings.
+The bundled server is llama.cpp's `llama-server` on CPU, serving Qwen's own
+Q8_0 build of `Qwen/Qwen3-Embedding-0.6B`. It is published for amd64 and
+arm64, so it runs natively on x86, a DGX Spark or Apple Silicon. Replace it
+when you already run a model server, or when you have a GPU to put it on.
 
 Choose before the first upload. The model sets the width of every stored
-vector, so changing it later means reindexing.
+vector, and a collection records the embedder that built it, so pointing at
+a different model later is refused until you reindex into a new index.
 [Choosing models](models.md) covers which to pick.
+
+### vLLM
+
+If you already run vLLM, serve the same model as a pooling model and point
+Primer at it:
+
+```bash
+vllm serve Qwen/Qwen3-Embedding-0.6B --runner pooling --max-model-len 2048
+```
+
+Older releases spell `--runner pooling` as `--task embed`. vLLM takes the
+pooling mode from the model's configuration, which for this model is
+already last-token.
 
 **Compose.** Setting the URL stops the bundled server:
 
 ```bash
-PRIMER_EMBEDDING_BASE_URL=http://host.docker.internal:11434/v1
-PRIMER_EMBEDDING_MODEL=qwen3-embedding:0.6b
+PRIMER_EMBEDDING_BASE_URL=http://host.docker.internal:8000/v1
+PRIMER_EMBEDDING_MODEL=Qwen/Qwen3-Embedding-0.6B
+PRIMER_EMBEDDING_MAX_INPUT_TOKENS=2048
 ```
 
 **Chart.** Turn the bundled server off and name yours. Setting both is
@@ -99,33 +111,54 @@ inference:
       enabled: false
     baseUrl: http://vllm.models:8000/v1
     model: Qwen/Qwen3-Embedding-0.6B
+    capabilities:
+      maxInputTokens: 2048   # what --max-model-len says
+      batchSize: 32
 ```
+
+### Any other server
 
 The model is the name your server answers to. Primer looks it up to find
 the width and the query and passage prompts, so for a model it knows that is
-all you set. For one it does not, set `dimensions` and the prefixes too.
+all you set. For one it does not, set `dimensions` and the prefixes too. Do
+not also configure the server to add prompts, or they are applied twice.
 
-To keep the bundled server and only change the model, set the model alone.
-The bundled server pools by `last-token`, which is right for the Qwen3
-models; most others want `mean` or `cls`
-(`inference.embeddings.bundled.pooling`, or `PRIMER_EMBEDDING_POOLING`).
+`capabilities.maxInputTokens` (`PRIMER_EMBEDDING_MAX_INPUT_TOKENS`) is the
+longest input the server accepts, its prompt included, and
+`capabilities.batchSize` (`PRIMER_EMBEDDING_BATCH_SIZE`) is how many
+passages Primer sends in one call. A server says nothing about either until
+a request breaks one, so they are declared. The parse worker refuses to
+start if `ingestion.maxChunkTokens` would not fit.
 
-For vLLM, serve an embedding model as a pooling model:
+An Ollama on the host works the same way:
 
 ```bash
-vllm serve Qwen/Qwen3-Embedding-0.6B --runner pooling
+PRIMER_EMBEDDING_BASE_URL=http://host.docker.internal:11434/v1
+PRIMER_EMBEDDING_MODEL=qwen3-embedding:0.6b
 ```
 
-Older releases spell that `--task embed`.
+To keep the bundled server and only change the model, set the model, the
+weights (`inference.embeddings.bundled.gguf`, or `PRIMER_EMBEDDING_GGUF`)
+and the pooling mode together. The bundled server pools by `last`, which is
+right for the Qwen3 models; most others want `mean` or `cls`
+(`inference.embeddings.bundled.pooling`, or `PRIMER_EMBEDDING_POOLING`).
 
 ## Using your own reranker, or none
+
+**vLLM.** Serve a cross-encoder it can score as one:
+
+```bash
+vllm serve BAAI/bge-reranker-v2-m3 --runner pooling
+```
+
+`/rerank` is at the root, so the URL has no `/v1`.
 
 **Compose.** Setting `PRIMER_RERANK_BASE_URL` stops the bundled server.
 Set it to your server's URL, or to nothing to search without reranking:
 
 ```bash
-PRIMER_RERANK_BASE_URL=http://host.docker.internal:8081
-PRIMER_RERANK_MODEL=BAAI/bge-reranker-base
+PRIMER_RERANK_BASE_URL=http://host.docker.internal:8000
+PRIMER_RERANK_MODEL=BAAI/bge-reranker-v2-m3
 ```
 
 **Chart.**
@@ -135,16 +168,17 @@ inference:
   rerank:
     bundled:
       enabled: false
-    baseUrl: http://tei.models:8080   # leave empty to search without one
-    model: BAAI/bge-reranker-base
+    baseUrl: http://vllm-rerank.models:8000   # leave empty to search without one
+    model: BAAI/bge-reranker-v2-m3
 ```
 
-The bundled reranker accepts at most 32 passages per call, so the chart
-refuses an `inference.rerank.candidates` above that while it is on.
+A reranker's scores are on a scale of its own, so changing it means
+measuring `inference.minScore` again.
+[Choosing models](models.md#the-relevance-floor) says how.
 
-TEI and vLLM read the passages from different fields and return scores
-under different names. Primer sends and reads both, so either works, as do
-Cohere's and Jina's hosted rerankers.
+llama.cpp, vLLM, Cohere and Jina read the passages from `documents` and
+return `relevance_score`; Text Embeddings Inference reads `texts` and
+returns `score`. Primer sends and reads both, so any of them works.
 
 ## Running the bundled servers yourself
 
