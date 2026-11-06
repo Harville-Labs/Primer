@@ -6,6 +6,11 @@ is the whole basis of Primer's deduplication.
 """
 
 from primer_storage.artifact_store import ArtifactStore
+from primer_storage.backends import (
+    SUPPORTED_SCHEMES,
+    UnsupportedStorage,
+    check_url,
+)
 from primer_storage.source_store import (
     DOCX_MEDIA_TYPE,
     FORMAT_NAMES,
@@ -32,6 +37,7 @@ __all__ = [
     "PNG_MEDIA_TYPE",
     "PPTX_MEDIA_TYPE",
     "SUPPORTED_EXTENSIONS",
+    "SUPPORTED_SCHEMES",
     "ArtifactStore",
     "QuotaExceeded",
     "SourceStore",
@@ -39,7 +45,9 @@ __all__ = [
     "StoredSource",
     "StudioStore",
     "UnsupportedContent",
+    "UnsupportedStorage",
     "accepted_formats",
+    "check_url",
     "detect_media_type",
 ]
 

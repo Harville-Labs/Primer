@@ -91,6 +91,7 @@ def create_app(
     )
     registry = dependencies or DependencyRegistry()
     registry.register_async("database", app.state.database.check)
+    registry.register_async("sources", app.state.source_store.check)
     app.state.dependencies = registry
 
     app.add_middleware(RequestIDMiddleware, header_name=settings.request_id_header)

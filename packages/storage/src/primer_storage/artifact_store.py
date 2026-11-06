@@ -17,7 +17,7 @@ from pathlib import PurePosixPath
 from typing import Any
 from uuid import UUID
 
-import fsspec
+from primer_storage.backends import open_filesystem
 
 CONVERSIONS = "conversions"
 
@@ -32,7 +32,7 @@ class ArtifactStore:
     """
 
     def __init__(self, url: str, *, prefix: str = "artifacts") -> None:
-        self._fs, self._root = fsspec.core.url_to_fs(url)
+        self._fs, self._root = open_filesystem(url)
         self._prefix = prefix
 
     def key(self, version_id: UUID, generation_id: UUID, name: str) -> str:

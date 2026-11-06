@@ -18,15 +18,16 @@ from pathlib import PurePosixPath
 from typing import Any
 from uuid import UUID, uuid4
 
-import fsspec
 from anyio import to_thread
+
+from primer_storage.backends import open_filesystem
 
 PREFIX = "studio"
 
 
 class StudioStore:
     def __init__(self, url: str, *, chunk_bytes: int = 1024 * 1024) -> None:
-        self._fs, self._root = fsspec.core.url_to_fs(url)
+        self._fs, self._root = open_filesystem(url)
         self._chunk_bytes = chunk_bytes
 
     def _key(self, *parts: str) -> str:

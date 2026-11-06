@@ -7,10 +7,11 @@ service credential that identifies this process to Control.
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Annotated, Literal
 
 from primer_contracts.embedding_models import find_embedding_model, tokenizer_for
-from pydantic import Field, SecretStr, model_validator
+from primer_storage import check_url
+from pydantic import AfterValidator, Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -41,7 +42,9 @@ class Settings(BaseSettings):
     #: for a dead worker.
     heartbeat_seconds: float = Field(default=60.0, gt=0)
 
-    source_store_url: str = Field(
+    #: Checked here so an unsupported scheme stops the process at startup
+    #: rather than failing the first upload.
+    source_store_url: Annotated[str, AfterValidator(check_url)] = Field(
         default="file:///var/lib/primer/sources",
         description="The same fsspec URL Control writes uploads to",
     )
