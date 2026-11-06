@@ -1,7 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { DeploymentCapabilities } from '#lib/api/types.ts';
 
-vi.mock('$app/env/private', () => ({ PRIMER_CONTROL_URL: 'http://control.test' }));
+vi.mock('$app/env/private', async () =>
+	(await import('#lib/server/private-env.testing.ts')).privateEnv({
+		PRIMER_CONTROL_URL: 'http://control.test',
+	}),
+);
 
 const { load: layout } = await import('./+layout.server');
 const { load: index } = await import('./+page.server');

@@ -11,6 +11,7 @@ from dataclasses import dataclass
 
 import pytest
 import pytest_asyncio
+from control_credentials import SERVICE_TOKEN
 from control_support import ServiceClient, UserClient
 from httpx2 import AsyncClient
 from primer_control.models import IngestionJob
@@ -199,11 +200,16 @@ async def test_job_state_is_what_the_document_reports(
     assert summary["status"] == "unsupported"
 
 
-@pytest.mark.parametrize("token", [None, "wrong-token"])
-async def test_the_internal_api_requires_the_service_credential(
+@pytest.mark.parametrize("token", [None, "wrong-token", SERVICE_TOKEN])
+async def test_the_job_api_admits_only_the_worker_credential(
     client: AsyncClient, job: QueuedJob, token: str | None
 ) -> None:
-    """An unset or wrong credential is refused; there is no anonymous path in."""
+    """An unset or wrong credential is refused; there is no anonymous path in.
+
+    Chat's credential is wrong here too. Chat asks what a person may read; a
+    credential that could also finish someone's ingestion job would let a
+    compromised Chat rewrite what a library holds.
+    """
     intruder = ServiceClient(client, token)
 
     response = await intruder.claim(job.job_id)

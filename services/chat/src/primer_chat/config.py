@@ -10,6 +10,7 @@ from __future__ import annotations
 from typing import Self
 
 from primer_contracts.images import ImageCapabilities
+from primer_service.identity import IdentitySettings
 from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -17,7 +18,7 @@ from primer_chat.budget import CHARACTERS_PER_TOKEN
 from primer_chat.tool_config import ToolConfiguration
 
 
-class Settings(BaseSettings):
+class Settings(BaseSettings, IdentitySettings):
     """Deployment configuration for the Chat service."""
 
     #: An empty variable is an unset one. Compose can only pass an optional
@@ -205,13 +206,3 @@ class Settings(BaseSettings):
     #: chart generates it; without one, keys cannot be stored at all and the
     #: settings page says so rather than writing a credential in the clear.
     settings_encryption_key: SecretStr | None = Field(default=None)
-    #: The group whose members may see and change how this deployment is
-    #: wired. Unset with authentication on means nobody, which is the safe
-    #: reading of an operator who has not decided yet.
-    admin_group: str | None = Field(default=None)
-
-    subject_header: str = Field(default="X-Forwarded-User")
-    email_header: str = Field(default="X-Forwarded-Email")
-    groups_header: str = Field(default="X-Forwarded-Groups")
-    groups_delimiter: str = Field(default=",", min_length=1)
-    auth_mode: str = Field(default="disabled")

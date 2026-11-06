@@ -77,15 +77,22 @@ def test_the_identity_boundary_is_still_written_by_hand() -> None:
     who a request is from. It is reviewed, not emitted by a tool from a
     document describing something else.
     """
-    server = REPO_ROOT / "apps" / "web" / "src" / "lib" / "server"
+    web = REPO_ROOT / "apps" / "web" / "src"
+    server = web / "lib" / "server"
     forwarding = (server / "forward.ts").read_text()
 
-    assert forwarding.count("x-forwarded-user") == 1
+    # The names come from the same variables the services read, so the two
+    # sides cannot disagree about which header holds the subject.
+    assert "PRIMER_SUBJECT_HEADER" in forwarding
+    assert "x-forwarded-user" not in forwarding.lower()
+    assert (web / "env.ts").read_text().count("X-Forwarded-User") == 1
     assert "generated" not in forwarding
     # And every client for a service goes through it, rather than one of
     # them growing its own list of headers that the others do not have.
-    for client in ("api.ts", "chat.ts", "lab.ts"):
-        source = (server / client).read_text()
+    clients = [server / name for name in ("api.ts", "chat.ts", "lab.ts")]
+    clients.append(web / "routes" / "chat" / "ask" / "+server.ts")
+    for client in clients:
+        source = client.read_text()
         assert "forwardingIdentity(" in source, client
         assert "x-forwarded-user" not in source, client
 

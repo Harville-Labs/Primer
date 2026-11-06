@@ -19,6 +19,8 @@ from primer_retrieval.config import Settings
 from pydantic import ValidationError
 
 SERVICE_TOKEN = "retrieval-test-token"  # noqa: S105 - a fixture value, not a real credential
+CHAT_TOKEN = "chat-token"  # noqa: S105 - a fixture value, not a real credential
+WORKER_TOKEN = "worker-token"  # noqa: S105 - a fixture value, not a real credential
 LIBRARY_ID = str(uuid.uuid5(uuid.NAMESPACE_URL, "library"))
 GENERATION_ID = str(uuid.uuid5(uuid.NAMESPACE_URL, "generation"))
 VERSION_ID = str(uuid.uuid5(uuid.NAMESPACE_URL, "version"))
@@ -58,7 +60,9 @@ def embedder() -> RecordingEmbedder:
 @pytest.fixture
 def client(embedder: RecordingEmbedder) -> TestClient:
     app = create_app(
-        Settings(internal_api_token=SERVICE_TOKEN, embedding_dimensions=8),
+        Settings(
+            internal_api_token=SERVICE_TOKEN, worker_token=SERVICE_TOKEN, embedding_dimensions=8
+        ),
         store=Tripwire(),  # ty: ignore[invalid-argument-type]
         verify_embedder=lambda _consequence: None,
         document_embedder=Tripwire(),  # ty: ignore[invalid-argument-type]
@@ -179,6 +183,42 @@ def test_every_route_requires_the_service_credential(client: TestClient, token: 
         response = post(client, path, body, token=token)
         assert response.status_code == 401, path
         assert response.json()["code"] == "identity_invalid"
+
+
+@pytest.mark.parametrize(
+    ("path", "token"),
+    [
+        ("/search", WORKER_TOKEN),
+        ("/passages", WORKER_TOKEN),
+        ("/graph/status", WORKER_TOKEN),
+        ("/index", CHAT_TOKEN),
+        ("/verify", CHAT_TOKEN),
+        ("/graph/index", CHAT_TOKEN),
+        ("/delete", CHAT_TOKEN),
+        ("/purge", CHAT_TOKEN),
+    ],
+)
+def test_each_caller_reaches_only_its_own_routes(path: str, token: str) -> None:
+    """Chat reads and the workers write; neither credential opens the other's.
+
+    A worker that could search would read any library it named, and Chat
+    that could delete would let one compromised pod empty everyone's. The
+    refusal comes from the credential, before the body is looked at, so an
+    empty body is enough to prove it.
+    """
+    app = create_app(
+        Settings(internal_api_token=CHAT_TOKEN, worker_token=WORKER_TOKEN, embedding_dimensions=8),
+        store=Tripwire(),  # ty: ignore[invalid-argument-type]
+        verify_embedder=lambda _consequence: None,
+        document_embedder=Tripwire(),  # ty: ignore[invalid-argument-type]
+        text_embedder=Tripwire(),  # ty: ignore[invalid-argument-type]
+        retriever=Tripwire(),
+    )
+
+    response = post(TestClient(app), path, {}, token=token)
+
+    assert response.status_code == 401
+    assert response.json()["code"] == "identity_invalid"
 
 
 def test_an_unconfigured_credential_denies_everything() -> None:
@@ -332,7 +372,9 @@ def test_health_endpoints_need_no_credential() -> None:
     the first time.
     """
     app = create_app(
-        Settings(internal_api_token=SERVICE_TOKEN, embedding_dimensions=8),
+        Settings(
+            internal_api_token=SERVICE_TOKEN, worker_token=SERVICE_TOKEN, embedding_dimensions=8
+        ),
         store=CountingStore(),  # ty: ignore[invalid-argument-type]
         verify_embedder=lambda _consequence: None,
         document_embedder=Tripwire(),  # ty: ignore[invalid-argument-type]
@@ -348,7 +390,9 @@ def test_health_endpoints_need_no_credential() -> None:
 def test_readiness_reports_a_store_it_cannot_reach() -> None:
     """Unready, not crashed: the orchestrator should stop sending traffic."""
     app = create_app(
-        Settings(internal_api_token=SERVICE_TOKEN, embedding_dimensions=8),
+        Settings(
+            internal_api_token=SERVICE_TOKEN, worker_token=SERVICE_TOKEN, embedding_dimensions=8
+        ),
         store=Tripwire(),  # ty: ignore[invalid-argument-type]
         verify_embedder=lambda _consequence: None,
         document_embedder=Tripwire(),  # ty: ignore[invalid-argument-type]
@@ -363,7 +407,9 @@ def test_liveness_does_not_touch_the_store() -> None:
     """A liveness probe that checked the store would restart this service
     whenever the store blipped, which is when restarting helps least."""
     app = create_app(
-        Settings(internal_api_token=SERVICE_TOKEN, embedding_dimensions=8),
+        Settings(
+            internal_api_token=SERVICE_TOKEN, worker_token=SERVICE_TOKEN, embedding_dimensions=8
+        ),
         store=Tripwire(),  # ty: ignore[invalid-argument-type]
         verify_embedder=lambda _consequence: None,
         document_embedder=Tripwire(),  # ty: ignore[invalid-argument-type]

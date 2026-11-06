@@ -69,8 +69,10 @@ values`, and in whatever stores your release history.
 | `graph.existingSecret` | `graph-password`. Required with `graph.url`; with the bundled Neo4j, the release makes one if you name none |
 | `graph.extraction.existingSecret` | `graph-extraction-api-key`, if the extraction endpoint needs one |
 
-The one it does create holds Primer's own cluster-internal service token,
-which means nothing outside the release, and the bundled Neo4j's password
+The one it does create holds Primer's own cluster-internal credentials,
+which mean nothing outside the release ([Internal
+credentials](configuration.md#internal-credentials) says which workload
+holds which), and the bundled Neo4j's password
 when `graph.existingSecret` names none. It is generated once and preserved across
 upgrades — regenerating it on every `helm upgrade` would leave in-flight
 workers holding a credential the API had just stopped accepting.

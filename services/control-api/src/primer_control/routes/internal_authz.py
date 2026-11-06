@@ -16,19 +16,19 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, status
 from primer_contracts.errors import ErrorCode
 from primer_contracts.indexing import LibraryAccessRequest, LibraryScope
+from primer_service.credentials import require_credential
 from primer_service.db import get_session
 from primer_service.errors import ProblemError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from primer_control.repositories.ingestion_jobs import IngestionJobRepository
 from primer_control.repositories.libraries import LibraryRepository
-from primer_control.security import require_service_credential
 from primer_control.services.library_access import LibraryAccess
 
 router = APIRouter(
     prefix="/internal/v1/authz",
     tags=["internal"],
-    dependencies=[Depends(require_service_credential)],
+    dependencies=[Depends(require_credential("internal_api_token"))],
     include_in_schema=False,
 )
 

@@ -3328,12 +3328,14 @@ source = { editable = "packages/service" }
 dependencies = [
     { name = "fastapi" },
     { name = "primer-contracts" },
+    { name = "pydantic" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "fastapi" },
     { name = "primer-contracts", editable = "packages/contracts" },
+    { name = "pydantic" },
 ]
 
 [[package]]

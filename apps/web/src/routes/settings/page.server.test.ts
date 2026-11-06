@@ -1,10 +1,12 @@
 import type { RequestEvent } from '@sveltejs/kit';
 import { describe, expect, it, vi } from 'vitest';
 
-vi.mock('$app/env/private', () => ({
-	PRIMER_CONTROL_URL: 'http://control.test',
-	PRIMER_CHAT_URL: 'http://chat.test',
-}));
+vi.mock('$app/env/private', async () =>
+	(await import('#lib/server/private-env.testing.ts')).privateEnv({
+		PRIMER_CONTROL_URL: 'http://control.test',
+		PRIMER_CHAT_URL: 'http://chat.test',
+	}),
+);
 
 const { actions } = await import('./+page.server');
 

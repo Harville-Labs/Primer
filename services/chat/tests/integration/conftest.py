@@ -8,11 +8,12 @@ assert when the fakes can record exactly what they were asked.
 
 from __future__ import annotations
 
+import os
 from collections.abc import AsyncIterator, Iterator
 
 import pytest
 import pytest_asyncio
-from chat_support import FakeControl, FakeGenerator, FakeRetrieval
+from chat_support import WEB_TOKEN, FakeControl, FakeGenerator, FakeRetrieval
 from httpx2 import ASGITransport, AsyncClient
 from primer_chat.app import create_app
 from primer_chat.config import Settings
@@ -22,6 +23,9 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 from testcontainers.community.postgres import PostgresContainer
 
 POSTGRES_IMAGE = "postgres:17"
+
+# Before any Settings is built: OIDC mode refuses to start without it.
+os.environ["PRIMER_WEB_TOKEN"] = WEB_TOKEN
 
 
 @pytest.fixture(scope="session")

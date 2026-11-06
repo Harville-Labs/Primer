@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Annotated, Literal
 
 from primer_contracts.lab import REPOSITORY_PATTERN, HubModel, LocalModel
+from primer_service.identity import IdentitySettings
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -24,7 +25,7 @@ QWEN_SCOPE = {
 QWEN3_4B_TRANSCODERS = "mwhanna/qwen3-4b-transcoders"
 
 
-class Settings(BaseSettings):
+class Settings(BaseSettings, IdentitySettings):
     """Deployment configuration for the Lab service."""
 
     #: Compose hands every optional Lab setting over as "" when it is unset,
@@ -41,7 +42,6 @@ class Settings(BaseSettings):
     #: Who may switch the resident model. A switch affects every user of
     #: this Lab, so a deployment shared by a class may want it narrower.
     lab_model_choice: Literal["users", "admins", "operator"] = "users"
-    admin_group: str | None = None
     #: Shell-style patterns a named repository must match. `Qwen/*` allows
     #: one publisher; the default allows any, because what makes a load
     #: safe is checked on the files, not taken from the name.
@@ -127,9 +127,3 @@ class Settings(BaseSettings):
     #: An experiment holds the prompts it was made from, which may be private,
     #: so it is not kept indefinitely by default.
     lab_experiment_retention_days: int = Field(default=90, ge=1, le=3650)
-
-    subject_header: str = Field(default="X-Forwarded-User")
-    email_header: str = Field(default="X-Forwarded-Email")
-    groups_header: str = Field(default="X-Forwarded-Groups")
-    groups_delimiter: str = Field(default=",", min_length=1)
-    auth_mode: str = Field(default="disabled")

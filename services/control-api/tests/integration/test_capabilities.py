@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import pytest
 import pytest_asyncio
+from control_credentials import FORWARDED
 from control_support import UserClient
 from httpx2 import ASGITransport, AsyncClient
 from primer_control.app import create_app
@@ -37,7 +38,9 @@ async def make_client(database: Database, clean_tables: AsyncEngine, source_stor
             database=database,
             source_store=source_store,
         )
-        return AsyncClient(transport=ASGITransport(app=app), base_url="http://control")
+        return AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://control", headers=FORWARDED
+        )
 
     return build
 

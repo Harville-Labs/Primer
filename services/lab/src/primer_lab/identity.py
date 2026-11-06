@@ -30,7 +30,7 @@ def can_choose_model(settings: Settings, principal: Principal) -> bool:
         case "admins":
             return is_admin(
                 principal,
-                auth_enabled=settings.auth_mode == "oidc",
+                auth_enabled=settings.auth_enabled,
                 admin_group=settings.admin_group,
             )
         case "operator":

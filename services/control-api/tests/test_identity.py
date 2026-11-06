@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 from fastapi.testclient import TestClient
+from primer_control.app import create_app
 from primer_control.config import Settings
 from primer_service.identity import LOCAL_SUBJECT
 from pydantic import ValidationError
@@ -26,6 +27,29 @@ def test_disabled_auth_ignores_spoofed_groups(disabled_client: TestClient) -> No
         "/api/v1/me", headers={"X-Auth-Request-Groups": "admins,operators"}
     )
     assert response.json()["groups"] == []
+
+
+@pytest.mark.parametrize("token", [None, "wrong-token"])
+def test_oidc_mode_refuses_identity_not_forwarded_by_the_web_app(token: str | None) -> None:
+    """A header naming a subject is not enough; the web app's credential is.
+
+    The proxy strips inbound identity headers at the edge, but anything inside
+    the cluster could reach Control directly and name anyone. Without this, a
+    worker or a compromised pod could act as any user.
+    """
+    headers = {"X-Forwarded-User": "someone-else"}
+    if token is not None:
+        headers["X-Primer-Web-Token"] = token
+    with TestClient(create_app(Settings(auth_mode="oidc"))) as client:
+        response = client.get("/api/v1/me", headers=headers)
+
+    assert response.status_code == 401
+    assert response.json()["code"] == "identity_invalid"
+
+
+def test_oidc_mode_refuses_to_start_without_a_web_token() -> None:
+    with pytest.raises(ValidationError, match="PRIMER_WEB_TOKEN"):
+        Settings(auth_mode="oidc", web_token=None)
 
 
 def test_oidc_mode_requires_trusted_subject(oidc_client: TestClient) -> None:

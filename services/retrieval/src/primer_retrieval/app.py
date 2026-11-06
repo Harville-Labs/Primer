@@ -37,6 +37,7 @@ from primer_contracts.indexing import (
     SearchRequest,
     SearchResult,
 )
+from primer_service.credentials import require_credential
 from primer_service.errors import ProblemError, problem_response
 
 from primer_retrieval import __version__
@@ -66,14 +67,21 @@ from primer_retrieval.pipelines import (
     to_retrieved,
 )
 from primer_retrieval.reranking import Reranker, reorder
-from primer_retrieval.security import require_service_credential
 from primer_retrieval.stores import RetryingQdrantDocumentStore, build_document_store
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(
+#: Chat reads; the ingestion workers write. Each holds only its own
+#: credential, so a worker cannot read a library's passages and Chat cannot
+#: rewrite one.
+reader = APIRouter(
     prefix="/internal/v1",
-    dependencies=[Depends(require_service_credential)],
+    dependencies=[Depends(require_credential("internal_api_token"))],
+    include_in_schema=False,
+)
+writer = APIRouter(
+    prefix="/internal/v1",
+    dependencies=[Depends(require_credential("worker_token"))],
     include_in_schema=False,
 )
 
@@ -172,7 +180,7 @@ def ready(state: State) -> JSONResponse:
     return JSONResponse(status_code=200, content={"status": "ok"})
 
 
-@router.post("/index", summary="Write one generation's chunks")
+@writer.post("/index", summary="Write one generation's chunks")
 def index_chunks(payload: IndexRequest, state: State) -> IndexResult:
     """Write into a pending generation.
 
@@ -191,7 +199,7 @@ def index_chunks(payload: IndexRequest, state: State) -> IndexResult:
     return IndexResult(generation_id=payload.generation_id, written=written)
 
 
-@router.post("/verify", summary="Count what a generation actually holds")
+@writer.post("/verify", summary="Count what a generation actually holds")
 def verify_generation(payload: GenerationQuery, state: State) -> GenerationCount:
     """Report a generation's size so activation can refuse an incomplete index.
 
@@ -212,7 +220,7 @@ def verify_generation(payload: GenerationQuery, state: State) -> GenerationCount
     )
 
 
-@router.post("/graph/index", summary="Write what one generation's chunks say, as a graph")
+@writer.post("/graph/index", summary="Write what one generation's chunks say, as a graph")
 def index_graph(payload: GraphIndexRequest, state: State) -> GraphIndexResult:
     """Write extracted entities and relations into a pending generation."""
     with graph_store("this document's graph cannot be indexed"):
@@ -222,7 +230,7 @@ def index_graph(payload: GraphIndexRequest, state: State) -> GraphIndexResult:
     return GraphIndexResult(generation_id=payload.generation_id, written=len(payload.graphs))
 
 
-@router.post("/search", summary="Search one library")
+@reader.post("/search", summary="Search one library")
 def search(payload: SearchRequest, state: State) -> SearchResult:
     """Rank passages within one library's active generations.
 
@@ -334,7 +342,7 @@ def above_floor(hits: list[Any], settings: Settings) -> list[Any]:
     return [hit for hit in hits if (hit.score or 0.0) >= settings.min_score]
 
 
-@router.post("/passages", summary="List one library's passages, in reading order")
+@reader.post("/passages", summary="List one library's passages, in reading order")
 def passages(payload: PassagesRequest, state: State) -> PassagesResult:
     """Every passage in a library's active generations, up to a limit.
 
@@ -356,7 +364,7 @@ def passages(payload: PassagesRequest, state: State) -> PassagesResult:
     )
 
 
-@router.post("/graph/status", summary="Describe how much of a library the graph covers")
+@reader.post("/graph/status", summary="Describe how much of a library the graph covers")
 def graph_status(payload: GraphStatusRequest, state: State) -> GraphStatus:
     """Counts for a library's graph, and which of its versions have one.
 
@@ -385,7 +393,7 @@ def graph_status(payload: GraphStatusRequest, state: State) -> GraphStatus:
     )
 
 
-@router.post("/delete", summary="Remove one generation's chunks")
+@writer.post("/delete", summary="Remove one generation's chunks")
 def delete_generation(payload: DeleteRequest, state: State) -> DeleteResult:
     """Delete by generation, which makes retiring and erasing the same act.
 
@@ -406,7 +414,7 @@ def delete_generation(payload: DeleteRequest, state: State) -> DeleteResult:
     return DeleteResult(generation_id=payload.generation_id, deleted=deleted)
 
 
-@router.post("/purge", summary="Remove a version's chunks")
+@writer.post("/purge", summary="Remove a version's chunks")
 def purge_version(payload: PurgeRequest, state: State) -> DeleteResult:
     """Erase a version, optionally sparing the generation now in use.
 
@@ -466,5 +474,6 @@ def create_app(
         return problem_response(request, exc)
 
     app.include_router(health)
-    app.include_router(router)
+    app.include_router(reader)
+    app.include_router(writer)
     return app

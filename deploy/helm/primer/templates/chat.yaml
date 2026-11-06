@@ -39,6 +39,7 @@ spec:
             - "8000"
           env:
             {{- include "primer.commonEnv" . | nindent 12 }}
+            {{- include "primer.credentialEnv" (list . (dict "PRIMER_SERVICE_TOKEN" "internal-token" "PRIMER_WEB_TOKEN" "web-token" "PRIMER_SETTINGS_ENCRYPTION_KEY" "settings-key")) | nindent 12 }}
             {{- include "primer.databaseEnv" . | nindent 12 }}
             - name: PRIMER_CONTROL_URL
               value: http://{{ include "primer.fullname" . }}-control:8000

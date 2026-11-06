@@ -59,39 +59,19 @@ a CPU does not finish a graph inside.
 {{- end -}}
 
 {{/*
-Settings every service shares. Secrets are referenced, never inlined: a value
-in the manifest is a value in `kubectl get deployment -o yaml`, and anyone
-with read access to the namespace has it.
+Settings every service shares. Credentials are not among them: each
+workload is handed only the ones it uses (primer.credentialEnv), because a
+credential in a pod is a credential anyone who compromises that pod holds.
 
-The database is not among them. Retrieval keeps nothing in PostgreSQL, and a
-service that is handed credentials it never uses widens what a compromise of
-it reaches; the ones that do use it include primer.databaseEnv themselves.
+The database is not among them either. Retrieval keeps nothing in
+PostgreSQL; the services that do use it include primer.databaseEnv
+themselves.
 */}}
 {{- define "primer.commonEnv" -}}
 - name: PRIMER_AUTH_MODE
   value: {{ .Values.auth.mode | quote }}
 - name: PRIMER_SOURCE_STORE_URL
   value: {{ .Values.sourceStore.url | quote }}
-- name: PRIMER_INTERNAL_API_TOKEN
-  valueFrom:
-    secretKeyRef:
-      name: {{ include "primer.fullname" . }}-internal
-      key: internal-token
-- name: PRIMER_SERVICE_TOKEN
-  valueFrom:
-    secretKeyRef:
-      name: {{ include "primer.fullname" . }}-internal
-      key: internal-token
-{{- /*
-Encrypts the API keys of providers added through the settings page. Given to
-every service rather than only the one that uses it, so that moving where
-providers are held later does not mean a chart change and a restart.
-*/}}
-- name: PRIMER_SETTINGS_ENCRYPTION_KEY
-  valueFrom:
-    secretKeyRef:
-      name: {{ include "primer.fullname" . }}-internal
-      key: settings-key
 {{- if .Values.auth.adminGroup }}
 {{- /*
 Who may see and change how this deployment is wired. Unset means nobody,
@@ -102,6 +82,32 @@ the alternative is that every user of a shared deployment can repoint it.
   value: {{ .Values.auth.adminGroup | quote }}
 {{- end }}
 {{- include "primer.extraEnv" . }}
+{{- end -}}
+
+{{/*
+Credentials from the release's internal Secret, as environment variables.
+Called with the root context and a map from variable name to Secret key, so
+each workload's template lists exactly what it holds:
+
+  internal-token  Chat presents it to Control and Retrieval, which accept it
+                  on their authorization and read routes.
+  worker-token    The ingestion workers present it to Control's job API and
+                  Retrieval's write routes, and nothing else accepts it. A
+                  worker that is compromised through a hostile document can
+                  then do no more than a worker does.
+  web-token       The web server presents it with the identity it forwards,
+                  so a service believes an identity header only from it.
+  settings-key    Encrypts provider keys; only Chat stores them.
+*/}}
+{{- define "primer.credentialEnv" -}}
+{{- $root := index . 0 }}
+{{- range $name, $key := index . 1 }}
+- name: {{ $name }}
+  valueFrom:
+    secretKeyRef:
+      name: {{ include "primer.fullname" $root }}-internal
+      key: {{ $key }}
+{{- end }}
 {{- end -}}
 
 {{/*

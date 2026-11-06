@@ -46,6 +46,7 @@ spec:
               value: http://{{ include "primer.fullname" . }}-control:8000
             - name: PRIMER_CHAT_URL
               value: http://{{ include "primer.fullname" . }}-chat:8000
+            {{- include "primer.credentialEnv" (list . (dict "PRIMER_WEB_TOKEN" "web-token")) | nindent 12 }}
             {{- if .Values.lab.enabled }}
             - name: PRIMER_LAB_URL
               value: http://{{ include "primer.fullname" . }}-lab:8000

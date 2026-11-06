@@ -15,6 +15,7 @@ from uuid import UUID
 
 import pytest
 import pytest_asyncio
+from control_credentials import FORWARDED
 from control_support import UserClient
 from httpx2 import ASGITransport, AsyncClient, Response
 from PIL import Image
@@ -66,7 +67,9 @@ async def make_client(
             studio_store=StudioStore(f"file://{tmp_path / 'studio'}"),
             publisher=publisher,
         )
-        http = AsyncClient(transport=ASGITransport(app=app), base_url="http://control")
+        http = AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://control", headers=FORWARDED
+        )
         clients.append(http)
         return http
 

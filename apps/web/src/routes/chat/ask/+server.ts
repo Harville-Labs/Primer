@@ -1,3 +1,4 @@
+import { forwardingIdentity } from '#lib/server/forward.ts';
 import { eventStream } from '#lib/server/stream.ts';
 import { PRIMER_CHAT_URL } from '$app/env/private';
 import type { RequestHandler } from './$types';
@@ -14,12 +15,9 @@ import type { RequestHandler } from './$types';
 /** Matched before the id is put in a path, so nothing else can be. */
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-export const POST: RequestHandler = async ({ request, fetch }) => {
-	const headers = new Headers({ 'Content-Type': 'application/json' });
-	for (const name of ['x-forwarded-user', 'x-forwarded-email', 'x-forwarded-groups']) {
-		const value = request.headers.get(name);
-		if (value) headers.set(name, value);
-	}
+export const POST: RequestHandler = async ({ request, fetch: serverFetch }) => {
+	const fetch = forwardingIdentity(request, serverFetch);
+	const headers = { 'Content-Type': 'application/json' };
 
 	const { conversation_id: conversationId, ...body } = (await request.json()) as {
 		conversation_id?: string;

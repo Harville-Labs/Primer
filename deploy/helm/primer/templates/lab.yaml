@@ -73,6 +73,7 @@ spec:
           env:
             - name: PRIMER_AUTH_MODE
               value: {{ .Values.auth.mode | quote }}
+            {{- include "primer.credentialEnv" (list . (dict "PRIMER_WEB_TOKEN" "web-token")) | nindent 12 }}
             {{- if .Values.auth.adminGroup }}
             - name: PRIMER_ADMIN_GROUP
               value: {{ .Values.auth.adminGroup | quote }}

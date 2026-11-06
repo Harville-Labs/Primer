@@ -11,6 +11,7 @@ from typing import Any
 
 import pytest
 import pytest_asyncio
+from control_credentials import FORWARDED
 from control_support import UserClient
 from httpx2 import ASGITransport, AsyncClient
 from primer_contracts.ingestion import StageName
@@ -52,7 +53,9 @@ async def client(
         source_store=source_store,
         publisher=publisher,
     )
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://control") as http:
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://control", headers=FORWARDED
+    ) as http:
         yield http
 
 
@@ -126,7 +129,9 @@ async def test_without_a_broker_uploads_still_work(
         database=database,
         source_store=source_store,
     )
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://control") as http:
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://control", headers=FORWARDED
+    ) as http:
         user = UserClient(http, "oidc-owner")
         library = (await user.post("/api/v1/libraries", {"name": "Local"})).json()
         response = await user.upload(str(library["id"]), "notes.md", b"# Notes")

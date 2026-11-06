@@ -21,6 +21,7 @@ from primer_contracts.ingestion import (
     StageFailure,
     TransitionResult,
 )
+from primer_service.credentials import require_credential
 from primer_service.db import get_session
 from primer_service.durable import DurableRoute
 from primer_service.errors import ProblemError
@@ -30,13 +31,12 @@ from primer_control.config import Settings
 from primer_control.dispatch import Dispatcher
 from primer_control.repositories.documents import DocumentRepository
 from primer_control.repositories.ingestion_jobs import IngestionJobRepository
-from primer_control.security import require_service_credential
 from primer_control.services.ingestion_pipeline import stage_waiting
 
 router = APIRouter(
     prefix="/internal/v1/ingestion",
     tags=["internal"],
-    dependencies=[Depends(require_service_credential)],
+    dependencies=[Depends(require_credential("worker_token"))],
     include_in_schema=False,
     # Commit before the response is sent; see primer_*.durable.
     route_class=DurableRoute,

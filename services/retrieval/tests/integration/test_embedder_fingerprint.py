@@ -68,6 +68,7 @@ def settings(qdrant_url: str, request: pytest.FixtureRequest) -> Settings:
         qdrant_index=f"fingerprint_{unique}",
         embedding_dimensions=DIMENSIONS,
         internal_api_token=TOKEN,
+        worker_token=TOKEN,
     )
 
 

@@ -15,7 +15,7 @@ from uuid import UUID
 
 import pytest
 import pytest_asyncio
-from conftest import SERVICE_TOKEN
+from control_credentials import FORWARDED, WORKER_TOKEN
 from control_support import ServiceClient, UserClient
 from httpx2 import ASGITransport, AsyncClient
 from primer_contracts.ingestion import StageName
@@ -60,12 +60,14 @@ async def client(
     publisher: FlakyPublisher,
 ) -> Any:
     app = create_app(
-        Settings(auth_mode="oidc", max_upload_bytes=4096, internal_api_token=SERVICE_TOKEN),
+        Settings(auth_mode="oidc", max_upload_bytes=4096, worker_token=WORKER_TOKEN),
         database=database,
         source_store=source_store,
         publisher=publisher,
     )
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://control") as http:
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://control", headers=FORWARDED
+    ) as http:
         yield http
 
 
@@ -76,7 +78,7 @@ def owner(client: AsyncClient) -> UserClient:
 
 @pytest.fixture
 def worker(client: AsyncClient) -> ServiceClient:
-    return ServiceClient(client, SERVICE_TOKEN)
+    return ServiceClient(client, WORKER_TOKEN)
 
 
 @pytest_asyncio.fixture

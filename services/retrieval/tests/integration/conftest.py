@@ -109,6 +109,7 @@ def client(qdrant_url: str, neo4j: Neo4jContainer, request: pytest.FixtureReques
         qdrant_index=f"service_{unique}",
         embedding_dimensions=DIMENSIONS,
         internal_api_token=SERVICE_TOKEN,
+        worker_token=SERVICE_TOKEN,
     )
     app = create_app(
         settings, document_embedder=StubDocumentEmbedder(), text_embedder=StubTextEmbedder()
@@ -138,6 +139,7 @@ def unreadable(
         qdrant_index=f"unreadable_{unique}",
         embedding_dimensions=DIMENSIONS,
         internal_api_token=SERVICE_TOKEN,
+        worker_token=SERVICE_TOKEN,
     )
     store = build_document_store(settings)
     # Swapped after construction so the store is built exactly the way
@@ -176,6 +178,7 @@ def graph_client(qdrant_url: str, neo4j: Neo4jContainer, request: pytest.Fixture
         qdrant_index=f"service_{unique}",
         embedding_dimensions=DIMENSIONS,
         internal_api_token=SERVICE_TOKEN,
+        worker_token=SERVICE_TOKEN,
     )
     app = create_app(
         settings, document_embedder=StubDocumentEmbedder(), text_embedder=StubTextEmbedder()

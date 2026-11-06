@@ -18,6 +18,7 @@ from fastapi.testclient import TestClient
 from primer_contracts.lab import HubModel, LocalModel
 from primer_lab.app import create_app
 from primer_lab.config import Settings
+from primer_service.credentials import WEB_TOKEN_HEADER
 from primer_service.db import Database
 from tokenizers import Tokenizer, models, pre_tokenizers
 from transformers import (
@@ -187,6 +188,7 @@ def lab(
         "lab_weights_dir": weights_dir,
         "lab_model": LocalModel(path=TINY),
         "lab_device": "cpu",
+        "web_token": WEB_TOKEN,
     }
     settings = Settings(**defaults | overrides)
     return TestClient(
@@ -226,6 +228,10 @@ def switch_to_chat_model(client: TestClient, weights_dir: Path) -> None:
     assert settle(client)["model"]["reference"]["path"] == "chatty"
 
 
+#: What the web app presents with the identity headers it forwards.
+WEB_TOKEN = "test-web-token"  # noqa: S105 - a test value
+
+
 def as_user(name: str) -> dict[str, str]:
-    """Headers as the proxy sets them, for a Lab running with authentication on."""
-    return {"X-Forwarded-User": name}
+    """Headers as the web app forwards them, for a Lab running with authentication on."""
+    return {"X-Forwarded-User": name, WEB_TOKEN_HEADER: WEB_TOKEN}

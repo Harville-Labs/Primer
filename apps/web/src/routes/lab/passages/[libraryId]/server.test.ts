@@ -1,10 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 
-vi.mock('$app/env/private', () => ({
-	PRIMER_CONTROL_URL: 'http://control.test',
-	PRIMER_CHAT_URL: 'http://chat.test',
-	PRIMER_LAB_URL: 'http://lab.test',
-}));
+vi.mock('$app/env/private', async () =>
+	(await import('#lib/server/private-env.testing.ts')).privateEnv({
+		PRIMER_CONTROL_URL: 'http://control.test',
+		PRIMER_CHAT_URL: 'http://chat.test',
+		PRIMER_LAB_URL: 'http://lab.test',
+	}),
+);
 
 const { GET } = await import('./+server');
 
