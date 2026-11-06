@@ -65,6 +65,7 @@ def build_client(**settings: Any) -> TestClient:
     app = create_app(
         Settings(internal_api_token=SERVICE_TOKEN, embedding_dimensions=8, **settings),
         store=EmptyStore(),  # ty: ignore[invalid-argument-type]
+        verify_embedder=lambda _consequence: None,
         document_embedder=object(),  # ty: ignore[invalid-argument-type]
         text_embedder=FixedEmbedder(),
         retriever=OneHitRetriever(),

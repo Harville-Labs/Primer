@@ -48,6 +48,7 @@ def client() -> TestClient:
             internal_api_token=SERVICE_TOKEN,
         ),
         store=object(),  # ty: ignore[invalid-argument-type]
+        verify_embedder=lambda _consequence: None,
         document_embedder=UnreachableEmbedder(),
         text_embedder=UnreachableEmbedder(),
         retriever=object(),
@@ -173,6 +174,7 @@ def client_storing(store: Any) -> TestClient:
             internal_api_token=SERVICE_TOKEN,
         ),
         store=store,
+        verify_embedder=lambda _consequence: None,
         document_embedder=WorkingEmbedder(),
         text_embedder=UnreachableEmbedder(),
         retriever=object(),

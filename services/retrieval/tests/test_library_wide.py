@@ -97,6 +97,7 @@ def build_client(graph: Graph, **settings: Any) -> TestClient:
     app = create_app(
         configured,
         store=object(),  # ty: ignore[invalid-argument-type]
+        verify_embedder=lambda _consequence: None,
         document_embedder=object(),  # ty: ignore[invalid-argument-type]
         text_embedder=Embedder(),
         retriever=Retriever(),
