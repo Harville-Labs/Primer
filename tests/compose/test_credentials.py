@@ -36,3 +36,12 @@ def test_the_workers_hold_only_the_worker_credential() -> None:
     for name in ("control", "retrieval"):
         environment = services[name]["environment"]
         assert environment["PRIMER_WORKER_TOKEN"] == RESOLVE_ENV["PRIMER_WORKER_TOKEN"], name
+
+
+def test_the_workers_hold_no_database_credential() -> None:
+    """They reach jobs through Control's API, so the database is not theirs to open."""
+    services = resolve(BASE)["services"]
+    for name in WORKERS:
+        environment = services[name]["environment"]
+        assert "PRIMER_DATABASE_URL" not in environment, name
+        assert environment["PRIMER_SOURCE_STORE_URL"].startswith("file://"), name

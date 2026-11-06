@@ -98,6 +98,9 @@ each workload's template lists exactly what it holds:
   web-token       The web server presents it with the identity it forwards,
                   so a service believes an identity header only from it.
   settings-key    Encrypts provider keys; only Chat stores them.
+  db-<role>-password
+                  A bundled PostgreSQL's login for Control, Chat or Lab;
+                  see primer.databaseEnv.
 */}}
 {{- define "primer.credentialEnv" -}}
 {{- $root := index . 0 }}
@@ -111,28 +114,62 @@ each workload's template lists exactly what it holds:
 {{- end -}}
 
 {{/*
-How to reach PostgreSQL. An operator's database comes as one URI from their
-Secret. A bundled one is addressed by the release, with the password passed
-as PGPASSWORD rather than spliced into the URI: asyncpg and psycopg both
-read it, and a password is then free to hold characters a URI would need
-escaped.
+How to reach PostgreSQL, as one service's runtime role or as the owner.
+
+Called with the root context and a role: "control", "chat" or "lab" for that
+service, or "" for the owner the migrations run as. A bundled PostgreSQL
+gives each service its own login, `primer_<role>`, which the migrations
+create and confine to that service's schema - so a flaw in Chat that ran
+arbitrary SQL could read conversations, but not libraries, and nothing at
+runtime can alter a table. Its password is in the release's internal Secret.
+
+An operator's database comes as one URI from their Secret, used by every
+service: the chart cannot build a URI for a role on a server it does not
+know the address of. See docs/operations/configuration.md.
+
+The password is passed as PGPASSWORD rather than spliced into the URI:
+asyncpg and psycopg both read it, and a password is then free to hold
+characters a URI would need escaped.
 */}}
 {{- define "primer.databaseEnv" -}}
-{{- $secret := required "postgresql.existingSecret is required: name a Secret holding the database URI under postgresql.urlKey, or its password under postgresql.passwordKey with postgresql.bundled.enabled" .Values.postgresql.existingSecret -}}
-{{- if .Values.postgresql.bundled.enabled }}
+{{- $root := index . 0 }}
+{{- $role := index . 1 }}
+{{- $secret := required "postgresql.existingSecret is required: name a Secret holding the database URI under postgresql.urlKey, or its password under postgresql.passwordKey with postgresql.bundled.enabled" $root.Values.postgresql.existingSecret -}}
+{{- if $root.Values.postgresql.bundled.enabled }}
+{{- $host := include "primer.postgresqlHost" $root }}
+{{- if $role }}
+{{- include "primer.credentialEnv" (list $root (dict "PGPASSWORD" (printf "db-%s-password" $role))) }}
+- name: PRIMER_DATABASE_URL
+  value: {{ printf "postgresql://primer_%s@%s:5432/primer" $role $host | quote }}
+{{- else }}
 - name: PGPASSWORD
   valueFrom:
     secretKeyRef:
       name: {{ $secret }}
-      key: {{ .Values.postgresql.passwordKey }}
+      key: {{ $root.Values.postgresql.passwordKey }}
 - name: PRIMER_DATABASE_URL
-  value: {{ printf "postgresql://primer@%s:5432/primer" (include "primer.postgresqlHost" .) | quote }}
+  value: {{ printf "postgresql://primer@%s:5432/primer" $host | quote }}
+{{- end }}
 {{- else }}
 - name: PRIMER_DATABASE_URL
   valueFrom:
     secretKeyRef:
       name: {{ $secret }}
-      key: {{ .Values.postgresql.urlKey }}
+      key: {{ $root.Values.postgresql.urlKey }}
+{{- end }}
+{{- end -}}
+
+{{/*
+What a migration Job needs to make the runtime role its service connects as.
+Empty for an operator's database, where every service uses their URI.
+*/}}
+{{- define "primer.runtimeRoleEnv" -}}
+{{- $root := index . 0 }}
+{{- $role := index . 1 }}
+{{- if $root.Values.postgresql.bundled.enabled }}
+- name: PRIMER_DATABASE_RUNTIME_ROLE
+  value: {{ printf "primer_%s" $role | quote }}
+{{- include "primer.credentialEnv" (list $root (dict "PRIMER_DATABASE_RUNTIME_PASSWORD" (printf "db-%s-password" $role))) }}
 {{- end }}
 {{- end -}}
 

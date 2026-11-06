@@ -107,7 +107,7 @@ spec:
               value: {{ $lab.dtype | quote }}
             - name: PRIMER_LAB_EXPERIMENT_RETENTION_DAYS
               value: {{ $lab.experimentRetentionDays | int | quote }}
-            {{- include "primer.databaseEnv" . | nindent 12 }}
+            {{- include "primer.databaseEnv" (list . "lab") | nindent 12 }}
           ports:
             - name: http
               containerPort: 8000

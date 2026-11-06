@@ -104,7 +104,6 @@ spec:
           env:
             {{- include "primer.commonEnv" $ | nindent 12 }}
             {{- include "primer.credentialEnv" (list $ (dict "PRIMER_SERVICE_TOKEN" "worker-token")) | nindent 12 }}
-            {{- include "primer.databaseEnv" $ | nindent 12 }}
             {{- include "primer.brokerEnv" $ | nindent 12 }}
             - name: PRIMER_CONTROL_URL
               value: http://{{ include "primer.fullname" $ }}-control:8000

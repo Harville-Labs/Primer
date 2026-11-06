@@ -43,7 +43,7 @@ spec:
               env:
                 {{- include "primer.commonEnv" $ | nindent 16 }}
                 {{- include "primer.credentialEnv" (list $ (dict "PRIMER_WEB_TOKEN" "web-token")) | nindent 16 }}
-                {{- include "primer.databaseEnv" $ | nindent 16 }}
+                {{- include "primer.databaseEnv" (list $ "control") | nindent 16 }}
                 - name: PRIMER_STUDIO_RETENTION_DAYS
                   value: {{ .retentionDays | int | quote }}
               resources:

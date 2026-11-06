@@ -464,7 +464,7 @@ def test_every_database_user_shares_the_bundled_url(compose_config: dict[str, An
     """One plain URL, from which each service chooses its own driver."""
     users = database_users(compose_config)
 
-    assert set(users) >= {"control", "chat", *WORKERS, "migrate-control", "migrate-chat"}
+    assert set(users) >= {"control", "chat", "migrate-control", "migrate-chat"}
     assert set(users.values()) == {"postgresql://primer:resolve-only@postgres:5432/primer"}
     assert "postgres" in compose_config["services"]
 

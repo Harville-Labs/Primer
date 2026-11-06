@@ -14,13 +14,19 @@ import pytest
 from test_chart import containers, render, workloads
 
 
+def _is_store_password(key: str) -> bool:
+    """A datastore's login, which test_chart_database covers, rather than a token."""
+    return key == "graph-password" or (key.startswith("db-") and key.endswith("-password"))
+
+
 def internal_credentials(workload: dict[str, Any]) -> dict[str, str]:
     """Variable name to key, for every variable read from the internal Secret."""
     found: dict[str, str] = {}
     for container in containers(workload):
         for entry in container.get("env") or []:
             ref = (entry.get("valueFrom") or {}).get("secretKeyRef") or {}
-            if ref.get("name", "").endswith("-internal") and ref.get("key") != "graph-password":
+            key = ref.get("key", "")
+            if ref.get("name", "").endswith("-internal") and not _is_store_password(key):
                 found[entry["name"]] = ref["key"]
     return found
 

@@ -329,6 +329,12 @@ headers and be anyone. The web server reads the header names from the same
 variables the services do: `PRIMER_SUBJECT_HEADER`, `PRIMER_EMAIL_HEADER`
 and `PRIMER_GROUPS_HEADER`, and `PRIMER_WEB_TOKEN`.
 
+The ingestion workers hold no database credential at all: everything they
+do to a job goes through Control's job API. With a bundled PostgreSQL, the
+chart also gives Control, Chat and Lab each their own database login,
+confined to that service's schema. See
+[Migrations](migrations.md#a-role-per-service).
+
 ## Settings that fail at startup
 
 Some combinations are refused rather than accepted and worked around later:
