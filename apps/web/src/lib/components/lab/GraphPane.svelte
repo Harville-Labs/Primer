@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { Network, TriangleAlert } from '@lucide/svelte';
+	import LabFailure from '#lib/components/lab/LabFailure.svelte';
+	import { Network } from '@lucide/svelte';
 	import { Button, Input, Slider, Spinner, Textarea } from '@sivir-ui/svelte';
 	import AttributionGraph from '#lib/components/lab/AttributionGraph.svelte';
 	import type { TranscoderStatus } from '#lib/api/types.ts';
@@ -101,13 +102,7 @@
 	{/if}
 
 	{#if grapher.failure}
-		<div role="alert" class="m-4 mb-0 flex gap-2 rounded-lg border border-error/40 bg-error/5 p-3 text-xs">
-			<TriangleAlert size={14} aria-hidden="true" class="mt-px shrink-0 text-error" />
-			<p>
-				<span class="font-medium text-error">{grapher.failure.title}.</span>
-				{grapher.failure.detail}
-			</p>
-		</div>
+		<LabFailure failure={grapher.failure} class="m-4 mb-0" />
 	{/if}
 
 	<div

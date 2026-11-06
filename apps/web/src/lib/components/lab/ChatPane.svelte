@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { MessagesSquare, Send, Square, TriangleAlert } from '@lucide/svelte';
+	import LabFailure from '#lib/components/lab/LabFailure.svelte';
+	import { MessagesSquare, Send, Square } from '@lucide/svelte';
 	import { Button, Slider, Spinner, Textarea } from '@sivir-ui/svelte';
 	import type { Intervention } from '#lib/api/types.ts';
 	import type { Exchange, SteeredChat } from '#lib/lab/chat.svelte.ts';
@@ -118,13 +119,7 @@
 					{@render steeringLine(exchange.steering)}
 				</p>
 				{#if exchange.view.failure}
-					<div role="alert" class="flex gap-2 rounded-lg border border-error/40 bg-error/5 p-3 text-xs">
-						<TriangleAlert size={14} aria-hidden="true" class="mt-px shrink-0 text-error" />
-						<p>
-							<span class="font-medium text-error">{exchange.view.failure.title}.</span>
-							{exchange.view.failure.detail}
-						</p>
-					</div>
+					<LabFailure failure={exchange.view.failure} />
 				{/if}
 				{#if running(exchange) && exchange.view.ahead}
 					<p class="flex items-center gap-2 text-xs text-muted-foreground" role="status">
