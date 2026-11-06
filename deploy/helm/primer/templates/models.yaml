@@ -154,11 +154,5 @@ spec:
           {{- include "primer.selectorLabels" $ | nindent 10 }}
           app.kubernetes.io/component: {{ $component }}
       spec:
-        accessModes: ["ReadWriteOnce"]
-        {{- with $server.bundled.persistence.storageClass }}
-        storageClassName: {{ . | quote }}
-        {{- end }}
-        resources:
-          requests:
-            storage: {{ $server.bundled.persistence.size }}
+        {{- include "primer.claimSpec" $server.bundled.persistence | nindent 8 }}
 {{- end }}

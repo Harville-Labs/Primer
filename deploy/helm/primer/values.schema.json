@@ -181,6 +181,13 @@
                 },
                 "storageClass": {
                   "type": "string"
+                },
+                "existingClaim": {
+                  "type": "string"
+                },
+                "accessMode": {
+                  "type": "string",
+                  "enum": ["ReadWriteOnce", "ReadWriteOncePod", "ReadWriteMany"]
                 }
               }
             },
@@ -206,12 +213,23 @@
       "type": "object",
       "properties": {
         "url": {
-          "description": "An fsspec URL. Object storage for more than one replica: a ReadWriteOnce volume cannot be shared between nodes.",
+          "description": "s3:// for an S3-compatible object store, or file:///absolute/path for a directory on sourceStore.volume.",
           "type": "string",
-          "minLength": 1
+          "pattern": "^(s3://|file:///)"
         },
         "existingSecret": {
           "type": "string"
+        },
+        "volume": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "existingClaim": { "type": "string" },
+            "accessMode": { "type": "string", "enum": ["ReadWriteOnce", "ReadWriteOncePod", "ReadWriteMany"] },
+            "storageClass": { "type": "string" },
+            "size": { "type": "string" }
+          }
         }
       }
     },
@@ -559,6 +577,13 @@
                 },
                 "storageClass": {
                   "type": "string"
+                },
+                "existingClaim": {
+                  "type": "string"
+                },
+                "accessMode": {
+                  "type": "string",
+                  "enum": ["ReadWriteOnce", "ReadWriteOncePod", "ReadWriteMany"]
                 }
               }
             },
@@ -631,6 +656,13 @@
                 },
                 "storageClass": {
                   "type": "string"
+                },
+                "existingClaim": {
+                  "type": "string"
+                },
+                "accessMode": {
+                  "type": "string",
+                  "enum": ["ReadWriteOnce", "ReadWriteOncePod", "ReadWriteMany"]
                 }
               }
             },
@@ -800,7 +832,9 @@
           "additionalProperties": false,
           "properties": {
             "size": { "type": "string" },
-            "storageClass": { "type": "string" }
+            "storageClass": { "type": "string" },
+            "existingClaim": { "type": "string" },
+            "accessMode": { "type": "string", "enum": ["ReadWriteOnce", "ReadWriteOncePod", "ReadWriteMany"] }
           }
         },
         "resources": {

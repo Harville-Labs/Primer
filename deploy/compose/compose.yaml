@@ -51,7 +51,23 @@ x-service-env: &service-env
   PRIMER_DATABASE_URL: *database-url
   PRIMER_INTERNAL_API_TOKEN: ${PRIMER_INTERNAL_API_TOKEN:?set PRIMER_INTERNAL_API_TOKEN}
   PRIMER_SERVICE_TOKEN: ${PRIMER_INTERNAL_API_TOKEN:?set PRIMER_INTERNAL_API_TOKEN}
-  PRIMER_SOURCE_STORE_URL: file:///var/lib/primer/sources
+  PRIMER_SOURCE_STORE_URL: ${PRIMER_SOURCE_STORE_URL:-file:///var/lib/primer/sources}
+
+# PRIMER_SOURCE_DIR, PRIMER_POSTGRES_DIR, PRIMER_QDRANT_DIR and
+# PRIMER_GRAPH_DIR each bind a host directory in place of a named volume when
+# set: a disk with room, or a mounted NAS share for the uploads. The
+# databases want a local disk, not NFS or SMB - their locking and fsync
+# assume one. docs/operations/storage.md has the detail.
+
+# The object store's own settings, for PRIMER_SOURCE_STORE_URL=s3://bucket.
+# Listed without values so an unset one stays unset: an empty endpoint URL
+# is a URL, and would be used. Only the services that open the store get
+# them.
+x-source-store-env: &source-store-env
+  AWS_ACCESS_KEY_ID:
+  AWS_SECRET_ACCESS_KEY:
+  AWS_REGION:
+  FSSPEC_S3_ENDPOINT_URL:
 
 # The embedding model, said once: the bundled server answers to it, Retrieval
 # describes its vectors by it, and the parse worker cuts chunks with its
@@ -102,7 +118,7 @@ x-model-server: &model-server
 
 # What both ingestion workers share; each adds the settings for its stages.
 x-worker-env: &worker-env
-  <<: *service-env
+  <<: [*service-env, *source-store-env]
   PRIMER_BROKER_URL: amqp://primer:${RABBITMQ_PASSWORD:?set RABBITMQ_PASSWORD}@rabbitmq:5672//
   PRIMER_CONTROL_URL: http://control:8000
   PRIMER_RETRIEVAL_URL: http://retrieval:8000
@@ -134,7 +150,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}
       POSTGRES_DB: primer
     volumes:
-      - postgres-data:/var/lib/postgresql/data
+      - ${PRIMER_POSTGRES_DIR:-postgres-data}:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U primer -d primer"]
       interval: 5s
@@ -194,7 +210,7 @@ services:
       # On by default upstream, and it reports to Qdrant's servers.
       QDRANT__TELEMETRY_DISABLED: "true"
     volumes:
-      - qdrant-data:/qdrant/storage
+      - ${PRIMER_QDRANT_DIR:-qdrant-data}:/qdrant/storage
     # The image has no curl or wget, so this is bash opening the port.
     healthcheck:
       test: ["CMD", "bash", "-c", ":> /dev/tcp/127.0.0.1/6333"]
@@ -213,7 +229,7 @@ services:
     environment:
       NEO4J_AUTH: neo4j/${PRIMER_GRAPH_PASSWORD:?set PRIMER_GRAPH_PASSWORD}
     volumes:
-      - graph-data:/data
+      - ${PRIMER_GRAPH_DIR:-graph-data}:/data
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:7474"]
       interval: 5s
@@ -340,7 +356,7 @@ services:
     image: alpine
     restart: "no"
     volumes:
-      - source-objects:/var/lib/primer/sources
+      - ${PRIMER_SOURCE_DIR:-source-objects}:/var/lib/primer/sources
       - model-cache:/var/cache/primer/huggingface
       - embedding-cache:/var/cache/primer/embeddings
       - rerank-cache:/var/cache/primer/reranker
@@ -356,7 +372,7 @@ services:
       rabbitmq:
         condition: service_healthy
     environment:
-      <<: *service-env
+      <<: [*service-env, *source-store-env]
       # Fixed, not configurable: see the note at the top of this file.
       PRIMER_AUTH_MODE: disabled
       PRIMER_BROKER_URL: amqp://primer:${RABBITMQ_PASSWORD:?set RABBITMQ_PASSWORD}@rabbitmq:5672//
@@ -374,7 +390,7 @@ services:
       # model to read the image with; empty leaves it off.
       PRIMER_VISION_ENABLED: ${PRIMER_VISION_MODEL:+true}
     volumes:
-      - source-objects:/var/lib/primer/sources
+      - ${PRIMER_SOURCE_DIR:-source-objects}:/var/lib/primer/sources
     command:
       ["uvicorn", "primer_control.app:create_app", "--factory",
        "--host", "0.0.0.0", "--port", "8000"]
@@ -511,7 +527,7 @@ services:
       PRIMER_VISION_CONCURRENCY: ${PRIMER_VISION_CONCURRENCY:-4}
       PRIMER_DESCRIBE_FIGURES: ${PRIMER_DESCRIBE_FIGURES:-true}
     volumes:
-      - source-objects:/var/lib/primer/sources
+      - ${PRIMER_SOURCE_DIR:-source-objects}:/var/lib/primer/sources
       # Docling downloads layout models on first use. A named volume keeps
       # them across restarts; without it every container start re-downloads
       # half a gigabyte.
@@ -542,7 +558,7 @@ services:
       PRIMER_CHAT_MODEL: ${PRIMER_CHAT_MODEL:-}
       PRIMER_CHAT_API_KEY: ${PRIMER_CHAT_API_KEY:-}
     volumes:
-      - source-objects:/var/lib/primer/sources
+      - ${PRIMER_SOURCE_DIR:-source-objects}:/var/lib/primer/sources
     # Threads, because every task here waits on the network.
     command:
       ["celery", "-A", "primer_ingestion.worker", "worker",

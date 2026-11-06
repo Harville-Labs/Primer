@@ -19,6 +19,7 @@ gives Lab a URL for a role granted only the `lab` schema.
 */}}
 {{- $full := include "primer.fullname" . }}
 {{- $lab := .Values.lab }}
+{{- if not $lab.persistence.existingClaim }}
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -28,13 +29,8 @@ metadata:
     {{- include "primer.labels" . | nindent 4 }}
     app.kubernetes.io/component: lab
 spec:
-  accessModes: ["ReadWriteOnce"]
-  {{- with $lab.persistence.storageClass }}
-  storageClassName: {{ . | quote }}
-  {{- end }}
-  resources:
-    requests:
-      storage: {{ $lab.persistence.size }}
+  {{- include "primer.claimSpec" $lab.persistence | nindent 2 }}
+{{- end }}
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -134,7 +130,7 @@ spec:
       volumes:
         - name: models
           persistentVolumeClaim:
-            claimName: {{ $full }}-lab-models
+            claimName: {{ $lab.persistence.existingClaim | default (printf "%s-lab-models" $full) | quote }}
         {{- include "primer.scratchVolumes" . | nindent 8 }}
 ---
 apiVersion: v1

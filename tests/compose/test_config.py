@@ -100,7 +100,7 @@ def test_nothing_mounts_the_docker_socket(compose_config: dict[str, Any]) -> Non
 
 
 def test_nothing_bind_mounts_a_host_path(compose_config: dict[str, Any]) -> None:
-    """Named volumes only, so the stack is portable and cannot reach the host."""
+    """Named volumes unless an operator names a directory (tests/compose/test_storage.py)."""
     for name, service in compose_config["services"].items():
         for volume in service.get("volumes", []):
             kind = volume.get("type") if isinstance(volume, dict) else None
@@ -319,9 +319,7 @@ def test_both_sides_of_the_index_are_told_the_embedding_model(
     assert services["retrieval"]["environment"]["PRIMER_EMBEDDING_MODEL"] == (
         DEFAULT_EMBEDDING_MODEL
     )
-    assert worker_option(services["embeddings"]["command"], "--alias") == (
-        DEFAULT_EMBEDDING_MODEL
-    )
+    assert worker_option(services["embeddings"]["command"], "--alias") == (DEFAULT_EMBEDDING_MODEL)
     assert worker_option(services["embeddings"]["command"], "--pooling") == "last"
 
 

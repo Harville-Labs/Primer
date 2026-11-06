@@ -111,18 +111,6 @@ spec:
         - name: tmp
           emptyDir:
             sizeLimit: 256Mi
-  volumeClaimTemplates:
-    - metadata:
-        name: data
-        labels:
-          {{- include "primer.selectorLabels" . | nindent 10 }}
-          app.kubernetes.io/component: qdrant
-      spec:
-        accessModes: ["ReadWriteOnce"]
-        {{- with $qdrant.persistence.storageClass }}
-        storageClassName: {{ . | quote }}
-        {{- end }}
-        resources:
-          requests:
-            storage: {{ $qdrant.persistence.size }}
+        {{- include "primer.existingClaimVolume" $qdrant.persistence | nindent 8 }}
+  {{- include "primer.claimTemplate" (dict "root" . "component" "qdrant" "persistence" $qdrant.persistence) | nindent 2 }}
 {{- end }}

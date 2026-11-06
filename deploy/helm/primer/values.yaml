@@ -143,6 +143,11 @@ postgresql:
     persistence:
       size: 20Gi
       storageClass: ""   # the cluster default
+      # A claim you made instead, such as a volume restored from a backup.
+      # Empty makes one. Block storage only - not an NFS or SMB share: see
+      # docs/operations/storage.md.
+      existingClaim: ""
+      accessMode: ReadWriteOnce
     resources:
       requests:
         cpu: 250m
@@ -155,8 +160,10 @@ rabbitmq:
   urlKey: broker-url
 
 sourceStore:
-  # An fsspec URL. Object storage for more than one replica: a
-  # ReadWriteOnce volume cannot be shared between nodes.
+  # Where uploaded documents and Studio's images are kept: `s3://bucket`
+  # for any S3-compatible object store, or `file:///absolute/path` for a
+  # directory on `volume` below. Nothing else - a NAS is mounted as a
+  # volume, not named here. docs/operations/storage.md compares the two.
   url: s3://primer-sources
   # A Secret holding the backend's own environment - AWS_ACCESS_KEY_ID,
   # AWS_SECRET_ACCESS_KEY, FSSPEC_S3_ENDPOINT_URL for a non-AWS endpoint, and
@@ -166,6 +173,21 @@ sourceStore:
   # Mounted only into Control, the ingestion workers, and Studio's retention
   # job, which keeps its images in the same store: nothing else opens one.
   existingSecret: ""
+  # The directory a `file://` url points into, mounted at that path in
+  # Control, the workers and the retention job. Required with `file://`,
+  # refused without it: a pod's own disk would lose every upload.
+  volume:
+    enabled: false
+    # A claim you made - a NAS share through an NFS or SMB CSI driver, or
+    # a CephFS volume. Empty makes one with the settings below, and keeps
+    # it when the release is uninstalled.
+    existingClaim: ""
+    # ReadWriteMany, because Control and the workers run on different
+    # nodes. ReadWriteOnce works only when every pod that mounts it is
+    # scheduled on one node.
+    accessMode: ReadWriteMany
+    storageClass: ""   # the cluster default, which must offer the mode above
+    size: 50Gi
 
 # Settings this chart does not model, added to every Primer workload. An
 # escape hatch, so a deployment that needs one variable does not need a fork
@@ -436,6 +458,11 @@ vectorStore:
     persistence:
       size: 20Gi
       storageClass: ""   # the cluster default
+      # A claim you made instead, such as a volume restored from a backup.
+      # Empty makes one. Block storage only - not an NFS or SMB share: see
+      # docs/operations/storage.md.
+      existingClaim: ""
+      accessMode: ReadWriteOnce
     resources:
       requests:
         cpu: 250m
@@ -474,6 +501,11 @@ graph:
     persistence:
       size: 10Gi
       storageClass: ""   # the cluster default
+      # A claim you made instead, such as a volume restored from a backup.
+      # Empty makes one. Block storage only - not an NFS or SMB share: see
+      # docs/operations/storage.md.
+      existingClaim: ""
+      accessMode: ReadWriteOnce
     resources:
       requests:
         cpu: 250m
@@ -627,6 +659,11 @@ lab:
   persistence:
     size: 50Gi
     storageClass: ""   # the cluster default
+    # A claim you made instead, such as a volume restored from a backup.
+    # Empty makes one. Block storage only - not an NFS or SMB share: see
+    # docs/operations/storage.md.
+    existingClaim: ""
+    accessMode: ReadWriteOnce
   # Sized for the default model on CPU, where Lab runs it in float32: about
   # 7GB of weights, plus a run's activations and what it records of them.
   resources:

@@ -124,12 +124,14 @@ spec:
             {{- toYaml $worker.resources | nindent 12 }}
           volumeMounts:
             {{- include "primer.scratchMounts" $ | nindent 12 }}
+            {{- include "primer.sourceStoreMounts" $ | nindent 12 }}
             {{- if and (eq $name "parse") $worker.modelCache.enabled }}
             - name: model-cache
               mountPath: /var/cache/primer/huggingface
             {{- end }}
       volumes:
         {{- include "primer.scratchVolumes" $ | nindent 8 }}
+        {{- include "primer.sourceStoreVolumes" $ | nindent 8 }}
         {{- if and (eq $name "parse") $worker.modelCache.enabled }}
         - name: model-cache
           persistentVolumeClaim:
