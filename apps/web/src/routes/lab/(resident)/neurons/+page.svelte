@@ -3,6 +3,7 @@
 	import { Button, ToggleGroup } from '@sivir-ui/svelte';
 	import { onMount } from 'svelte';
 	import ActivationHeatmap from '#lib/components/lab/ActivationHeatmap.svelte';
+	import ChatPane from '#lib/components/lab/ChatPane.svelte';
 	import ComparePane from '#lib/components/lab/ComparePane.svelte';
 	import EditsPanel from '#lib/components/lab/EditsPanel.svelte';
 	import ExperimentsSheet from '#lib/components/lab/ExperimentsSheet.svelte';
@@ -13,6 +14,7 @@
 	import NeuronInspector from '#lib/components/lab/NeuronInspector.svelte';
 	import SteerSheet from '#lib/components/lab/SteerSheet.svelte';
 	import type { Experiment, NeuronsRun } from '#lib/api/types.ts';
+	import { SteeredChat } from '#lib/lab/chat.svelte.ts';
 	import { Edits, Generator, Steering } from '#lib/lab/edits.svelte.ts';
 	import { Experiments } from '#lib/lab/experiments.svelte.ts';
 	import { Grapher } from '#lib/lab/grapher.svelte.ts';
@@ -36,10 +38,11 @@
 	const steering = new Steering();
 	const experiments = new Experiments('neurons');
 	const grapher = new Grapher();
+	const chat = new SteeredChat();
 
 	let steerOpen = $state(false);
 	let savedOpen = $state(false);
-	let pane = $state<'grid' | 'compare' | 'graph'>('grid');
+	let pane = $state<'grid' | 'compare' | 'chat' | 'graph'>('grid');
 
 	let promptOpen = $state(false);
 	let peek = $state<Cell | null>(null);
@@ -131,7 +134,7 @@
 		type="single"
 		value={pane}
 		onValueChange={(value) => {
-			if (value === 'grid' || value === 'compare') pane = value;
+			if (value === 'grid' || value === 'compare' || value === 'chat') pane = value;
 			if (value === 'graph') {
 				// Start from the prompt being read, which is usually the one to trace.
 				if (!grapher.prompt) grapher.prompt = inspector.prompt;
@@ -141,6 +144,9 @@
 	>
 		<ToggleGroup.Item value="grid" class="text-xs">Grid</ToggleGroup.Item>
 		<ToggleGroup.Item value="compare" class="text-xs">Compare</ToggleGroup.Item>
+		{#if model && data.status}
+			<ToggleGroup.Item value="chat" class="text-xs">Chat</ToggleGroup.Item>
+		{/if}
 		{#if graphTokens !== null && model}
 			<ToggleGroup.Item value="graph" class="text-xs">Graph</ToggleGroup.Item>
 		{/if}
@@ -232,6 +238,10 @@
 	{#if pane === 'compare'}
 		<div class="min-h-0 flex-1 bg-card">
 			<ComparePane {generator} />
+		</div>
+	{:else if pane === 'chat' && model && data.status}
+		<div class="min-h-0 flex-1 bg-card">
+			<ChatPane {chat} {edits} {steering} maxNewTokens={data.status.max_new_tokens} />
 		</div>
 	{:else if pane === 'graph' && graphTokens !== null && model}
 		<div class="min-h-0 flex-1 bg-card">

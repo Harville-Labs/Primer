@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { Edits, Generator, Steering } from './edits.svelte';
-import { RESIDENT } from './fixture';
+import { frames, RESIDENT } from './fixture';
 
 const neuron = { site: 'mlp_neuron' as const, layer: 1, index: 4, op: 'zero' as const };
 
@@ -111,12 +111,6 @@ describe('the list of edits', () => {
 		expect(edits.active).toBeNull();
 	});
 });
-
-function frames(...events: Record<string, unknown>[]): string {
-	return events
-		.map((event) => `id: ${event.id}\nevent: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`)
-		.join('');
-}
 
 function recording(answer: () => Response) {
 	const asked: unknown[] = [];

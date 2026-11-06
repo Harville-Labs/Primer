@@ -215,6 +215,13 @@
 			of the negative set from the mean of the positive set. The result can be added to the stream
 			in Compare, scaled by a number you choose.
 		</p>
+		<p>
+			Chat holds a conversation with the edits in place at every token the model writes. Each
+			reply is written twice, as Compare does, and the steered one is what the next turn sees, so
+			the reply beside it is what the model would have said to the same conversation without the
+			edits. Changing or clearing the edits between turns steers only the replies still to come. It
+			needs a model with a chat template, which tells the model's turns from yours.
+		</p>
 	</Section>
 
 	<Section id="graphs" title="Attribution graphs">

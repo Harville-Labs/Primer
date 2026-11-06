@@ -183,6 +183,29 @@ A steering vector is the difference between the mean residual stream of two
 sets of prompts, read at each one's last token. Lab keeps it, in memory and
 for the person who made it, until the model changes.
 
+### Chatting with edits
+
+The Neurons tab's Chat view holds a conversation with the model while the
+edits steer every token it writes. Each turn is a run like the one above:
+the reply is written once as the model is and once with the edits, from
+the conversation rendered through the model's chat template. The steered
+reply is the one the next turn sees as the assistant's, so the unsteered
+reply beside it is the model's own answer to the same conversation. The
+edits are read when each turn is sent: changing or clearing them steers
+the next reply and leaves the ones already written alone.
+
+Lab keeps no conversation. The browser tab holds it and sends the turns
+it kept each time, so leaving the page ends it. A model without a chat
+template cannot chat, since it has no way to tell its turns from the
+user's; load an instruction-tuned one. A conversation is at most 64 turns,
+and the whole of it, rendered, counts against
+`PRIMER_LAB_MAX_PROMPT_TOKENS`: a long conversation reaches that limit and
+has to be started again.
+
+An edit's amount, on any run, is at most 65,504 either way, the largest
+finite half-precision number. Past it, a model in half precision would
+hold the edited activation as infinity and write nothing useful.
+
 How long a run may be is the operator's choice: the run limits under
 [Configuration](configuration.md#lab) bound the prompt, the answer, and how
 many edits one run applies. The GPU is shared, and a run holds it from its

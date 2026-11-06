@@ -269,6 +269,14 @@ InterventionPositions = Literal["all", "prompt", "generated"] | tuple[int, int]
 RESIDUAL_WIDTH_SITES = ("resid_post", "mlp_out", "attn_out")
 
 
+#: The largest amount an edit adds, multiplies by, or clamps to. It is the
+#: largest finite half-precision number: past it, a half-precision model
+#: holds the edited activation as infinity, and every logit after it is
+#: NaN - an answer of whatever token is first in the vocabulary, which reads
+#: as the edit having done something.
+MAX_EDIT_VALUE = 65_504.0
+
+
 class Intervention(WireModel):
     """One edit to the forward pass, applied at every step of a generation.
 
@@ -282,7 +290,7 @@ class Intervention(WireModel):
     #: vector at the site.
     index: int | None = Field(default=None, ge=0)
     op: InterventionOp
-    value: float = Field(default=0.0, allow_inf_nan=False)
+    value: float = Field(default=0.0, allow_inf_nan=False, ge=-MAX_EDIT_VALUE, le=MAX_EDIT_VALUE)
     vector_id: str | None = Field(default=None, pattern=r"^[0-9a-f]{32}$")
     positions: InterventionPositions = "all"
 
@@ -318,6 +326,44 @@ class GenerateRequest(PromptInput):
     #: token of the answer, before and after the edits. It must be one
     #: token in this model's vocabulary.
     target: str | None = Field(default=None, min_length=1, max_length=200)
+
+
+#: The most turns a steered conversation may hold, user and assistant
+#: together. The templated conversation is also held to the deployment's
+#: prompt limit; this bounds the work of rendering one before that is known.
+MAX_CHAT_TURNS = 64
+
+
+class ChatTurn(WireModel):
+    """One turn of a steered conversation, as the chat template reads it."""
+
+    # An assistant turn is sent back as the model wrote it, so it is read
+    # back exactly: a stripped space would be a different token.
+    model_config = VERBATIM
+
+    role: Literal["user", "assistant"]
+    content: str = Field(min_length=1, max_length=20_000)
+
+
+class SteeredChatRequest(WireModel):
+    """The conversation so far, ending with the user's turn, and the edits to steer it with.
+
+    Lab writes the next assistant turn twice: as the model would, and with
+    the edits at every token. The assistant turns sent here are the ones
+    the caller kept - in Lab's web app, the steered ones - so the unsteered
+    reply is what the model would say at this point of the same
+    conversation, not a second conversation of its own.
+    """
+
+    messages: list[ChatTurn] = Field(min_length=1, max_length=MAX_CHAT_TURNS)
+    interventions: list[Intervention] = Field(default_factory=list, max_length=256)
+    max_new_tokens: int = Field(default=128, ge=1, le=2048)
+
+    @model_validator(mode="after")
+    def _ends_with_the_user(self) -> SteeredChatRequest:
+        if self.messages[-1].role != "user":
+            raise ValueError("a conversation to reply to ends with the user's turn")
+        return self
 
 
 #: One prompt of a set a steering vector or a probe is made from. Each is a
@@ -443,6 +489,11 @@ class GenerationCompleted(GenerationEvent):
     #: shorter one ends.
     diverged_at: int | None = Field(default=None, ge=0)
     target: TargetChange | None = None
+    #: The edited answer decoded whole, special tokens left out. A steered
+    #: chat keeps it as the assistant's turn: joining the tokens' own texts
+    #: would lose the spaces some tokenizers only restore across tokens, and
+    #: split a character spread over two. None on a run saved before it.
+    edited_text: str | None = None
 
 
 class GenerationFailed(GenerationEvent):

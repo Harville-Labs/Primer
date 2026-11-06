@@ -38,17 +38,30 @@ class Reading:
 def tokenize(tokenizer: Any, prompt: str, *, chat: bool) -> Prompt:
     """Turn a prompt into token ids, through the chat template if asked and present.
 
+    A chat prompt is a conversation of one user turn.
+    """
+    if chat and has_chat_template(tokenizer):
+        return render_conversation(tokenizer, [{"role": "user", "content": prompt}])
+    return Prompt(ids=tokenizer.encode(prompt, add_special_tokens=True), chat_template=False)
+
+
+def has_chat_template(tokenizer: Any) -> bool:
+    return bool(getattr(tokenizer, "chat_template", None))
+
+
+def render_conversation(tokenizer: Any, messages: list[dict[str, str]]) -> Prompt:
+    """A conversation as the model reads it, ready for the assistant's next turn.
+
     The template is rendered to text and then encoded, rather than asking
     for ids directly, because what `apply_chat_template(tokenize=True)`
     returns has changed shape between `transformers` releases. A template
     writes its own special tokens, so the encode adds none of its own.
+
+    The caller checks the tokenizer has a template: a base model has none,
+    and what it reads in place of one is the caller's decision.
     """
-    if chat and getattr(tokenizer, "chat_template", None):
-        text = tokenizer.apply_chat_template(
-            [{"role": "user", "content": prompt}], tokenize=False, add_generation_prompt=True
-        )
-        return Prompt(ids=tokenizer.encode(text, add_special_tokens=False), chat_template=True)
-    return Prompt(ids=tokenizer.encode(prompt, add_special_tokens=True), chat_template=False)
+    text = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+    return Prompt(ids=tokenizer.encode(text, add_special_tokens=False), chat_template=True)
 
 
 def special_ids(tokenizer: Any) -> set[int]:

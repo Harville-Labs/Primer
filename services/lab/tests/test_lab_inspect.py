@@ -15,15 +15,12 @@ import pytest
 import torch
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from lab_support import TINY, build_tiny_model, lab, settle
+from lab_support import TINY, build_tiny_model, lab, settle, switch_to_chat_model
 from primer_contracts.lab import LENS_TOP, InspectedToken
 from primer_lab import routes
 from transformers import Qwen3ForCausalLM
 
 PROMPT = "hello world w3 w7 w7"
-#: Wraps a user turn in <eos> markers, so the template's own tokens are
-#: ones the tests can tell apart from the prompt's.
-TEMPLATE = "{% for m in messages %}<eos> {{ m['content'] }} <eos>{% endfor %}"
 
 
 def inspect(client: TestClient, **body: Any) -> Any:
@@ -112,9 +109,7 @@ def test_a_prompt_over_the_limit_is_refused_naming_the_limit(weights_dir, hub, f
 
 
 def test_the_chat_template_wraps_the_prompt_and_marks_its_tokens(client, weights_dir):
-    build_tiny_model(weights_dir / "chatty", chat_template=TEMPLATE)
-    client.put("/api/v1/lab/model", json={"model": {"source": "local", "path": "chatty"}})
-    assert settle(client)["model"]["reference"]["path"] == "chatty"
+    switch_to_chat_model(client, weights_dir)
 
     wrapped = inspect(client, chat=True).json()
     plain = inspect(client, chat=False).json()

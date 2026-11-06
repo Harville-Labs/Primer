@@ -225,3 +225,10 @@ export function builtGraph(): BuiltGraph {
 		dropped_edges: 0,
 	} as BuiltGraph;
 }
+
+/** Events as Lab writes them on a stream, for a fetch to answer with. */
+export function frames(...events: Record<string, unknown>[]): string {
+	return events
+		.map((event) => `id: ${event.id}\nevent: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`)
+		.join('');
+}

@@ -24,6 +24,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/lab/chat": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reply in a conversation with and without edits to the forward pass
+         * @description Renders the conversation through the model's chat template and writes the next assistant turn twice, greedily: first as the model is, then with the interventions applied at every token, the conversation's included. Streams the same events as `/generate`, with `baseline` the unsteered reply and `edited` the steered one. Lab keeps no conversation: send the whole of it, with the assistant turns you kept, each time. A model without a chat template is refused.
+         */
+        post: operations["chat_api_v1_lab_chat_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/lab/experiments": {
         parameters: {
             query?: never;
@@ -379,6 +399,19 @@ export interface components {
             tokens: string[];
         };
         /**
+         * ChatTurn
+         * @description One turn of a steered conversation, as the chat template reads it.
+         */
+        ChatTurn: {
+            /** Content */
+            content: string;
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "user" | "assistant";
+        };
+        /**
          * EntropyEstimate
          * @description How much of each next-token distribution the score could see.
          * @enum {string}
@@ -510,6 +543,8 @@ export interface components {
             diverged_at?: number | null;
             /** Edited */
             edited: components["schemas"]["InspectedToken"][];
+            /** Edited Text */
+            edited_text?: string | null;
             /** Id */
             id: number;
             model: components["schemas"]["LabModelStatus"];
@@ -1153,6 +1188,27 @@ export interface components {
          */
         SpanKind: "surprisal_spike" | "low_confidence";
         /**
+         * SteeredChatRequest
+         * @description The conversation so far, ending with the user's turn, and the edits to steer it with.
+         *
+         *     Lab writes the next assistant turn twice: as the model would, and with
+         *     the edits at every token. The assistant turns sent here are the ones
+         *     the caller kept - in Lab's web app, the steered ones - so the unsteered
+         *     reply is what the model would say at this point of the same
+         *     conversation, not a second conversation of its own.
+         */
+        SteeredChatRequest: {
+            /** Interventions */
+            interventions?: components["schemas"]["Intervention"][];
+            /**
+             * Max New Tokens
+             * @default 128
+             */
+            max_new_tokens: number;
+            /** Messages */
+            messages: components["schemas"]["ChatTurn"][];
+        };
+        /**
          * SteeringVector
          * @description A steering vector Lab holds for its owner until the model changes.
          */
@@ -1294,6 +1350,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ActivationVector"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    chat_api_v1_lab_chat_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SteeredChatRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": string & (components["schemas"]["GenerationQueued"] | components["schemas"]["GeneratedToken"] | components["schemas"]["GenerationCompleted"] | components["schemas"]["GenerationFailed"]);
                 };
             };
             /** @description Validation Error */
